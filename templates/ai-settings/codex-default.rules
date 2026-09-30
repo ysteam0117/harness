@@ -1,0 +1,46 @@
+# もとになった共通仕様：C-05・C-42・C-75（F-25）
+# 毎回確認を求める（prompt）・禁止する（forbidden）コマンド。
+# 生成した後に、`codex execpolicy check --pretty --rules .codex/rules/default.rules -- <コマンド>` で判定を確かめる。
+
+# ---- 禁止する ----
+prefix_rule(
+    pattern = ["git", "push", ["--force", "-f", "--force-with-lease"], "origin", "main"],
+    decision = "forbidden",
+    justification = "mainへの強制pushは禁止されている（C-42）",
+    match = ["git push --force origin main"],
+)
+
+prefix_rule(
+    pattern = [["cat", "type", "more", "less", "head", "tail", "Get-Content"], [".env", ".env.development", ".env.test", ".env.production", ".env.local"]],
+    decision = "forbidden",
+    justification = "秘密情報のファイルは読まない。足りない項目は npm run env:check で確かめる（C-05）",
+    match = ["cat .env"],
+)
+
+# ---- 毎回確認を求める：Gitの履歴や変更を失う操作 ----
+prefix_rule(pattern = ["git", "push", ["--force", "-f", "--force-with-lease"]], decision = "prompt", justification = "強制pushは利用者の判断を仰ぐ（C-75）")
+prefix_rule(pattern = ["git", "reset", "--hard"], decision = "prompt", justification = "未コミットの変更が失われる（C-75）")
+prefix_rule(pattern = ["git", "clean"], decision = "prompt", justification = "追跡していないファイルが削除される（C-75）")
+prefix_rule(pattern = ["git", "branch", "-D"], decision = "prompt", justification = "ブランチを強制的に削除する（C-75）")
+prefix_rule(pattern = ["git", "rebase"], decision = "prompt", justification = "履歴を書き換える（C-75）")
+prefix_rule(pattern = ["git", "checkout", "--"], decision = "prompt", justification = "未コミットの変更が失われる（C-75）")
+prefix_rule(pattern = ["git", "restore"], decision = "prompt", justification = "未コミットの変更が失われる（C-75）")
+
+# ---- 毎回確認を求める：ファイルの削除 ----
+prefix_rule(pattern = ["rm", ["-r", "-rf", "-fr", "-R"]], decision = "prompt", justification = "まとめての削除は利用者の判断を仰ぐ（C-75）")
+
+# ---- 毎回確認を求める：本番・共有の環境 ----
+prefix_rule(pattern = ["terraform", ["apply", "destroy"]], decision = "prompt", justification = "本番・共有の環境に影響する（C-39・C-75）")
+prefix_rule(pattern = ["wrangler", "deploy"], decision = "prompt", justification = "デプロイは承認を得て行う（C-41）")
+prefix_rule(pattern = ["npx", "wrangler", "deploy"], decision = "prompt", justification = "デプロイは承認を得て行う（C-41）")
+
+# ---- 毎回確認を求める：依存関係・GitHub・Docker ----
+prefix_rule(pattern = ["npm", "uninstall"], decision = "prompt", justification = "依存ライブラリの削除（C-75）")
+prefix_rule(pattern = ["gh", "pr", "close"], decision = "prompt", justification = "ほかの人から見える操作（C-75）")
+prefix_rule(pattern = ["gh", "issue", "delete"], decision = "prompt", justification = "ほかの人から見える操作（C-75）")
+prefix_rule(pattern = ["gh", "repo", "delete"], decision = "prompt", justification = "ほかの人から見える操作（C-75）")
+prefix_rule(pattern = ["docker", "system", "prune"], decision = "prompt", justification = "開発用のデータが消える（C-75）")
+prefix_rule(pattern = ["docker", "volume", "rm"], decision = "prompt", justification = "開発用のデータが消える（C-75）")
+
+# 注意：`wrangler d1 ... --remote` は、オプションの位置が決まらないため先頭一致のルールで表せない。
+# AGENTS.md の指示（本番のD1に接続しない）と、Cloudflare側の権限で守る。

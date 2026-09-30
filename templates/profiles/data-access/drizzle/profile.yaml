@@ -1,0 +1,24 @@
+# 技術プロファイル：Drizzle ORM（F-24）
+id: drizzle
+category: data-access
+name: Drizzle ORM
+languages: [typescript]
+databases: [cloudflare-d1, postgresql]
+# CLIが最新の安定版を調べるパッケージ（F-19）
+packages:
+  - drizzle-orm
+  - drizzle-kit
+# ひな形で動作を確かめたバージョン。ハーネスのリリースごとに更新する
+verified_versions:        # 2026-09-30 試作（Issue #18）で確認
+  drizzle-orm: "0.45.3"
+  drizzle-kit: "0.31.11"
+# 組み合わせる道具の条件（試作で見つかったもの）
+compatibility_notes:
+  - "PostgreSQLのドライバは pg（node-postgres 8.13.0 以上）。2026-09-30 に pg 8.23.0・PostgreSQL 18.6 で確認"
+  - "vitest-pool-workers の中では pg を読み込めない。Workers＋PostgreSQL は wrangler dev に対するAPIのテストで確かめる"
+  - "D1では db.transaction() を使わず db.batch() を使う"
+# 引用する共通の部分
+includes:
+  - data-access/_shared
+# 出力するSkillの名前
+skill_name: data-access-drizzle

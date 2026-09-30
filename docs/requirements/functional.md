@@ -25,6 +25,8 @@
 | [F-21](#f-21) | AI向け設定ファイルの構成 | MUST | 共通ルールの核を`AGENTS.md`に、分野別の詳細をSkillに分けて生成し、役割ごとのエージェントの定義から必要なSkillだけを読み込ませる |
 | [F-22](#f-22) | 共通仕様とテンプレートの対応の確認 | MUST | 共通仕様の各項目が、生成するテンプレート（`AGENTS.md`・Skill・エージェントの定義）のどこかに反映されているかを自動で確認する |
 | [F-23](#f-23) | ハーネスの改善の提案の仕組みの生成 | MUST | 改善の提案（[C-78](common/workflow.md#c-78)）を記録するIssueテンプレート・ラベル・設定を生成し、ハーネス側で提案を集める手段を用意する |
+| [F-24](#f-24) | 技術プロファイル | MUST | ライブラリごとのルールを「技術プロファイル」として持ち、利用者が選んだライブラリのルールだけを生成するプロジェクトに入れる。共通の部分は1か所に書いて引用する |
+| [F-25](#f-25) | AIの権限の設定と秘密情報の確認の生成 | MUST | 危険なコマンドに確認を求め・禁止するAIの設定、足りない秘密情報の項目を名前だけで確かめるスクリプト、秘密情報の入力の手順書を生成する |
 
 <a id="f-08"></a>
 
@@ -82,6 +84,7 @@
 │  ├─ tech-stack.md             技術とバージョン・選定理由（[C-62](common/quality-test.md#c-62)・[F-19](#f-19)）
 │  ├─ testing/                  テストの種類ごとの環境構築の手順書（[C-69](common/quality-test.md#c-69)）
 │  └─ adr/                      設計判断の記録（[C-35](common/workflow.md#c-35)）。警告を承知で続行した内容も記録（[F-08](#f-08)）
+├─ prototype/                   プロトタイプ（HTML・CSS・JavaScript、C-76）。本番のコードに流用しない
 ├─ frontend/                    React（[C-06](common/frontend.md#c-06)のディレクトリ構成、仮のアイコン [C-55](common/frontend.md#c-55)）
 ├─ backend/                     Hono（[C-03](common/backend.md#c-03)の層構成、ロガー [C-30](common/backend.md#c-30) 等）
 │  └─ db/
@@ -336,6 +339,7 @@ knowledge/
 | `templates/AGENTS.md` | `AGENTS.md`（`CLAUDE.md`から読み込む） | `AGENTS.md` |
 | `templates/CLAUDE.md` | `CLAUDE.md` | 出力しない |
 | `templates/skills/<名前>/SKILL.md` | `.claude/skills/<名前>/SKILL.md` | `.agents/skills/<名前>/SKILL.md` |
+| `templates/ai-settings/` | `.claude/settings.json` | `.codex/rules/default.rules` |
 | `templates/agents/<名前>.md` | `.claude/agents/<名前>.md`（冒頭の`claude:`の設定と本文） | `.codex/agents/<名前>.toml`（冒頭の`codex:`の設定と、本文を`developer_instructions`に入れる） |
 
 - エージェントのひな形の冒頭には、Claude Code用（`tools`・`model`）とCodex用（`name`・`model`・`model_reasoning_effort`・`sandbox_mode`）の設定を両方書き、本文は共通にする
@@ -367,7 +371,7 @@ knowledge/
 | 実装の進め方 | [C-76](common/workflow.md#c-76)・[C-66](common/workflow.md#c-66)・[C-33](common/workflow.md#c-33)・[C-34](common/workflow.md#c-34)・[C-35](common/workflow.md#c-35)・[C-07](common/workflow.md#c-07) | 統括（要件定義・Issueへの分割・Issueの実装を始めるとき） |
 | バックエンド | [C-03](common/backend.md#c-03)・[C-04](common/backend.md#c-04)・[C-10](common/backend.md#c-10)・[C-30](common/backend.md#c-30)・[C-31](common/backend.md#c-31)・[C-37](common/backend.md#c-37)・[C-64](common/backend.md#c-64)・[C-65](common/backend.md#c-65)・[C-74](common/backend.md#c-74)・[C-57](common/design-principles.md#c-57) | 計画・実装・コードレビュー |
 | フロントエンド | [C-06](common/frontend.md#c-06)・[C-43](common/frontend.md#c-43)〜[C-52](common/frontend.md#c-52)・[C-54](common/frontend.md#c-54)・[C-55](common/frontend.md#c-55)・[C-77](common/frontend.md#c-77)・[C-57](common/design-principles.md#c-57) | 計画・実装・コードレビュー |
-| テスト | [C-24](common/quality-test.md#c-24)〜[C-26](common/quality-test.md#c-26)・[C-69](common/quality-test.md#c-69)・[C-70](common/quality-test.md#c-70)・[C-60](common/quality-test.md#c-60)・[C-61](common/quality-test.md#c-61) | テスト・品質チェック |
+| テスト | [C-24](common/quality-test.md#c-24)〜[C-26](common/quality-test.md#c-26)・[C-69](common/quality-test.md#c-69)・[C-70](common/quality-test.md#c-70)・[C-60](common/quality-test.md#c-60)・[C-61](common/quality-test.md#c-61)・[C-79](common/quality-test.md#c-79) | テスト・品質チェック |
 | セキュリティ | [C-09](common/security.md#c-09)・[C-12](common/security.md#c-12)〜[C-20](common/security.md#c-20)・[C-27](common/security.md#c-27)〜[C-29](common/security.md#c-29)・[C-58](common/security.md#c-58)・[C-59](common/security.md#c-59)・[C-63](common/security.md#c-63)・[C-72](common/security.md#c-72) | 計画・コードレビュー（影響大のとき） |
 | エラー応答・API | [C-15](common/error-response.md#c-15)・[C-71](common/error-response.md#c-71)・[C-73](common/error-response.md#c-73)・[C-31](common/backend.md#c-31) | 実装・コードレビュー |
 | 環境・デプロイ | [C-36](common/project-env.md#c-36)・[C-39](common/project-env.md#c-39)〜[C-41](common/project-env.md#c-41)・[C-08](common/workflow.md#c-08) | 統括（デプロイの承認を依頼するとき） |
@@ -399,6 +403,136 @@ Skillなどのテンプレートは共通仕様の要点を写したものなの
 - 記録する場所の設定は質問せず、既定の`project`で生成する。`harness`に変えたい人は、設定ファイルを書き換える
 - ハーネスのリポジトリには、各プロジェクトから`harness-feedback`のラベルが付いたIssueを集めて一覧にする手順（`gh`コマンド等）を用意し、月1回の見直しで使う
 
+<a id="f-24"></a>
+
+## F-24：技術プロファイル
+
+使うライブラリはハーネスで1つに決めず、利用者が選ぶ。選んだライブラリに合わせたルールを、技術プロファイルとして読み込む。Javaなど、言語が変わっても同じ仕組みで対応する。
+
+### 流れ
+
+| # | 段階 | 誰が | 内容 |
+| --- | --- | --- | --- |
+| 1 | 選択肢の表示 | CLI | 選んだ言語・DBで使えるライブラリだけを表示する |
+| 2 | 選択 | 利用者 | 使うライブラリを決める |
+| 3 | バージョンの確認 | CLI | その時点の最新の安定版と、検証済みのバージョンを調べて示す（[F-19](#f-19)） |
+| 4 | 選定の確定 | 利用者 | バージョンを確定する。生成したプロジェクトで固定する（[C-62](common/quality-test.md#c-62)） |
+| 5 | ルールの読み込み | CLI | 選んだライブラリのプロファイルのルールを、Skillとして生成するプロジェクトに入れる |
+
+### 構成
+
+```text
+templates/profiles/
+└─ <分類>/                     例：data-access、logger、http-client、test-framework、backend-framework
+   ├─ _shared/                 分類の中で共通の部分
+   └─ <ライブラリ>/
+      ├─ profile.yaml          対応する言語・DB、バージョンを調べるパッケージ名、検証済みのバージョン、引用する共通の部分
+      └─ SKILL.md              そのライブラリ固有のルール
+```
+
+- `profile.yaml`の`includes`に、引用する共通の部分を書く。CLIは、共通の部分とライブラリ固有の部分をつないで、1つのSkill（例：`data-access-drizzle`）として出力する
+- 共通のSkill（`backend`等）には、ライブラリに依存するところに「詳しい書き方は、選んだライブラリのSkillを読む」という案内だけを書く
+- 同じルールを複数のプロファイルに書かない。共通にできる部分は`_shared/`に書いて引用する
+- `profile.yaml`に対応する言語・DBを書き、合わない組み合わせは選択肢に出さない。回答の組み合わせで合わないものは、整合性チェック（[F-08](#f-08)）でエラーにする
+- プロファイルも、共通仕様とテンプレートの対応の確認（[F-22](#f-22)）の対象にする
+
+### バージョンの選び方
+
+- ハーネスの要件定義書にはバージョンの番号を書かない。バージョンは、プロジェクトを生成するときに決めて固定する
+- ハーネスのリリースごとに、ひな形で動作を確かめたバージョンを、`profile.yaml`の「検証済みのバージョン」として記録する
+- 最新の**安定版**を選ぶ。RC・ベータなどの試験版は選ばない
+- 最新の安定版が、検証済みのバージョンと大きな版（MAJOR）で違う場合は、「ひな形で動作を確認していない」という警告を出す（[F-08](#f-08)と同じく、止めずに知らせる）
+
+### 初回に用意するプロファイル
+
+| 分類 | プロファイル | 含める道具・部品 | 状態 |
+| --- | --- | --- | --- |
+| バックエンドのフレームワーク | Hono | `app.onError`・`app.notFound`（[C-73](common/error-response.md#c-73)）、`secureHeaders`（[C-58](common/security.md#c-58)）、`cors`（[C-29](common/security.md#c-29)）、`csrf`（[C-28](common/security.md#c-28)）、`@hono/zod-validator`（[C-27](common/security.md#c-27)）、`app.routes`（GETの検証、[C-28](common/security.md#c-28)） | 決定（ひな形は未作成） |
+| データアクセス | Drizzle ORM | D1は`db.batch()`でトランザクション（`db.transaction()`は使えない）、PostgreSQLのドライバは`pg` | 決定（試作で確認済み：Issue #18） |
+| ロガー | 自作の共通ロガー | JSONを標準出力に出す小さな共通の部品。伏せ字・OpenTelemetryの項目名・監査ログ（[C-30](common/backend.md#c-30)）をひな形で用意する | 決定（ひな形は未作成） |
+| API通信（フロントエンド） | Axios | インスタンスとインターセプター（[C-46](common/frontend.md#c-46)） | 決定（ひな形は未作成） |
+| フロントエンドの状態・フォーム | 標準：TanStack Query、React Hook Form＋Zod／必要になったとき：Zustand | Zustandは最初から入れず、複数の画面で共有する状態が必要になったときに、承認を得て追加する（[C-32](common/quality-test.md#c-32)・[C-45](common/frontend.md#c-45)） | 決定（ひな形は未作成） |
+| テストの道具 | Vitest、@cloudflare/vitest-pool-workers、Testing Library、Playwright、MSW、fast-check、k6、OWASP ZAP | 単体・結合（フロントエンド・バックエンド共通）、Workersの実行環境でのテスト、コンポーネントのテスト、E2E、外部APIのモック、異常な入力のテスト、負荷・限界のテスト、セキュリティのテスト（[C-79](common/quality-test.md#c-79)） | 決定（ひな形は未作成） |
+| 品質チェックの道具 | ESLint＋typescript-eslint＋eslint-plugin-react-hooks、Prettier、TypeScript（`tsc`）、Stryker、dependency-cruiser、jscpd、`npm audit` | Lint、整形、型チェック、ミューテーションテスト、層をまたぐ依存の違反、重複、脆弱性 | 決定（ひな形は未作成） |
+
+- ライブラリを入れるのは、メンテナンス性が上がる場合に限る。使わなくてもよい場面で入れると、仕組みが複雑になるだけになるため、標準で入れるものと、必要になったときに追加するものを分ける（[C-38](common/design-principles.md#c-38)・[C-53](common/design-principles.md#c-53)）
+- 大きな版が新しくなったばかりの道具（TypeScript・Vitest等）は、ほかの道具が対応していない場合がある。ひな形を作るときに組み合わせて動くことを確かめ、検証済みのバージョンとして記録する
+
+#### 試作で見つかった、道具の組み合わせの条件（2026-09-30、Issue #18）
+
+最新の安定版どうしでも、組み合わせると動かない場合があった。ひな形の「検証済みのバージョン」には、次の条件を反映する。
+
+| 条件 | 対応 |
+| --- | --- |
+| `@cloudflare/vitest-pool-workers`はVitest 4系にだけ対応（Vitestの最新は5系） | Vitestは4系の最新の安定版にする |
+| `typescript-eslint`はTypeScript 6.1未満にだけ対応（TypeScriptの最新は7系） | TypeScriptは6.0系の最新の安定版にする |
+| `@cloudflare/vitest-pool-workers`に同梱の実行エンジンは、新しい`compatibility_date`に対応していない場合がある | `compatibility_date`は、テストの道具が対応する日付以下にする |
+| npm 11では、esbuild・workerdのインストール時の処理が既定で実行されない | 生成する`package.json`に、許可の設定（`allowScripts`）を入れる |
+| `npm audit`で、開発用の道具（drizzle-kit・wranglerの内部）の脆弱性が報告される。本番で動く部分には無い | 品質チェックの合否は本番の依存（`npm audit --omit=dev`）で判定し、開発用の依存の結果は記録して、更新の判断に使う |
+| Workersの環境変数の型 | `wrangler types`で生成し、生成したファイルはLint・整形の対象から外す |
+
+- このように、[F-19](#f-19)の「最新の安定版」をそのまま選ぶと動かない組み合わせがある。CLIは、最新の安定版を示すときに、`profile.yaml`の組み合わせの条件と照らし合わせ、条件に合う中で最新のものを示す
+
+#### Honoのプロファイル：Cloudflareでのバッチ処理の使い分け
+
+[C-65](common/backend.md#c-65)のバッチ処理を、次の3つの仕組みの組み合わせで実現する。
+
+| 役割 | 使うもの | 例 |
+| --- | --- | --- |
+| 起動の合図 | Cron Triggers | 毎晩2時（日本時間）に集計を始める |
+| 大量の件数を小分けにして処理する | Queues | 1万件の通知を、100件ずつのメッセージに分けて処理する |
+| 複数の手順を、途中から再開できるように進める | Workflows | 集計 → ファイルの作成 → 保存 → 完了の通知 |
+
+- 短い処理（数秒で終わる）は、Cron Triggersの中で直接実行してよい。件数が多い処理はQueuesへ、複数の手順を再開できるようにしたい処理はWorkflowsへ任せる
+- 迷ったら、Cron Triggersは「起動の合図だけ」にし、実際の処理はQueuesかWorkflowsに任せる（Cron TriggersはCPU時間の上限が短いため）
+
+| [C-65](common/backend.md#c-65)のルール | 実現方法 |
+| --- | --- |
+| べき等にする | Queuesのメッセージは、同じものが2回以上届く可能性がある前提で作り、処理済みかをDBで確かめてから処理する |
+| 小分けにして、途中から再開できる | Queuesのメッセージ1件を1つの小分けにする。Workflowsは手順ごとに状態が保存され、失敗した手順から再開できる |
+| 同時に2つ動かさない | Workflowsは実行ごとに一意の名前（例：`daily-summary-2026-09-30`）で起動する。Cronで直接実行する場合は、DBの実行履歴で「実行中」を確かめてから始める |
+| 実行の記録を残す | DBに実行履歴のテーブル（開始・終了・件数・結果）を持ち、ログにも出す |
+| 再試行と失敗の一覧 | Queuesの再試行の上限と、上限を超えたメッセージの行き先（デッドレターキュー）を設定する。Workflowsは手順ごとに再試行を設定する |
+| 時刻はUTCで書く | Cron Triggersの設定はUTCで書き、日本時間を文書に併記する |
+| 本番での手動の再実行 | Workflowsの起動、または保護した管理用の入口から起動し、承認を得て行う |
+
+- 上限の参考（2026年9月時点、有料プラン、[Cloudflare Workers: Limits](https://developers.cloudflare.com/workers/platform/limits/)）：Cron TriggersのCPU時間は30秒（1時間未満の間隔）／15分（1時間以上の間隔）、実行時間は15分。Queuesの処理は1回15分。Workflowsは時間の上限なし
+- Queuesの重複の配送、Workflowsの同じ名前での重複の起動の防止、デッドレターキューの設定方法は、バッチ処理のひな形を作るときに公式のドキュメントで確かめる
+
+#### Spring Boot（Java）のプロファイル
+
+バックエンドのフレームワークは選択式とし、Spring Bootも選べるようにする。Honoのプロファイルで仕組みが正しく動くことを確かめた後に、同じ形で作る。
+
+| 分類 | Spring Bootの場合の候補 |
+| --- | --- |
+| データアクセス | MyBatis／JPA |
+| EntityとDTOの変換 | MapStruct／手書き |
+| ロガー | SLF4J＋Logback |
+| テスト | JUnit＋Testcontainers |
+| 品質チェック | Checkstyle・SpotBugs・PMD |
+| ビルド | Gradle／Maven |
+| デプロイ先 | Cloudflare Workersでは動かないため、コンテナを動かせる場所（AWSのECS等）のインフラのプロファイルを用意する |
+
+- 追加の候補：Kysely（複雑なSQLを型付きで書きやすい。Drizzleと併用せず、プロジェクトごとにどちらか一方を選ぶ別のプロファイルとして追加する。Drizzleで複雑なSQLを書くのがつらいという知見がたまったら追加を判断する）、MyBatis・JPA（Java）
+
+<a id="f-25"></a>
+
+## F-25：AIの権限の設定と秘密情報の確認の生成
+
+CLIは、生成するプロジェクトに次を出力する。
+
+| ひな形 | 出力先 | 内容 |
+| --- | --- | --- |
+| `templates/ai-settings/claude-settings.json` | `.claude/settings.json` | 危険なコマンドの`ask`・`deny`と、秘密情報のファイルの読み込みの`deny`（[C-75](common/design-principles.md#c-75)・[C-05](common/security.md#c-05)） |
+| `templates/ai-settings/codex-default.rules` | `.codex/rules/default.rules` | 同じ内容を、Codexのルールの書き方（`prefix_rule`）で書いたもの |
+| `templates/scripts/env-check.mjs` | `scripts/env-check.mjs`（`npm run env:check`で実行） | `.env.example`と実際のファイルの項目の名前を比べ、足りない項目の名前だけを表示する。値は表示しない |
+| `templates/docs/secrets.md` | `docs/secrets.md` | 秘密情報の入力の手順（開発・検証・本番・CI・Terraform） |
+
+- 使うAIに応じて、Claude Code用・Codex用の設定を出力する
+- `.claude/settings.json`・`.codex/rules/`はプロジェクトのルールとしてコミットする（[C-68](common/workflow.md#c-68)）
+- Codexのルールは、生成した後に`codex execpolicy check`で、代表的なコマンドが意図どおりに判定されることを確かめる
+- 設定の書き方は、2026年9月時点の公式ドキュメント（Claude Code：Configure permissions／Codex：Rules）で確認した。変更された場合は見直す
+
 ## 対話の質問順（案）
 
 初回の範囲（Webアプリ・Cloudflare・React・Hono）で選択肢が1つしかない質問は、聞かずに自動で決め、画面に表示だけする。質問の仕組みは残し、後から選択肢を追加できるようにする。
@@ -416,7 +550,7 @@ Skillなどのテンプレートは共通仕様の要点を写したものなの
 | 9 | インフラ・デプロイ先 | Cloudflare | 自動で決定。環境は開発・検証・本番の3つ（[C-40](common/project-env.md#c-40)） |
 | 10 | DB | Cloudflare D1（標準）／PostgreSQL（Hyperdrive経由）／なし | |
 | 11 | PostgreSQLの提供元 | Neon／Supabase／その他 | 10でPostgreSQLを選んだ場合だけ聞く |
-| 12 | データアクセスのライブラリ | Drizzle ORM（候補） | ライブラリの決定後、自動で決定 |
+| 12 | データアクセスのライブラリ | Drizzle ORM | [F-24](#f-24)の技術プロファイルから選ぶ。初回はDrizzleのみのため自動で決定 |
 | 13 | 認証方式 | なし／アプリ独自認証／OIDC／両方の併用（推奨：OIDC） | [C-12](common/security.md#c-12) |
 | 14 | 外部IdP | Google／Microsoft／その他 | 13でOIDCか併用を選んだ場合だけ聞く |
 | 14-1 | ファイルのアップロード | 使う／使わない | [F-20](#f-20)。保存先は非公開のCloudflare R2（自動で決定） |

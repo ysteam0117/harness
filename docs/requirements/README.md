@@ -109,7 +109,7 @@
 | [C-61](common/quality-test.md#c-61) |  | common/quality-test.md |
 | [C-62](common/quality-test.md#c-62) |  | common/quality-test.md |
 | [C-63](common/security.md#c-63) |  | common/security.md |
-| [C-64](common/backend.md#c-64) |  | common/backend.md |
+| [C-64](common/backend.md#c-64) | 。デッドロックを起きにくくし、起きた場合はトランザクション全体を回数の上限付きでやり直す | common/backend.md |
 | [C-65](common/backend.md#c-65) |  | common/backend.md |
 | [C-66](common/workflow.md#c-66) |  | common/workflow.md |
 | [C-67](common/workflow.md#c-67) |  | common/workflow.md |
@@ -121,9 +121,10 @@
 | [C-73](common/error-response.md#c-73) |  | common/error-response.md |
 | [C-74](common/backend.md#c-74) |  | common/backend.md |
 | [C-75](common/design-principles.md#c-75) | 取り消しが難しい操作や、ほかの人の作業・環境に影響する破壊的な操作は、実行する前に利用者の判断を仰ぐ | common/design-principles.md |
-| [C-76](common/workflow.md#c-76) | 実装の前に、統括が利用者と対話して要件定義を行い、受け入れ条件付きのIssueに分割する。IssueごとにC-66の流れで実装する | common/workflow.md |
+| [C-76](common/workflow.md#c-76) | 実装の前に、統括が利用者と対話して要件定義を行い、HTML・CSS・JavaScriptのプロトタイプで動きを確かめてから、受け入れ条件付きのIssueに分割する。IssueごとにC-66の流れで実装する | common/workflow.md |
 | [C-77](common/frontend.md#c-77) | 操作した結果は、画面を再読み込みしなくても、そのページ全体にすぐ反映されるようにする | common/frontend.md |
 | [C-78](common/workflow.md#c-78) | 作業中に気づいたハーネスの改善点は、AIが自分で直さず、決まった形のIssueとして記録し、利用者が採用するかを判断する | common/workflow.md |
+| [C-79](common/quality-test.md#c-79) | 「壊そうとしても壊れないこと」を確かめるテスト（異常な入力・同時実行・障害・負荷・セキュリティ）を行う。カオステストは条件付きで検討する | common/quality-test.md |
 | [F-01](functional.md#f-01) | 対話形式でのハーネス生成 | functional.md |
 | [F-02](functional.md#f-02) | 使用AIの選択 | functional.md |
 | [F-03](functional.md#f-03) | AIの追加 | functional.md |
@@ -147,3 +148,5 @@
 | [F-21](functional.md#f-21) |  | functional.md |
 | [F-22](functional.md#f-22) | 共通仕様とテンプレートの対応の確認 | functional.md |
 | [F-23](functional.md#f-23) | ハーネスの改善の提案の仕組みの生成 | functional.md |
+| [F-24](functional.md#f-24) | 技術プロファイル | functional.md |
+| [F-25](functional.md#f-25) | AIの権限の設定と秘密情報の確認の生成 | functional.md |

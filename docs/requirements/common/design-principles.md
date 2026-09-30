@@ -112,4 +112,27 @@
 - **MUST**：確認する前に、`git status`等で失われるものがないかを確かめる
 - **SHOULD**：迷った場合は、削除ではなく、移動・名前の変更・一時的な退避など、元に戻せる方法を選ぶ
 - **MUST**：役割ごとのエージェント（[C-66](workflow.md#c-66)）は、破壊的な操作をしない。必要だと判断した場合は、実行せずに統括に報告し、統括が利用者の判断を仰ぐ
-- 利用者の判断を仰ぐだけでなく、AIの設定（Claude Codeの権限の設定等）で、特に危険なコマンドを実行できないようにすることも検討する（未決定事項を参照）
+
+### AIの設定による守り
+
+指示だけに頼らず、AIの設定でも、危険なコマンドに確認を求め、特に危険なものは禁止する（[F-25](../functional.md#f-25)）。
+
+| 扱い | Claude Code | Codex | 対象 |
+| --- | --- | --- | --- |
+| 毎回確認を求める | `permissions.ask` | `decision = "prompt"` | Gitの履歴や変更を失う操作（`git push --force`・`git reset --hard`・`git clean`・`git branch -D`・`git rebase`・`git checkout --`・`git restore`）、ファイルの削除（`rm -r`）、本番・共有の環境（`terraform apply`・`terraform destroy`・`wrangler deploy`・`--remote`を付けた`wrangler d1`）、依存関係の削除（`npm uninstall`）、GitHubでほかの人から見える操作（`gh pr close`・`gh issue delete`・`gh repo delete`）、Dockerのデータの削除（`docker system prune`・`docker volume rm`） |
+| 禁止する | `permissions.deny` | `decision = "forbidden"` | `main`への強制push（[C-42](workflow.md#c-42)）、実際の値が入った秘密情報のファイルの読み込み（[C-05](security.md#c-05)） |
+
+- 確認を求める設定は、AIに任せて進める設定にしていても、必ず確認を求める
+- 禁止は、許可の設定で上書きできない。各自の個人の設定で緩めても、禁止したものは守られる
+
+### 何重にも守る
+
+AIの設定のルールは、AIがふだん書く形のコマンドに当てはまるだけで、安全を保証する壁ではない（例：`bash -c '...'`や、コマンドの絶対パスで書かれると当てはまらない）。そのため、次を重ねて守る。
+
+| 守り | 内容 |
+| --- | --- |
+| 指示 | 本項と`AGENTS.md`で、破壊的な操作は判断を仰ぐよう指示する |
+| AIの設定 | 上記の確認・禁止のルール |
+| 書き込みの制限 | Codexの編集しない役割は`read-only`で動かす（[F-21](../functional.md#f-21)） |
+| GitHubの設定 | `main`への直接のpush・強制pushを、ブランチ保護で禁止する（[C-42](workflow.md#c-42)） |
+| 取り消しの手段 | DBのバックアップ（[C-41](project-env.md#c-41)）、Gitの履歴 |

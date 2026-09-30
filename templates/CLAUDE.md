@@ -18,6 +18,7 @@
 
 | 役割 | エージェント | モデル |
 | --- | --- | --- |
+| プロトタイプの作成 | `prototyper` | {{claude_model_prototyper}} |
 | 計画 | `planner` | {{claude_model_planner}} |
 | 計画レビュー | `plan-reviewer` | {{claude_model_plan_reviewer}} |
 | テスト | `test-writer` | {{claude_model_test_writer}} |
