@@ -1,0 +1,7 @@
+docs/
+templates/
+knowledge/
+README.md
+dist/
+node_modules/
+package-lock.json
