@@ -1,0 +1,27 @@
+# 技術プロファイル：テストの道具（F-24）
+id: vitest-playwright
+category: test-framework
+name: Vitest・Playwright ほか
+languages: [typescript]
+packages: [vitest, "@cloudflare/vitest-pool-workers", "@testing-library/react", "@testing-library/dom", "@testing-library/user-event", jsdom, msw, fast-check, "@playwright/test", k6]
+# ひな形で動作を確かめたバージョン（2026-09-30、Issue #19 の試作で確認）
+verified_versions:
+  vitest: "4.1.11"
+  "@cloudflare/vitest-pool-workers": "0.22.0"
+  "@testing-library/react": "16.3.3"
+  "@testing-library/dom": "10.4.2"
+  jsdom: "30.1.1"
+  msw: "3.0.1"
+  fast-check: "4.10.2"
+  "@playwright/test": "1.63.0"
+compatibility_notes:
+  - "@cloudflare/vitest-pool-workers は Vitest 4系にだけ対応する（5系は不可）"
+  - "vitest-pool-workers の中では pg（PostgreSQLのドライバ）を読み込めない。Workers＋PostgreSQL は wrangler dev に対するAPIのテストで確かめる"
+  - "msw はバージョンを明示する（指定しないと古い版が入ることがある）"
+  - "jsdom の画面の場所と、テストで呼ぶAPIのドメインをそろえる（別のドメインだと通信の制限で失敗する）"
+  - "k6 と OWASP ZAP は npm ではなく、手順書（docs/testing/）に沿って導入する"
+skill_name: test-tools
+files:
+  files/vitest.config.ts: vitest.config.ts
+  files/playwright.config.ts: playwright.config.ts
+  files/console-guard.ts: e2e/console-guard.ts

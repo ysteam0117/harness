@@ -1,0 +1,25 @@
+# 技術プロファイル：Hono（F-24）
+id: hono
+category: backend-framework
+name: Hono
+languages: [typescript]
+runtimes: [cloudflare-workers]
+packages: [hono, "@hono/zod-validator", zod, wrangler]
+# ひな形で動作を確かめたバージョン（2026-09-30、Issue #19 の試作で確認）
+verified_versions:
+  hono: "4.13.12"
+  "@hono/zod-validator": "0.9.1"
+  zod: "4.6.5"
+  wrangler: "4.144.0"
+compatibility_notes:
+  - "Hono の csrf ミドルウェアはフォームの送信だけを確かめる。状態を変える要求の送信元の確認は files/security.ts の originCheck を使う"
+  - "@hono/zod-validator は既定でZodの詳しいエラーを返す。files/validation.ts の validate を通して使う"
+  - "compatibility_date は、テストの道具（@cloudflare/vitest-pool-workers）が対応する日付以下にする"
+requires: [logger/structured-logger]
+skill_name: backend-hono
+files:
+  files/app-error.ts: backend/src/lib/app-error.ts
+  files/error-handler.ts: backend/src/lib/error-handler.ts
+  files/security.ts: backend/src/lib/security.ts
+  files/validation.ts: backend/src/lib/validation.ts
+  files/security.test.ts: backend/src/lib/security.test.ts

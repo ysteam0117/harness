@@ -428,8 +428,11 @@ templates/profiles/
 └─ <分類>/                     例：data-access、logger、http-client、test-framework、backend-framework
    ├─ _shared/                 分類の中で共通の部分
    └─ <ライブラリ>/
-      ├─ profile.yaml          対応する言語・DB、バージョンを調べるパッケージ名、検証済みのバージョン、引用する共通の部分
-      └─ SKILL.md              そのライブラリ固有のルール
+      ├─ profile.yaml          対応する言語・DB、バージョンを調べるパッケージ名、検証済みのバージョン、組み合わせの条件、
+      │                         引用する共通の部分（includes）、必要なほかのプロファイル（requires）、
+      │                         package.json に加える設定（package_json）、出力するファイルの対応（files）
+      ├─ SKILL.md              そのライブラリ固有のルール
+      └─ files/                生成するプロジェクトへ出力する、動作を確かめたコード・設定のひな形
 ```
 
 - `profile.yaml`の`includes`に、引用する共通の部分を書く。CLIは、共通の部分とライブラリ固有の部分をつないで、1つのSkill（例：`data-access-drizzle`）として出力する
@@ -449,16 +452,41 @@ templates/profiles/
 
 | 分類 | プロファイル | 含める道具・部品 | 状態 |
 | --- | --- | --- | --- |
-| バックエンドのフレームワーク | Hono | `app.onError`・`app.notFound`（[C-73](common/error-response.md#c-73)）、`secureHeaders`（[C-58](common/security.md#c-58)）、`cors`（[C-29](common/security.md#c-29)）、`csrf`（[C-28](common/security.md#c-28)）、`@hono/zod-validator`（[C-27](common/security.md#c-27)）、`app.routes`（GETの検証、[C-28](common/security.md#c-28)） | 決定（ひな形は未作成） |
-| データアクセス | Drizzle ORM | D1は`db.batch()`でトランザクション（`db.transaction()`は使えない）、PostgreSQLのドライバは`pg` | 決定（試作で確認済み：Issue #18） |
-| ロガー | 自作の共通ロガー | JSONを標準出力に出す小さな共通の部品。伏せ字・OpenTelemetryの項目名・監査ログ（[C-30](common/backend.md#c-30)）をひな形で用意する | 決定（ひな形は未作成） |
-| API通信（フロントエンド） | Axios | インスタンスとインターセプター（[C-46](common/frontend.md#c-46)） | 決定（ひな形は未作成） |
-| フロントエンドの状態・フォーム | 標準：TanStack Query、React Hook Form＋Zod／必要になったとき：Zustand | Zustandは最初から入れず、複数の画面で共有する状態が必要になったときに、承認を得て追加する（[C-32](common/quality-test.md#c-32)・[C-45](common/frontend.md#c-45)） | 決定（ひな形は未作成） |
-| テストの道具 | Vitest、@cloudflare/vitest-pool-workers、Testing Library、Playwright、MSW、fast-check、k6、OWASP ZAP | 単体・結合（フロントエンド・バックエンド共通）、Workersの実行環境でのテスト、コンポーネントのテスト、E2E、外部APIのモック、異常な入力のテスト、負荷・限界のテスト、セキュリティのテスト（[C-79](common/quality-test.md#c-79)） | 決定（ひな形は未作成） |
-| 品質チェックの道具 | ESLint＋typescript-eslint＋eslint-plugin-react-hooks、Prettier、TypeScript（`tsc`）、Stryker、dependency-cruiser、jscpd、`npm audit` | Lint、整形、型チェック、ミューテーションテスト、層をまたぐ依存の違反、重複、脆弱性 | 決定（ひな形は未作成） |
+| バックエンドのフレームワーク | Hono | `app.onError`・`app.notFound`（[C-73](common/error-response.md#c-73)）、`secureHeaders`（[C-58](common/security.md#c-58)）、`cors`（[C-29](common/security.md#c-29)）、`csrf`（[C-28](common/security.md#c-28)）、`@hono/zod-validator`（[C-27](common/security.md#c-27)）、`app.routes`（GETの検証、[C-28](common/security.md#c-28)） | 作成済み（Issue #19） |
+| データアクセス | Drizzle ORM | D1は`db.batch()`でトランザクション（`db.transaction()`は使えない）、PostgreSQLのドライバは`pg` | 作成済み（試作で確認済み：Issue #18） |
+| ロガー | 自作の共通ロガー | JSONを標準出力に出す小さな共通の部品。伏せ字・OpenTelemetryの項目名・監査ログ（[C-30](common/backend.md#c-30)）をひな形で用意する | 作成済み（Issue #19） |
+| フロントエンドの組み立て・画面の切り替え | Vite＋React Router | Cloudflare公式のViteの部品（`@cloudflare/vite-plugin`）で、画面（React）とAPI（Hono）を同じWorkersから同じドメインで配信する（[C-29](common/security.md#c-29)） | 作成済み（Issue #19） |
+| API通信（フロントエンド） | Axios | インスタンスとインターセプター（[C-46](common/frontend.md#c-46)） | 作成済み（Issue #19） |
+| フロントエンドの状態・フォーム | 標準：TanStack Query、React Hook Form＋Zod／必要になったとき：Zustand | Zustandは最初から入れず、複数の画面で共有する状態が必要になったときに、承認を得て追加する（[C-32](common/quality-test.md#c-32)・[C-45](common/frontend.md#c-45)） | 作成済み（Issue #19） |
+| テストの道具 | Vitest、@cloudflare/vitest-pool-workers、Testing Library、Playwright、MSW、fast-check、k6、OWASP ZAP | 単体・結合（フロントエンド・バックエンド共通）、Workersの実行環境でのテスト、コンポーネントのテスト、E2E、外部APIのモック、異常な入力のテスト、負荷・限界のテスト、セキュリティのテスト（[C-79](common/quality-test.md#c-79)） | 作成済み（Issue #19） |
+| 品質チェックの道具 | ESLint＋typescript-eslint＋eslint-plugin-react-hooks、Prettier、TypeScript（`tsc`）、Stryker、dependency-cruiser、jscpd、`npm audit` | Lint、整形、型チェック、ミューテーションテスト、層をまたぐ依存の違反、重複、脆弱性 | 作成済み（Issue #19） |
 
 - ライブラリを入れるのは、メンテナンス性が上がる場合に限る。使わなくてもよい場面で入れると、仕組みが複雑になるだけになるため、標準で入れるものと、必要になったときに追加するものを分ける（[C-38](common/design-principles.md#c-38)・[C-53](common/design-principles.md#c-53)）
 - 大きな版が新しくなったばかりの道具（TypeScript・Vitest等）は、ほかの道具が対応していない場合がある。ひな形を作るときに組み合わせて動くことを確かめ、検証済みのバージョンとして記録する
+
+#### Honoのプロファイル：セキュリティの設定値（初期値）
+
+| 項目 | 値 | 理由 |
+| --- | --- | --- |
+| CSP | `default-src 'self'`、`script-src 'self'`、`style-src 'self'`、`img-src 'self' data:`、`connect-src 'self'`、`frame-ancestors 'none'`、`object-src 'none'`、`base-uri 'self'`、`form-action 'self'` | 画面とAPIを同じドメインから配信するため、原則として自分のドメインだけを許可する。外部のサービスを使う場合は、プロジェクトごとに追加してADRに記録する |
+| CORS | 許可しない | 同じドメインの構成（[C-29](common/security.md#c-29)） |
+| CSRFのOriginの確認 | 自分のドメインだけを許可する。許可するドメインは、環境ごとに環境変数で持つ | [C-28](common/security.md#c-28) |
+
+#### 品質チェックの道具のプロファイル：合格の基準（初期値）
+
+| 項目 | 基準 | 補足 |
+| --- | --- | --- |
+| Lint・型チェック・整形 | エラーが0件 | 警告は記録するが、合否には使わない |
+| テストのカバレッジ | 合否には使わず、記録だけする | 割合を目標にすると、中身のないテストで数字を上げやすいため。テストの質は[C-25](common/quality-test.md#c-25)・[C-26](common/quality-test.md#c-26)とミューテーションテストで確かめる |
+| ミューテーションテストのスコア | 影響の大きい処理（認証・認可・個人情報・重要な業務ルール）で80%以上 | [C-25](common/quality-test.md#c-25) |
+| 関数の複雑さ（ESLintの`complexity`） | 1つの関数で15以下 | 超えたら分割を検討する |
+| 重複（jscpd） | 重複の割合が5%以下 | 超えたら共通化を検討する。偶然似ているだけのものは共通化しない（[C-38](common/design-principles.md#c-38)） |
+| 層をまたぐ依存（dependency-cruiser） | 違反が0件 | [C-03](common/backend.md#c-03)・[C-06](common/frontend.md#c-06) |
+| 依存ライブラリの脆弱性 | 本番の依存（`npm audit --omit=dev`）で、高・重大が0件 | [C-32](common/quality-test.md#c-32) |
+| 初回に読み込むJavaScriptの量 | 圧縮後200KB以下（目安） | [C-60](common/quality-test.md#c-60)の知見（仮説） |
+
+- セキュリティの設定値と合格の基準は、いずれも最初の目安とする。実際のプロジェクトで使った結果をもとに、ハーネスの改善の提案（[C-78](common/workflow.md#c-78)）や知見の見直し（[F-18](#f-18)）で見直す
+- プロジェクトの事情で変える場合は、`docs/project-rules.md`に書く。緩める場合はADRに記録し、承認を得る（[C-80](common/workflow.md#c-80)）
 
 #### 試作で見つかった、道具の組み合わせの条件（2026-09-30、Issue #18）
 
@@ -474,6 +502,11 @@ templates/profiles/
 | Workersの環境変数の型 | `wrangler types`で生成し、生成したファイルはLint・整形の対象から外す |
 
 - このように、[F-19](#f-19)の「最新の安定版」をそのまま選ぶと動かない組み合わせがある。CLIは、最新の安定版を示すときに、`profile.yaml`の組み合わせの条件と照らし合わせ、条件に合う中で最新のものを示す
+
+#### プロファイルのひな形の確認（Issue #19）
+
+- 各プロファイルの`files/`のコード（ロガー・エラーの処理・セキュリティ・入力チェック・API通信・E2Eのコンソールの監視）と設定（ESLint・dependency-cruiser）は、試作のフォルダで型チェック・テスト・Lint・整形を通して確かめた
+- 試作で見つかり、ひな形に反映した問題：Honoの`csrf`はJSONの要求を確かめない（→`originCheck`）、`@hono/zod-validator`がZodの詳しいエラーを返す（→`validate`）、`@hookform/resolvers`とZod 4系のぶつかり（→`overrides`）、ローカルのD1の保存先のずれ、`app.onError`でのログの不足、ポートの確認での`TIME_WAIT`の誤判定、Reactのルール（react-hooks）がE2Eの`use`を誤判定する（→フロントエンドだけに適用）
 
 #### Honoのプロファイル：Cloudflareでのバッチ処理の使い分け
 

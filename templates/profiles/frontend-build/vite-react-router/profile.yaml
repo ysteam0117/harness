@@ -1,0 +1,23 @@
+# 技術プロファイル：Vite＋React Router（F-24）
+id: vite-react-router
+category: frontend-build
+name: Vite＋React Router
+languages: [typescript]
+packages: [vite, "@vitejs/plugin-react", "@cloudflare/vite-plugin", react, react-dom, react-router]
+# ひな形で動作を確かめたバージョン（2026-09-30、Issue #19 の試作で確認）
+verified_versions:
+  vite: "8.3.1"
+  "@vitejs/plugin-react": "6.1.1"
+  "@cloudflare/vite-plugin": "1.62.2"
+  react: "19.3.0"
+  react-dom: "19.3.0"
+  react-router: "8.4.0"
+compatibility_notes:
+  - "@cloudflare/vite-plugin で、画面とAPI（Hono）を1つのWorkersにまとめ、同じドメインから配信する"
+  - "wrangler.jsonc の assets に run_worker_first（/api/*）と not_found_handling（single-page-application）を設定する"
+  - "Viteの起点（root）とローカルのD1の保存先をそろえる。マイグレーションの適用時は --persist-to で同じ保存先を指定する"
+  - "2026-09-30 の確認で、初回に読み込むJavaScriptは圧縮後161KB（React・React Router・TanStack Query・React Hook Form・Zod・Axios）"
+skill_name: frontend-build
+files:
+  files/vite.config.ts: vite.config.ts
+  files/wrangler.jsonc: wrangler.jsonc

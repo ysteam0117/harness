@@ -1,0 +1,20 @@
+# 技術プロファイル：TanStack Query＋React Hook Form＋Zod（F-24）
+id: tanstack-query-rhf-zod
+category: frontend-state
+name: TanStack Query＋React Hook Form＋Zod
+languages: [typescript]
+packages: ["@tanstack/react-query", react-hook-form, "@hookform/resolvers", zod]
+optional_packages: [zustand]   # 必要になったときに、承認を得て追加する（C-32・C-45）
+# ひな形で動作を確かめたバージョン（2026-09-30、Issue #19 の試作で確認）
+verified_versions:
+  "@tanstack/react-query": "5.104.0"
+  react-hook-form: "7.89.0"
+  "@hookform/resolvers": "5.9.1"
+  zod: "4.6.5"
+compatibility_notes:
+  - "@hookform/resolvers は任意の部品を通して Zod 3系を求め、Zod 4系とぶつかる。package.json の overrides で @typeschema/zod の zod に $zod を使わせる"
+package_json:
+  overrides:
+    "@typeschema/zod":
+      zod: "$zod"
+skill_name: frontend-state

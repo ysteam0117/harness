@@ -1,0 +1,13 @@
+# 技術プロファイル：Axios（F-24）
+id: axios
+category: http-client
+name: Axios
+languages: [typescript]
+packages: [axios]
+# ひな形で動作を確かめたバージョン（2026-09-30、Issue #19 の試作で確認）
+verified_versions:
+  axios: "1.20.0"
+skill_name: http-client-axios
+files:
+  files/api-client.ts: frontend/src/services/api-client.ts
+  files/api-client.test.ts: frontend/src/services/api-client.test.ts

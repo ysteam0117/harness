@@ -1,0 +1,6 @@
+{
+  "testRunner": "vitest",
+  "mutate": ["{{mutation_targets}}"],
+  "reporters": ["clear-text", "html"],
+  "thresholds": { "break": 80 }
+}

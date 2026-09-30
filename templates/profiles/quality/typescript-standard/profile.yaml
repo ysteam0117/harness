@@ -1,0 +1,41 @@
+# 技術プロファイル：品質チェックの道具（TypeScript、F-24）
+id: typescript-standard
+category: quality
+name: ESLint・Prettier・tsc・Stryker・dependency-cruiser・jscpd
+languages: [typescript]
+packages: [eslint, typescript-eslint, eslint-plugin-react-hooks, prettier, typescript, "@stryker-mutator/core", "@stryker-mutator/vitest-runner", dependency-cruiser, jscpd]
+# ひな形で動作を確かめたバージョン（2026-09-30、Issue #19 の試作で確認）
+verified_versions:
+  eslint: "10.11.0"
+  typescript-eslint: "8.71.0"
+  eslint-plugin-react-hooks: "7.1.1"
+  prettier: "3.9.9"
+  typescript: "6.0.3"
+  "@stryker-mutator/core": "10.0.0"
+  "@stryker-mutator/vitest-runner": "10.0.0"
+  dependency-cruiser: "18.4.0"
+  jscpd: "5.3.3"
+compatibility_notes:
+  - "typescript-eslint は TypeScript 6.1 未満にだけ対応する（7系は不可）"
+  - "npm 11 では esbuild・workerd のインストール時の処理が既定で実行されないため、package.json に allowScripts を設定する"
+  - "npm audit の合否は本番の依存（--omit=dev）で判定する。開発用の道具の脆弱性は記録して更新の判断に使う"
+package_json:
+  scripts:
+    check: "npm run lint && npm run typecheck && npm run format:check && npm run deps:check && npm run dup:check && npm test && npm run audit:prod"
+    lint: "eslint ."
+    typecheck: "tsc -p ."
+    format:check: "prettier --check ."
+    deps:check: "depcruise frontend/src backend/src --config .dependency-cruiser.cjs"
+    dup:check: "jscpd frontend/src backend/src"
+    mutation: "stryker run"
+    audit:prod: "npm audit --omit=dev --audit-level=high"
+    env:check: "node scripts/env-check.mjs"
+  allowScripts:
+    esbuild: true
+    workerd: true
+skill_name: quality-tools
+files:
+  files/eslint.config.mjs: eslint.config.mjs
+  files/dependency-cruiser.cjs: .dependency-cruiser.cjs
+  files/stryker.config.json: stryker.config.json
+  files/jscpd.json: .jscpd.json

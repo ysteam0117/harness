@@ -1,0 +1,10 @@
+# 技術プロファイル：自作の共通ロガー（F-24）
+id: structured-logger
+category: logger
+name: 自作の共通ロガー
+languages: [typescript]
+packages: []   # ライブラリを使わない
+skill_name: logger
+files:
+  files/logger.ts: backend/src/lib/logger/logger.ts
+  files/logger.test.ts: backend/src/lib/logger/logger.test.ts
