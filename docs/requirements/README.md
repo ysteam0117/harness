@@ -150,3 +150,4 @@
 | [F-23](functional.md#f-23) | ハーネスの改善の提案の仕組みの生成 | functional.md |
 | [F-24](functional.md#f-24) | 技術プロファイル | functional.md |
 | [F-25](functional.md#f-25) | AIの権限の設定と秘密情報の確認の生成 | functional.md |
+| [F-26](functional.md#f-26) | 共通仕様の判定に必要な質問 | functional.md |
