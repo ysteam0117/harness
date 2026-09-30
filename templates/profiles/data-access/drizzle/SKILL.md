@@ -63,4 +63,5 @@ description: Drizzle ORMでDBにアクセスするときのルール。スキー
 - 結合テストは`@cloudflare/vitest-pool-workers`（`cloudflareTest`の設定）で、Workersと同じ実行エンジンで行う。ローカルのD1（またはテスト用のPostgreSQLのコンテナ）に、マイグレーションとシードを適用してから行う
 - `wrangler.jsonc`の`compatibility_date`は、テストの道具に同梱された実行エンジンが対応する日付以下にする（新しすぎると起動しない）
 - 実行計画は`EXPLAIN QUERY PLAN <SQL>`で取得し、インデックスが使われているか（`USING INDEX`）を確かめる
+- インデックスの付け方は、Skill「知見」の`db/index-design`（検索・結合・並び順の列、複合インデックスの列の順、外部キーの列、値の種類が少ない列、部分一致、書き込みへの影響）を読む
 - 実行されたSQLの数を数えて、N+1が起きていないことを確かめる
