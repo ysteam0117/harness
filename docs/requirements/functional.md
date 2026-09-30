@@ -23,6 +23,8 @@
 | [F-19](#f-19) | バージョンの調査と選定理由の記録 | MUST | 選んだ技術について、最新の安定版などを調べたうえで採用するバージョンを決め、なぜそのバージョンにしたかを記録する |
 | [F-20](#f-20) | ファイル保存の選択 | MUST | 利用者がアップロードするファイルを扱うかと、ファイルの種類を選べる。扱う場合は、非公開の保存先（初回はCloudflare R2）とアップロード処理のひな形を生成する |
 | [F-21](#f-21) | AI向け設定ファイルの構成 | MUST | 共通ルールの核を`AGENTS.md`に、分野別の詳細をSkillに分けて生成し、役割ごとのエージェントの定義から必要なSkillだけを読み込ませる |
+| [F-22](#f-22) | 共通仕様とテンプレートの対応の確認 | MUST | 共通仕様の各項目が、生成するテンプレート（`AGENTS.md`・Skill・エージェントの定義）のどこかに反映されているかを自動で確認する |
+| [F-23](#f-23) | ハーネスの改善の提案の仕組みの生成 | MUST | 改善の提案（[C-78](common/workflow.md#c-78)）を記録するIssueテンプレート・ラベル・設定を生成し、ハーネス側で提案を集める手段を用意する |
 
 <a id="f-08"></a>
 
@@ -318,14 +320,31 @@ knowledge/
 | --- | --- |
 | `AGENTS.md` | 共通ルールの核。全AI共通の本体（[F-04](#f-04)）。冒頭に日本語での表示のルール（[C-67](common/workflow.md#c-67)）を書く |
 | `CLAUDE.md` | `@AGENTS.md`で本体を読み込み、Claude固有の内容（エージェントの呼び出し方等）だけを書く |
-| Skill（`.claude/skills/`等） | 分野別の詳細ルール。必要な作業のときだけ読み込む |
+| Skill | 分野別の詳細ルール。必要な作業のときだけ読み込む。Claude Codeは`.claude/skills/<名前>/SKILL.md`、Codexは`.agents/skills/<名前>/SKILL.md`（中身は同じ） |
 | エージェントの定義（`.claude/agents/`等） | [C-66](common/workflow.md#c-66)の役割ごとの定義。使うモデルと、読み込むSkillを書く |
 | `.harness/config.yaml` | CLIへの回答、使ったハーネスのバージョン（[C-08](common/workflow.md#c-08)）、役割とモデルの割り当て（[C-66](common/workflow.md#c-66)）。ハーネスの更新（Issue #7）にも使う |
 
 - Skillの書き方（`SKILL.md`）はClaude CodeとCodexでほぼ共通のため、中身は1つを元にして、置き場所だけをAIごとに出し分ける（アダプタ、[F-03](#f-03)）
 - 共有の範囲はC-68に従う
 
-#### 核とSkillの分け方
+#### ひな形とAIごとの出力（アダプタ）
+
+ハーネスのひな形は、AIに依存しない1つのもとから作り、CLIが選んだAIに応じて出し分ける（[F-03](#f-03)・[F-04](#f-04)）。
+
+| ひな形（ハーネスのリポジトリ） | Claude Codeへの出力 | Codexへの出力 |
+| --- | --- | --- |
+| `templates/AGENTS.md` | `AGENTS.md`（`CLAUDE.md`から読み込む） | `AGENTS.md` |
+| `templates/CLAUDE.md` | `CLAUDE.md` | 出力しない |
+| `templates/skills/<名前>/SKILL.md` | `.claude/skills/<名前>/SKILL.md` | `.agents/skills/<名前>/SKILL.md` |
+| `templates/agents/<名前>.md` | `.claude/agents/<名前>.md`（冒頭の`claude:`の設定と本文） | `.codex/agents/<名前>.toml`（冒頭の`codex:`の設定と、本文を`developer_instructions`に入れる） |
+
+- エージェントのひな形の冒頭には、Claude Code用（`tools`・`model`）とCodex用（`name`・`model`・`model_reasoning_effort`・`sandbox_mode`）の設定を両方書き、本文は共通にする
+- Codexのエージェントの`sandbox_mode`は、編集しない役割（`planner`・`plan_reviewer`・`code_reviewer`）を`read-only`にし、書き込みを仕組みで防ぐ。テストを実行する`quality_checker`は、キャッシュ等が作られるため`workspace-write`にし、指示で編集を禁じる
+- Codexのエージェント名は、公式の例に合わせて英小文字とアンダースコア（`plan_reviewer`等）にする
+- Codexはエージェントを自動では起動しないため、Skill「実装の進め方」に、名前を指定して起動する方法を書く
+- 置き場所・形式は2026年9月時点の公式ドキュメント（Codex：Build skills／Subagents）で確認した。変更された場合は見直す
+
+### 核とSkillの分け方
 
 「知らないまま作業すると、どの作業でも違反しうるか」を基準に分ける。核は短く保つ。
 
@@ -337,21 +356,48 @@ knowledge/
 - 秘密情報・テストデータの禁止事項（[C-05](common/security.md#c-05)）
 - AIの作業ルール（[C-53](common/design-principles.md#c-53)）、完了の定義（[C-34](common/workflow.md#c-34)）
 - 知見の使い方（[C-56](common/design-principles.md#c-56)）と、各Skill・文書の場所の案内
+- 破壊的な操作（[C-75](common/design-principles.md#c-75)）、ハーネスの改善の提案（[C-78](common/workflow.md#c-78)）、要件定義とIssueへの分割（[C-76](common/workflow.md#c-76)）、エラーのもみ消しの禁止（[C-71](common/error-response.md#c-71)）、テスト後の後始末（[C-69](common/quality-test.md#c-69)）
+- 構成（[C-02](common/project-env.md#c-02)）、ライブラリの追加とバージョンの固定（[C-32](common/quality-test.md#c-32)・[C-62](common/quality-test.md#c-62)）、メンテナンス性（[C-38](common/design-principles.md#c-38)）
+- `CLAUDE.md`：Superpowers（[C-11](common/workflow.md#c-11)）、共有の範囲（[C-68](common/workflow.md#c-68)）、役割ごとのエージェントとモデル（[C-66](common/workflow.md#c-66)）
 
 **Skill（その作業のときだけ読み込む）**
 
 | Skill | 含める共通仕様 | 主に読む役割 |
 | --- | --- | --- |
-| バックエンド | [C-03](common/backend.md#c-03)・[C-04](common/backend.md#c-04)・[C-10](common/backend.md#c-10)・[C-30](common/backend.md#c-30)・[C-31](common/backend.md#c-31)・[C-37](common/backend.md#c-37)・[C-64](common/backend.md#c-64)・[C-65](common/backend.md#c-65) | 計画・実装・コードレビュー |
-| フロントエンド | [C-06](common/frontend.md#c-06)・[C-43](common/frontend.md#c-43)〜[C-52](common/frontend.md#c-52)・[C-54](common/frontend.md#c-54)・[C-55](common/frontend.md#c-55) | 計画・実装・コードレビュー |
-| テスト | [C-24](common/quality-test.md#c-24)〜[C-26](common/quality-test.md#c-26)・[C-69](common/quality-test.md#c-69) | テスト・品質チェック |
-| セキュリティ | [C-09](common/security.md#c-09)・[C-12](common/security.md#c-12)〜[C-20](common/security.md#c-20)・[C-27](common/security.md#c-27)〜[C-29](common/security.md#c-29)・[C-58](common/security.md#c-58)・[C-59](common/security.md#c-59)・[C-63](common/security.md#c-63) | 計画・コードレビュー（影響大のとき） |
-| エラー応答・API | [C-15](common/error-response.md#c-15)・[C-31](common/backend.md#c-31) | 実装・コードレビュー |
-| 環境・デプロイ | [C-36](common/project-env.md#c-36)・[C-39](common/project-env.md#c-39)〜[C-41](common/project-env.md#c-41) | 統括（デプロイの承認を依頼するとき） |
+| 実装の進め方 | [C-76](common/workflow.md#c-76)・[C-66](common/workflow.md#c-66)・[C-33](common/workflow.md#c-33)・[C-34](common/workflow.md#c-34)・[C-35](common/workflow.md#c-35)・[C-07](common/workflow.md#c-07) | 統括（要件定義・Issueへの分割・Issueの実装を始めるとき） |
+| バックエンド | [C-03](common/backend.md#c-03)・[C-04](common/backend.md#c-04)・[C-10](common/backend.md#c-10)・[C-30](common/backend.md#c-30)・[C-31](common/backend.md#c-31)・[C-37](common/backend.md#c-37)・[C-64](common/backend.md#c-64)・[C-65](common/backend.md#c-65)・[C-74](common/backend.md#c-74)・[C-57](common/design-principles.md#c-57) | 計画・実装・コードレビュー |
+| フロントエンド | [C-06](common/frontend.md#c-06)・[C-43](common/frontend.md#c-43)〜[C-52](common/frontend.md#c-52)・[C-54](common/frontend.md#c-54)・[C-55](common/frontend.md#c-55)・[C-77](common/frontend.md#c-77)・[C-57](common/design-principles.md#c-57) | 計画・実装・コードレビュー |
+| テスト | [C-24](common/quality-test.md#c-24)〜[C-26](common/quality-test.md#c-26)・[C-69](common/quality-test.md#c-69)・[C-70](common/quality-test.md#c-70)・[C-60](common/quality-test.md#c-60)・[C-61](common/quality-test.md#c-61) | テスト・品質チェック |
+| セキュリティ | [C-09](common/security.md#c-09)・[C-12](common/security.md#c-12)〜[C-20](common/security.md#c-20)・[C-27](common/security.md#c-27)〜[C-29](common/security.md#c-29)・[C-58](common/security.md#c-58)・[C-59](common/security.md#c-59)・[C-63](common/security.md#c-63)・[C-72](common/security.md#c-72) | 計画・コードレビュー（影響大のとき） |
+| エラー応答・API | [C-15](common/error-response.md#c-15)・[C-71](common/error-response.md#c-71)・[C-73](common/error-response.md#c-73)・[C-31](common/backend.md#c-31) | 実装・コードレビュー |
+| 環境・デプロイ | [C-36](common/project-env.md#c-36)・[C-39](common/project-env.md#c-39)〜[C-41](common/project-env.md#c-41)・[C-08](common/workflow.md#c-08) | 統括（デプロイの承認を依頼するとき） |
 | レビュー | [C-33](common/workflow.md#c-33)と、レビューの実行方法（別のAIの実行時の注意等） | 計画レビュー・コードレビュー |
 | 知見 | [F-18](#f-18)と、該当する`knowledge/`の知見 | 全役割（判断に迷ったとき） |
 
 - 各役割のエージェントの定義に、読み込むSkillを書き、役割ごとに必要なルールだけを読み込ませる
+
+<a id="f-22"></a>
+
+## F-22：共通仕様とテンプレートの対応の確認
+
+Skillなどのテンプレートは共通仕様の要点を写したものなので、共通仕様だけを変えてテンプレートを直し忘れると、生成されるプロジェクトに古いルールが配られてしまう。これを防ぐ。
+
+- ハーネスのリポジトリのPRテンプレートに、「共通仕様を変えた場合は、対応するテンプレートも直したか」の確認欄を設ける。どの番号がどのSkillに対応するかは、[F-21](#f-21)の表で確かめる
+- CLIの開発時に、次を自動で確かめるチェックを作り、CIで実行する
+  - 共通仕様の各番号（C-xx）が、[F-21](#f-21)の表でいずれかの核・Skillに割り当てられていること
+  - 各テンプレートの冒頭に、もとになった共通仕様の番号の一覧があり、[F-21](#f-21)の表と一致していること
+- 共通仕様の番号を追加したのに、どのテンプレートにも割り当てていない場合は、チェックを失敗にする
+
+<a id="f-23"></a>
+
+## F-23：ハーネスの改善の提案の仕組みの生成
+
+- CLIは、生成するプロジェクトに次を用意する
+  - Issueテンプレート（`.github/ISSUE_TEMPLATE/harness-feedback.md`）
+  - `harness-feedback`のラベル（作成の手順をREADMEに記載する）
+  - `.harness/config.yaml`の記録する場所の設定：`feedback_target`（`project`が既定、`harness`も選べる）と、`harness`の場合の`harness_repo`（ハーネスのリポジトリ）
+- 記録する場所の設定は質問せず、既定の`project`で生成する。`harness`に変えたい人は、設定ファイルを書き換える
+- ハーネスのリポジトリには、各プロジェクトから`harness-feedback`のラベルが付いたIssueを集めて一覧にする手順（`gh`コマンド等）を用意し、月1回の見直しで使う
 
 ## 対話の質問順（案）
 
