@@ -155,3 +155,4 @@
 | [F-26](functional.md#f-26) | 共通仕様の判定に必要な質問 | functional.md |
 | [F-27](functional.md#f-27) | 生成済みのプロジェクトへのハーネスの更新 | functional.md |
 | [F-28](functional.md#f-28) | CLI本体 | functional.md |
+| [F-29](functional.md#f-29) | 既存のプロジェクトへのハーネスの導入 | functional.md |
