@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { Command, Help } from "commander";
-import { createCommand } from "./commands/create.js";
+import { createCommand, type CreateDeps } from "./commands/create.js";
 import { statusCommand } from "./commands/status.js";
 import { updateCommand } from "./commands/update.js";
 
@@ -27,7 +27,7 @@ function translatePlaceholders(text: string): string {
   return text.replaceAll("[options]", "[オプション]").replaceAll("[command]", "[コマンド]");
 }
 
-export function createProgram(): Command {
+export function createProgram(deps: Partial<CreateDeps> = {}): Command {
   const program = new Command("harness");
   program
     .description("AI 開発ハーネスを作成・更新するコマンド")
@@ -60,7 +60,7 @@ export function createProgram(): Command {
   program.hook("preSubcommand", (root, subcommand) => {
     subcommand.copyInheritedSettings(root);
   });
-  program.addCommand(createCommand());
+  program.addCommand(createCommand(deps));
   program.addCommand(updateCommand());
   program.addCommand(statusCommand());
   return program;

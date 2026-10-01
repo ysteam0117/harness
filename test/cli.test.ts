@@ -1,8 +1,11 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { stringify } from "yaml";
+import { CancelledError } from "../src/questions/prompter.js";
 import { createProgram } from "../src/program.js";
+import { FakePrompter, baseAnswers, cleanupTmp, makeTmp } from "./questions/helpers.js";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(readFileSync(path.join(rootDir, "package.json"), "utf8")) as {
@@ -12,7 +15,7 @@ const pkg = JSON.parse(readFileSync(path.join(rootDir, "package.json"), "utf8"))
 const JAPANESE = /[ぁ-んァ-ヶ一-龠]/;
 
 /** 実行して、標準出力・標準エラーに出た文字と、commander が投げたエラーを集める */
-async function run(args: string[]) {
+async function run(args: string[], deps?: Parameters<typeof createProgram>[0]) {
   const out: string[] = [];
   const err: string[] = [];
   const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation((chunk: unknown) => {
@@ -22,7 +25,7 @@ async function run(args: string[]) {
   const errorSpy = vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => {
     err.push(a.map(String).join(" ") + "\n");
   });
-  const program = createProgram();
+  const program = createProgram(deps);
   program.exitOverride();
   program.configureOutput({
     writeOut: (s) => out.push(s),
@@ -46,6 +49,7 @@ beforeEach(() => {
 afterEach(() => {
   process.exitCode = undefined;
   vi.restoreAllMocks();
+  cleanupTmp();
 });
 
 describe("#30 AC-1: harness --help", () => {
@@ -71,7 +75,8 @@ describe("#30 AC-1: harness --help", () => {
 });
 
 describe("#30 AC-1: 未実装のコマンド", () => {
-  for (const name of ["create", "update", "status"]) {
+  // create は #32 で実装された（動きは下の「#32 R5」で確かめる）
+  for (const name of ["update", "status"]) {
     it(`#30 AC-1: ${name} は標準エラーに「未実装」の文言を出し、終了コードが1になる`, async () => {
       const { err, out } = await run([name]);
       expect(err).toContain("未実装");
@@ -184,5 +189,58 @@ describe("#30 AC-1: コマンドの説明の文と使い方の行（F-28）", ()
     const text = out + err;
     expect(text).toContain("[オプション]");
     expect(text).not.toContain("[options]");
+  });
+});
+
+describe("#32 R5: create コマンド（CLI 経由）", () => {
+  const okTools = async () => [
+    { name: "node" as const, state: "ok" as const, version: "24.0.0" },
+    { name: "git" as const, state: "ok" as const, version: "2.45.0" },
+    { name: "docker" as const, state: "ok" as const, version: "27.0.1" },
+  ];
+
+  it("#32 AC-4: --answers の完全な YAML と --yes で、確認まで進み「生成は Issue #34 で実装予定です」で終了コード1。入力は求めない", async () => {
+    const tmp = makeTmp();
+    const file = path.join(tmp.inputDir, "answers.yaml");
+    writeFileSync(file, stringify(baseAnswers()));
+    const prompter = new FakePrompter({});
+    const { err } = await run(["create", "--answers", file, "--yes"], {
+      prompter,
+      cwd: tmp.cwd,
+      interactive: false,
+      checkTools: okTools,
+    });
+    expect(err).toContain("生成は Issue #34 で実装予定です");
+    expect(prompter.inputs).toHaveLength(0);
+    expect(process.exitCode).toBe(1);
+    expect(readdirSync(tmp.cwd)).toEqual([]);
+  });
+
+  it("#32 AC-1: --answers なしで、質問を始める（最初の質問は app_name）", async () => {
+    const tmp = makeTmp();
+    const prompter = new FakePrompter({ app_name: [new CancelledError()] });
+    await run(["create"], { prompter, cwd: tmp.cwd, interactive: true, checkTools: okTools });
+    expect(prompter.askedIds[0]).toBe("app_name");
+  });
+
+  it("#32 AC-5: 質問の途中で中断すると、「中断しました。ファイルは作成していません。」で終了コード130。ファイルは作られない", async () => {
+    const tmp = makeTmp();
+    const prompter = new FakePrompter({ app_name: ["testapp-001"], ais: [new CancelledError()] });
+    const { err } = await run(["create"], {
+      prompter,
+      cwd: tmp.cwd,
+      interactive: true,
+      checkTools: okTools,
+    });
+    expect(err).toContain("中断しました。ファイルは作成していません。");
+    expect(process.exitCode).toBe(130);
+    expect(readdirSync(tmp.cwd)).toEqual([]);
+  });
+
+  it("#32 AC-4: create --help に --yes の日本語の説明がある", async () => {
+    const { out, err } = await run(["create", "--help"]);
+    const line = (out + err).split(/\r?\n/).find((l) => l.includes("--yes"));
+    expect(line).toBeDefined();
+    expect(line).toMatch(JAPANESE);
   });
 });

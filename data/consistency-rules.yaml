@@ -1,0 +1,103 @@
+# 回答の整合性チェックのルール（F-08）。ルールを足すときは、この一覧に書き足すだけでよい。
+#
+# level : error（技術的に成り立たない）／warning（成り立つが推奨しない）／info（知っておくべきこと）
+# when  : all（すべて）か any（いずれか）に、条件を並べる
+#   answer : 質問の id。equals・in・notEquals のどれか1つで判定する
+#   fact   : 回答以外の事実（src/checks/rules.ts の FACT_NAMES）。equals・in・truthy のどれか1つで判定する
+# fix   : エラーのときに、直すべき質問の id（警告・情報は空でよい）
+
+- id: auth-needs-db
+  level: error
+  when:
+    all:
+      - { answer: auth, in: [app, both] }
+      - { answer: database, equals: none }
+  message: 認証が「アプリ独自認証」または「併用」で、DBが「なし」です
+  reason: 利用者の情報を保存する場所がありません
+  fix: [auth, database]
+
+- id: upload-needs-db
+  level: error
+  when:
+    all:
+      - { answer: file_upload, equals: yes }
+      - { answer: database, equals: none }
+  message: ファイルのアップロードを使い、DBが「なし」です
+  reason: ファイルの持ち主を記録できず、権限の確認と削除時の後始末ができません
+  fix: [file_upload, database]
+
+- id: upload-without-auth
+  level: warning
+  when:
+    all:
+      - { answer: file_upload, equals: yes }
+      - { answer: auth, equals: none }
+  message: ファイルのアップロードを使い、認証が「なし」です
+  reason: 誰でもアップロードでき、いたずらや容量の浪費につながります。公開のファイルとして扱う場合に限って成り立ちます
+  fix: [file_upload, auth]
+
+- id: team-needs-ci
+  level: warning
+  when:
+    all:
+      - { answer: team_size, equals: team }
+      - { answer: check_location, equals: local }
+  message: 開発人数が「複数人」で、品質チェックの実行場所が「ローカルのみ」です
+  reason: マージの前に、他の人の変更も含めた品質チェックが自動で行われません
+  fix: [team_size, check_location]
+
+- id: public-needs-ci
+  level: warning
+  when:
+    all:
+      - { answer: visibility, equals: public }
+      - { answer: check_location, equals: local }
+  message: リポジトリが「公開」で、品質チェックの実行場所が「ローカルのみ」です
+  reason: 外部からのPRを自動でチェックできません
+  fix: [visibility, check_location]
+
+- id: postgresql-needs-service
+  level: info
+  when:
+    all:
+      - { answer: database, equals: postgresql }
+  message: DBが「PostgreSQL」です
+  reason: 外部のDBサービスの契約が必要になり、D1より構成と費用が増えます
+  fix: [database]
+
+- id: version-newer-than-verified
+  level: warning
+  when:
+    all:
+      - { answer: version_policy, equals: latest }
+      - { fact: versions_newer_than_verified, truthy: true }
+  message: バージョンで「最新の安定版」を選び、検証済みより新しいものがあります
+  reason: ハーネスでの動作を確認していません
+  fix: []
+
+- id: missing-tools
+  level: warning
+  when:
+    all:
+      - { fact: missing_tools, truthy: true }
+  message: このPCに必要なツールがない、またはバージョンが足りません
+  reason: 生成はできますが、そのままでは起動・テストできません。導入の案内を確認してください
+  fix: []
+
+- id: invalid-app-name
+  level: error
+  when:
+    all:
+      - { fact: invalid_app_name, truthy: true }
+  message: アプリ名が命名規則（英小文字・数字・ハイフン。先頭と末尾はハイフン不可）に合いません
+  reason: Dockerのコンテナ名などに使えません
+  fix: [app_name]
+
+- id: target-dir-not-empty
+  level: error
+  when:
+    all:
+      - { fact: target_dir_not_empty, truthy: true }
+  message: 生成先のフォルダに、すでに中身があります
+  reason: 既存のファイルを上書きしないため、生成できません
+  fix: [app_name]

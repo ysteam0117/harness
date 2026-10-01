@@ -1,7 +1,7 @@
 // 配布物の確認：組み立て → npm pack → 一時フォルダへインストール → harness --help の確認。
 // 手元の環境を汚さないよう、グローバルへのインストールは使わない。
-import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -64,6 +64,57 @@ function npm(args: string[], cwd: string): string {
   return run(process.execPath, [npmCli, ...args], cwd);
 }
 
+/** 配布物の確認に使う、架空の回答（実在しない値だけ）。手元の道具の警告は環境で変わるため、承知済みにしておく */
+const SAMPLE_ANSWERS = `app_name: testapp-001
+ais: [claude]
+visibility: private
+team_size: solo
+database: d1
+auth: oidc
+idp: google
+personal_data: none
+admin: no
+critical_ops: "no"
+collaborative: "no"
+org_separation: "no"
+realtime: "no"
+availability: tolerant
+file_upload: "no"
+check_location: both
+version_policy: verified
+accepted_warnings: [missing-tools]
+`;
+
+/**
+ * インストールした配布物で `harness create --answers <架空の回答> --yes` を実行し、
+ * ルールのデータ（data/）を読めて「生成は Issue #34 で実装予定」で終わる（終了コード1）ことを確かめる。
+ * 失敗する終了コードを例外にせず、内容を確かめるため spawnSync を使う（shell は使わない）。
+ */
+function checkCreate(workDir: string, installDir: string): void {
+  const npmCli = process.env.npm_execpath;
+  if (!npmCli) {
+    throw new Error("npm run pack:check で実行してください（npm_execpath が見つかりません）");
+  }
+  const answersFile = path.join(workDir, "answers.yaml");
+  writeFileSync(answersFile, SAMPLE_ANSWERS);
+  const r = spawnSync(
+    process.execPath,
+    [npmCli, "exec", "--no", "--", "harness", "create", "--answers", answersFile, "--yes"],
+    { cwd: installDir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true },
+  );
+  if (r.error) {
+    throw new Error(`harness create を起動できませんでした：${r.error.message}`);
+  }
+  const output = `${r.stdout}
+${r.stderr}`;
+  if (r.status !== 1 || !output.includes("生成は Issue #34 で実装予定")) {
+    throw new Error(
+      `harness create の結果が想定と違います（終了コード ${String(r.status)}。想定は 1 と「生成は Issue #34 で実装予定」の表示）：
+${output}`,
+    );
+  }
+}
+
 function checkPackage(workDir: string): void {
   const installDir = path.join(workDir, "install");
   mkdirSync(installDir);
@@ -84,6 +135,8 @@ function checkPackage(workDir: string): void {
     }
   }
   console.log(help);
+  checkCreate(workDir, installDir);
+  console.log("harness create（ルールのデータの読み込みを含む）の確認に成功しました。");
   console.log("配布物の確認に成功しました。");
 }
 

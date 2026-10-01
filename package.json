@@ -11,7 +11,8 @@
   },
   "files": [
     "dist",
-    "templates"
+    "templates",
+    "data"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
