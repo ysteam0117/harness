@@ -1,0 +1,6 @@
+{
+  "permissions": {
+    "ask": ["Bash(git reset --hard *)", "Bash(rm -rf *)"],
+    "deny": ["Bash(git push --force * main)"]
+  }
+}

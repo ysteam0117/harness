@@ -31,6 +31,7 @@
 | prettier          | 3.9.9      | 整形（CLI のコードと設定ファイルだけが対象）                     |
 | @types/node       | 24.19.0    | Node.js の型                                                     |
 | @types/semver     | 7.8.0      | semver の型                                                      |
+| smol-toml         | 1.9.0      | Codex のエージェントの TOML の出力を、第三者の読み込み役で読み戻して確かめるため。テストだけで使い、配布物に含めない。依存がなく、更新が続いており、TOML 1.0 に対応している。@iarna/toml は2023年から更新がない |
 
 ## GitHub Actions（CI）
 

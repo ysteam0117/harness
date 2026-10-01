@@ -1,0 +1,19 @@
+id: alpha
+category: lib
+name: アルファ
+languages: [typescript]
+packages: [alpha-lib]
+verified_versions:
+  alpha-lib: "1.2.3"
+includes:
+  - lib/_shared
+skill_name: lib-alpha
+files:
+  files/a.ts: out/src/a.ts
+  files/b.ts: out/src/b.ts
+package_json:
+  scripts:
+    alpha: "alpha run"
+  overrides:
+    "@scope/pkg":
+      zod: "$zod"

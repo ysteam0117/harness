@@ -3,11 +3,11 @@ name: doc-writer
 description: 変更に関係する文書を確認・更新し、PRの「知見」の欄を書く「ドキュメント」の役割。文書だけを変更する。
 claude:
   tools: Read, Grep, Glob, Edit, Write, Bash
-  model: {{claude_model_doc_writer}}
+  model: "{{claude_model_doc_writer}}"
 codex:
   name: doc_writer
-  model: {{codex_model_doc_writer}}
-  model_reasoning_effort: {{codex_effort_doc_writer}}
+  model: "{{codex_model_doc_writer}}"
+  model_reasoning_effort: "{{codex_effort_doc_writer}}"
   sandbox_mode: workspace-write
 ---
 

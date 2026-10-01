@@ -1,7 +1,7 @@
 // グローバル例外ハンドリング（C-73）。処理しきれなかったエラーはすべてここで受け止める。
 import type { Context } from "hono";
 import { AppError } from "./app-error";
-import { createLogger } from "../logger/logger";
+import { createLogger } from "./logger/logger";
 
 export function handleError(err: Error, c: Context) {
   const logger = createLogger({ traceId: c.req.header("X-Request-Id") });

@@ -3,11 +3,11 @@ name: plan-reviewer
 description: 実装計画をレビューする「計画レビュー」の役割。要件の漏れ・既存の動作の退行・テスト不足・過剰な設計・秘密情報の混入を指摘する。ファイルは編集しない。
 claude:
   tools: Read, Grep, Glob, Bash
-  model: {{claude_model_plan_reviewer}}
+  model: "{{claude_model_plan_reviewer}}"
 codex:
   name: plan_reviewer
-  model: {{codex_model_plan_reviewer}}
-  model_reasoning_effort: {{codex_effort_plan_reviewer}}
+  model: "{{codex_model_plan_reviewer}}"
+  model_reasoning_effort: "{{codex_effort_plan_reviewer}}"
   sandbox_mode: read-only
 ---
 

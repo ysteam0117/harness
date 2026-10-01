@@ -3,11 +3,11 @@ name: quality-checker
 description: Lint・型チェック・整形・テスト・E2E等の品質チェックを実行し、結果と受け入れ条件を照合して報告する「品質チェック」の役割。ファイルは編集しない。
 claude:
   tools: Read, Grep, Glob, Bash
-  model: {{claude_model_quality_checker}}
+  model: "{{claude_model_quality_checker}}"
 codex:
   name: quality_checker
-  model: {{codex_model_quality_checker}}
-  model_reasoning_effort: {{codex_effort_quality_checker}}
+  model: "{{codex_model_quality_checker}}"
+  model_reasoning_effort: "{{codex_effort_quality_checker}}"
   sandbox_mode: workspace-write
 ---
 

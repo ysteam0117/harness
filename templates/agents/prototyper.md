@@ -3,11 +3,11 @@ name: prototyper
 description: 洗い出した画面の一覧と動きをもとに、HTML・CSS・JavaScriptだけで画面の動きを再現したプロトタイプを作る「プロトタイプの作成」の役割。prototype/ だけを変更する。
 claude:
   tools: Read, Grep, Glob, Edit, Write, Bash
-  model: {{claude_model_prototyper}}
+  model: "{{claude_model_prototyper}}"
 codex:
   name: prototyper
-  model: {{codex_model_prototyper}}
-  model_reasoning_effort: {{codex_effort_prototyper}}
+  model: "{{codex_model_prototyper}}"
+  model_reasoning_effort: "{{codex_effort_prototyper}}"
   sandbox_mode: workspace-write
 ---
 

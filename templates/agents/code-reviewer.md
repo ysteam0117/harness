@@ -3,11 +3,11 @@ name: code-reviewer
 description: 変更の差分をレビューする「コードレビュー」の役割。不具合・影響範囲・テスト不足・共通のルールへの違反を指摘する。ファイルは編集しない。
 claude:
   tools: Read, Grep, Glob, Bash
-  model: {{claude_model_code_reviewer}}
+  model: "{{claude_model_code_reviewer}}"
 codex:
   name: code_reviewer
-  model: {{codex_model_code_reviewer}}
-  model_reasoning_effort: {{codex_effort_code_reviewer}}
+  model: "{{codex_model_code_reviewer}}"
+  model_reasoning_effort: "{{codex_effort_code_reviewer}}"
   sandbox_mode: read-only
 ---
 

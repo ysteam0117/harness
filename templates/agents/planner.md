@@ -3,11 +3,11 @@ name: planner
 description: Issueの受け入れ条件から実装計画を作る「計画」の役割。変更するファイル・手順・テストケース・確認のコマンドを決める。ファイルは編集しない。
 claude:
   tools: Read, Grep, Glob, Bash
-  model: {{claude_model_planner}}
+  model: "{{claude_model_planner}}"
 codex:
   name: planner
-  model: {{codex_model_planner}}
-  model_reasoning_effort: {{codex_effort_planner}}
+  model: "{{codex_model_planner}}"
+  model_reasoning_effort: "{{codex_effort_planner}}"
   sandbox_mode: read-only
 ---
 

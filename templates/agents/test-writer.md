@@ -3,11 +3,11 @@ name: test-writer
 description: 受け入れ条件からテストを実装より先に書く「テスト」の役割。テストのファイルだけを作成・変更する。本番のコードは変更しない。
 claude:
   tools: Read, Grep, Glob, Edit, Write, Bash
-  model: {{claude_model_test_writer}}
+  model: "{{claude_model_test_writer}}"
 codex:
   name: test_writer
-  model: {{codex_model_test_writer}}
-  model_reasoning_effort: {{codex_effort_test_writer}}
+  model: "{{codex_model_test_writer}}"
+  model_reasoning_effort: "{{codex_effort_test_writer}}"
   sandbox_mode: workspace-write
 ---
 

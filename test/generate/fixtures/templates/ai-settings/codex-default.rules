@@ -1,0 +1,8 @@
+# もとになった共通仕様：C-00（架空）
+# テスト用のルール（架空）
+prefix_rule(
+    pattern = ["git", "reset", "--hard"],
+    decision = "prompt",
+    justification = "変更が失われる",
+    match = ["git reset --hard HEAD"],
+)

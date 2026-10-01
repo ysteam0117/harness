@@ -3,11 +3,11 @@ name: implementer
 description: 確定した実装計画に沿って、テストが通るように実装する「実装」の役割。計画にあるファイルだけを変更し、テストは変更しない。
 claude:
   tools: Read, Grep, Glob, Edit, Write, Bash
-  model: {{claude_model_implementer}}
+  model: "{{claude_model_implementer}}"
 codex:
   name: implementer
-  model: {{codex_model_implementer}}
-  model_reasoning_effort: {{codex_effort_implementer}}
+  model: "{{codex_model_implementer}}"
+  model_reasoning_effort: "{{codex_effort_implementer}}"
   sandbox_mode: workspace-write
 ---
 

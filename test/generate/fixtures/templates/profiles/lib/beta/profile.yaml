@@ -1,0 +1,10 @@
+id: beta
+category: lib
+name: ベータ
+requires: [lib/alpha]
+skill_name: lib-beta
+files:
+  files/c.ts: out/src/c.ts
+package_json:
+  scripts:
+    beta: "beta run"
