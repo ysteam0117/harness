@@ -85,7 +85,7 @@
 ├─ docs/
 │  ├─ requirements.md           要件定義書のひな形
 │  ├─ tech-stack.md             技術とバージョン・選定理由（[C-62](common/quality-test.md#c-62)・[F-19](#f-19)）
-│  ├─ testing/                  テストの種類ごとの環境構築の手順書（[C-69](common/quality-test.md#c-69)）
+│  ├─ testing/                  テストの種類ごとの環境構築の手順書（[C-69](common/quality-test.md#c-69)）、ペネトレーションテストの手順書のひな形（[C-82](common/quality-test.md#c-82)）
 │  └─ adr/                      設計判断の記録（[C-35](common/workflow.md#c-35)）。警告を承知で続行した内容も記録（[F-08](#f-08)）
 ├─ prototype/                   プロトタイプ（HTML・CSS・JavaScript、C-76）。本番のコードに流用しない
 ├─ frontend/                    React（[C-06](common/frontend.md#c-06)のディレクトリ構成、仮のアイコン [C-55](common/frontend.md#c-55)）
@@ -374,7 +374,7 @@ knowledge/
 | 実装の進め方 | [C-76](common/workflow.md#c-76)・[C-66](common/workflow.md#c-66)・[C-33](common/workflow.md#c-33)・[C-34](common/workflow.md#c-34)・[C-35](common/workflow.md#c-35)・[C-07](common/workflow.md#c-07) | 統括（要件定義・Issueへの分割・Issueの実装を始めるとき） |
 | バックエンド | [C-03](common/backend.md#c-03)・[C-04](common/backend.md#c-04)・[C-10](common/backend.md#c-10)・[C-30](common/backend.md#c-30)・[C-31](common/backend.md#c-31)・[C-37](common/backend.md#c-37)・[C-64](common/backend.md#c-64)・[C-65](common/backend.md#c-65)・[C-74](common/backend.md#c-74)・[C-57](common/design-principles.md#c-57) | 計画・実装・コードレビュー |
 | フロントエンド | [C-06](common/frontend.md#c-06)・[C-43](common/frontend.md#c-43)〜[C-52](common/frontend.md#c-52)・[C-54](common/frontend.md#c-54)・[C-55](common/frontend.md#c-55)・[C-77](common/frontend.md#c-77)・[C-57](common/design-principles.md#c-57) | 計画・実装・コードレビュー |
-| テスト | [C-24](common/quality-test.md#c-24)〜[C-26](common/quality-test.md#c-26)・[C-69](common/quality-test.md#c-69)・[C-70](common/quality-test.md#c-70)・[C-60](common/quality-test.md#c-60)・[C-61](common/quality-test.md#c-61)・[C-79](common/quality-test.md#c-79) | テスト・品質チェック |
+| テスト | [C-24](common/quality-test.md#c-24)〜[C-26](common/quality-test.md#c-26)・[C-69](common/quality-test.md#c-69)・[C-70](common/quality-test.md#c-70)・[C-60](common/quality-test.md#c-60)・[C-61](common/quality-test.md#c-61)・[C-79](common/quality-test.md#c-79)・[C-82](common/quality-test.md#c-82) | テスト・品質チェック |
 | セキュリティ | [C-09](common/security.md#c-09)・[C-12](common/security.md#c-12)〜[C-20](common/security.md#c-20)・[C-27](common/security.md#c-27)〜[C-29](common/security.md#c-29)・[C-58](common/security.md#c-58)・[C-59](common/security.md#c-59)・[C-63](common/security.md#c-63)・[C-72](common/security.md#c-72) | 計画・コードレビュー（影響大のとき） |
 | エラー応答・API | [C-15](common/error-response.md#c-15)・[C-71](common/error-response.md#c-71)・[C-73](common/error-response.md#c-73)・[C-31](common/backend.md#c-31) | 実装・コードレビュー |
 | 環境・デプロイ | [C-36](common/project-env.md#c-36)・[C-39](common/project-env.md#c-39)〜[C-41](common/project-env.md#c-41)・[C-08](common/workflow.md#c-08) | 統括（デプロイの承認を依頼するとき） |
@@ -459,8 +459,8 @@ templates/profiles/
 | フロントエンドの組み立て・画面の切り替え | Vite＋React Router | Cloudflare公式のViteの部品（`@cloudflare/vite-plugin`）で、画面（React）とAPI（Hono）を同じWorkersから同じドメインで配信する（[C-29](common/security.md#c-29)） | 作成済み（Issue #19） |
 | API通信（フロントエンド） | Axios | インスタンスとインターセプター（[C-46](common/frontend.md#c-46)） | 作成済み（Issue #19） |
 | フロントエンドの状態・フォーム | 標準：TanStack Query、React Hook Form＋Zod／必要になったとき：Zustand | Zustandは最初から入れず、複数の画面で共有する状態が必要になったときに、承認を得て追加する（[C-32](common/quality-test.md#c-32)・[C-45](common/frontend.md#c-45)） | 作成済み（Issue #19） |
-| テストの道具 | Vitest、@cloudflare/vitest-pool-workers、Testing Library、Playwright、MSW、fast-check、k6、OWASP ZAP | 単体・結合（フロントエンド・バックエンド共通）、Workersの実行環境でのテスト、コンポーネントのテスト、E2E、外部APIのモック、異常な入力のテスト、負荷・限界のテスト、セキュリティのテスト（[C-79](common/quality-test.md#c-79)） | 作成済み（Issue #19） |
-| 品質チェックの道具 | ESLint＋typescript-eslint＋eslint-plugin-react-hooks、Prettier、TypeScript（`tsc`）、Stryker、dependency-cruiser、jscpd、`npm audit` | Lint、整形、型チェック、ミューテーションテスト、層をまたぐ依存の違反、重複、脆弱性 | 作成済み（Issue #19） |
+| テストの道具 | Vitest、@cloudflare/vitest-pool-workers、Testing Library、Playwright、MSW、fast-check、k6、OWASP ZAP、Schemathesis | 単体・結合（フロントエンド・バックエンド共通）、Workersの実行環境でのテスト、コンポーネントのテスト、E2E、外部APIのモック、異常な入力のテスト、負荷・限界のテスト（[C-79](common/quality-test.md#c-79)）、攻撃を試すテスト・APIの異常な入力のテスト（[C-82](common/quality-test.md#c-82)） | 作成済み（Issue #19）。Schemathesisは追加予定（Issue #42） |
+| 品質チェックの道具 | ESLint＋typescript-eslint＋eslint-plugin-react-hooks、Prettier、TypeScript（`tsc`）、Stryker、dependency-cruiser、jscpd、`npm audit`、Semgrep、gitleaks、OSV-Scanner、Dependabot | Lint、整形、型チェック、ミューテーションテスト、層をまたぐ依存の違反、重複、脆弱性、コードを見るセキュリティのテスト・秘密情報の混入の確認（[C-82](common/quality-test.md#c-82)） | 作成済み（Issue #19）。Semgrep・gitleaks・OSV-Scanner・Dependabotは追加予定（Issue #42） |
 
 - ライブラリを入れるのは、メンテナンス性が上がる場合に限る。使わなくてもよい場面で入れると、仕組みが複雑になるだけになるため、標準で入れるものと、必要になったときに追加するものを分ける（[C-38](common/design-principles.md#c-38)・[C-53](common/design-principles.md#c-53)）
 - 大きな版が新しくなったばかりの道具（TypeScript・Vitest等）は、ほかの道具が対応していない場合がある。ひな形を作るときに組み合わせて動くことを確かめ、検証済みのバージョンとして記録する
@@ -483,7 +483,9 @@ templates/profiles/
 | 関数の複雑さ（ESLintの`complexity`） | 1つの関数で15以下 | 超えたら分割を検討する |
 | 重複（jscpd） | 重複の割合が5%以下 | 超えたら共通化を検討する。偶然似ているだけのものは共通化しない（[C-38](common/design-principles.md#c-38)） |
 | 層をまたぐ依存（dependency-cruiser） | 違反が0件 | [C-03](common/backend.md#c-03)・[C-06](common/frontend.md#c-06) |
-| 依存ライブラリの脆弱性 | 本番の依存（`npm audit --omit=dev`）で、高・重大が0件 | [C-32](common/quality-test.md#c-32) |
+| 依存ライブラリの脆弱性 | 本番の依存（`npm audit --omit=dev`・OSV-Scanner）で、高・重大が0件 | [C-32](common/quality-test.md#c-32)・[C-82](common/quality-test.md#c-82) |
+| コードを見るセキュリティのテスト（Semgrep） | 重大度が高い指摘が0件 | [C-82](common/quality-test.md#c-82) |
+| 秘密情報の混入（gitleaks） | 検出が0件 | [C-05](common/security.md#c-05)・[C-82](common/quality-test.md#c-82) |
 | 初回に読み込むJavaScriptの量 | 圧縮後200KB以下（目安） | [C-60](common/quality-test.md#c-60)の知見（仮説） |
 
 - セキュリティの設定値と合格の基準は、いずれも最初の目安とする。実際のプロジェクトで使った結果をもとに、ハーネスの改善の提案（[C-78](common/workflow.md#c-78)）や知見の見直し（[F-18](#f-18)）で見直す
@@ -573,7 +575,7 @@ CLIは、生成するプロジェクトに次を出力する。
 
 ## F-26：共通仕様の判定に必要な質問
 
-共通仕様には、プロジェクトの性質によって適用の仕方が変わるルールがある（[C-09](common/security.md#c-09)・[C-14](common/security.md#c-14)・[C-19](common/security.md#c-19)・[C-20](common/security.md#c-20)・[C-30](common/backend.md#c-30)・[C-77](common/frontend.md#c-77)・[C-79](common/quality-test.md#c-79)）。その判定に必要な情報を、次の2か所で確かめる。
+共通仕様には、プロジェクトの性質によって適用の仕方が変わるルールがある（[C-09](common/security.md#c-09)・[C-14](common/security.md#c-14)・[C-19](common/security.md#c-19)・[C-20](common/security.md#c-20)・[C-30](common/backend.md#c-30)・[C-77](common/frontend.md#c-77)・[C-79](common/quality-test.md#c-79)・[C-82](common/quality-test.md#c-82)）。その判定に必要な情報を、次の2か所で確かめる。
 
 | いつ | 誰が | 内容 |
 | --- | --- | --- |
@@ -598,11 +600,11 @@ CLIは、生成するプロジェクトに次を出力する。
 
 | 質問 | 回答 | 有効にするルール・生成するもの |
 | --- | --- | --- |
-| A | 扱う | ASVSのレベルの判定（下表）、ログの保存期間を要件で決める（[C-30](common/backend.md#c-30)）、不審な試行の通知（[C-19](common/security.md#c-19)）、個人情報の取扱いの方針（[C-09](common/security.md#c-09)） |
-| B | ある | 管理者のMFAの要否の判断をADRに記録する（[C-20](common/security.md#c-20)）、権限の管理の仕組みと委任の範囲の定義（[C-14](common/security.md#c-14)）、管理者の操作の監査ログ（[C-30](common/backend.md#c-30)） |
-| C | ある | 重要な操作の前の再認証（[C-20](common/security.md#c-20)）。該当する機能は、実装の進め方の「影響大」として扱う（[C-66](common/workflow.md#c-66)） |
+| A | 扱う | ASVSのレベルの判定（下表）、ログの保存期間を要件で決める（[C-30](common/backend.md#c-30)）、不審な試行の通知（[C-19](common/security.md#c-19)）、個人情報の取扱いの方針（[C-09](common/security.md#c-09)）、ペネトレーションテストを必須にする（[C-82](common/quality-test.md#c-82)） |
+| B | ある | 管理者のMFAの要否の判断をADRに記録する（[C-20](common/security.md#c-20)）、権限の管理の仕組みと委任の範囲の定義（[C-14](common/security.md#c-14)）、管理者の操作の監査ログ（[C-30](common/backend.md#c-30)）、ペネトレーションテストを必須にする（[C-82](common/quality-test.md#c-82)） |
+| C | ある | 重要な操作の前の再認証（[C-20](common/security.md#c-20)）。該当する機能は、実装の進め方の「影響大」として扱う（[C-66](common/workflow.md#c-66)）。ペネトレーションテストを必須にする（[C-82](common/quality-test.md#c-82)） |
 | D | する | 所有者・共同編集者の権限の定義（[C-14](common/security.md#c-14)）、更新の衝突の検知（楽観的ロック、[C-64](common/backend.md#c-64)）を必須にする |
-| E | 分ける | 組織をまたいでデータが見えないことを、認可のテストで確かめる（[C-14](common/security.md#c-14)） |
+| E | 分ける | 組織をまたいでデータが見えないことを、認可のテストで確かめる（[C-14](common/security.md#c-14)）。ペネトレーションテストを必須にする（[C-82](common/quality-test.md#c-82)） |
 | F | 必要 | 変更を届ける方式（WebSocket等）と、費用・構成への影響をADRで決める（[C-77](common/frontend.md#c-77)） |
 | G | 止まると困る | 冗長な構成とカオステストの検討（[C-79](common/quality-test.md#c-79)）、バックアップの頻度の見直し（[C-41](common/project-env.md#c-41)）をADRに記録する |
 | いずれか | 未定 | 要件定義の確認項目に残し、要件定義の中で決める。決まるまでは、安全側（扱う・ある・する）として扱う |

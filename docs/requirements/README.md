@@ -126,6 +126,7 @@
 | [C-78](common/workflow.md#c-78) | 作業中に気づいたハーネスの改善点は、AIが自分で直さず、決まった形のIssueとして記録し、利用者が採用するかを判断する | common/workflow.md |
 | [C-79](common/quality-test.md#c-79) | 「壊そうとしても壊れないこと」を確かめるテスト（異常な入力・同時実行・障害・負荷・セキュリティ）を行う。カオステストは条件付きで検討する | common/quality-test.md |
 | [C-80](common/workflow.md#c-80) | プロジェクト固有のルールは`docs/project-rules.md`に書き、ハーネスのルールと分ける。迷ったらプロジェクト固有として始め、ほかのアプリでも通用すると分かったらハーネスへ提案する | common/workflow.md |
+| [C-82](common/quality-test.md#c-82) | セキュリティのテストを、コードを見るテスト（毎回）・依存関係を見るテスト（毎回）・攻撃を試すテスト（リリース前、検証環境）・手動のペネトレーションテスト（条件付きで必須、検証環境）の4つで行う | common/quality-test.md |
 | [F-01](functional.md#f-01) | 対話形式でのハーネス生成 | functional.md |
 | [F-02](functional.md#f-02) | 使用AIの選択 | functional.md |
 | [F-03](functional.md#f-03) | AIの追加 | functional.md |
