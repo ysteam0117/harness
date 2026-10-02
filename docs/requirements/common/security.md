@@ -62,8 +62,8 @@
 
 | 環境 | 手順 |
 | --- | --- |
-| 開発（手元のPC） | `.env.example`をコピーして`.env`を作る → エディタで値を書く → `npm run env:check`で足りない項目がないことを確かめる → コンテナを起動し直す |
-| 検証・本番（Cloudflare） | `wrangler secret put <項目名> --env <環境>`を利用者が実行し、聞かれた値をその場で入力する → `wrangler secret list`で項目の名前を確かめる |
+| 開発・検証（手元のPC） | `.env.example`をコピーして`.env.development`・`.env.test`を作る → エディタで値を書く → `npm run env:check`で足りない項目がないことを確かめる → コンテナを起動し直す（[C-40](project-env.md#c-40)） |
+| 本番（Cloudflare） | `wrangler secret put <項目名>`を利用者が実行し、聞かれた値をその場で入力する → `wrangler secret list`で項目の名前を確かめる。本番の値は手元の平文のファイルに置かず、控えておく場合はパスワード管理ソフト等の暗号化された保管場所に置く（[C-40](project-env.md#c-40)）。Cloudflare上に検証の環境を足した場合は、`--env <環境>`を付ける |
 | CI（GitHub Actions） | GitHubの設定画面（Settings → Secrets and variables → Actions）で登録する。または`gh secret set <項目名>`を利用者が実行して入力する |
 | Terraform | 秘密情報はコードに書かず、環境変数（`TF_VAR_<項目名>`）で渡す |
 

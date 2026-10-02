@@ -170,7 +170,7 @@ Googleが公開しているCore Web Vitalsの「良好」の基準を目標と�
 | 最初に読み込むJavaScriptの量 | 圧縮後200KB以下。超える場合は分割読み込みを検討する | `knowledge/frontend/initial-bundle-size.md` |
 
 - 測り方は、[F-18](../functional.md#f-18)の「実測を根拠として使うときのルール」に従う
-- 目標を満たしているかを、検証環境（[C-40](project-env.md#c-40)）で定期的に測る
+- 目標を満たしているかを定期的に測る。手元の計測は本番の性能の目安にならないため、数値で判定する場合は、Cloudflare上に検証の環境を足すかを検討する（[C-40](project-env.md#c-40)）
 
 <a id="c-69"></a>
 

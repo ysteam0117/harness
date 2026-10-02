@@ -85,7 +85,7 @@
 | [C-37](common/backend.md#c-37) |  | common/backend.md |
 | [C-38](common/design-principles.md#c-38) |  | common/design-principles.md |
 | [C-39](common/project-env.md#c-39) |  | common/project-env.md |
-| [C-40](common/project-env.md#c-40) |  | common/project-env.md |
+| [C-40](common/project-env.md#c-40) | 環境は開発・検証・本番の3つに分け、開発・検証は手元で環境変数の設定を切り替えて使う。本番だけをCloudflareに置き、本番の値は手元に置かない | common/project-env.md |
 | [C-41](common/project-env.md#c-41) |  | common/project-env.md |
 | [C-42](common/workflow.md#c-42) |  | common/workflow.md |
 | [C-43](common/frontend.md#c-43) |  | common/frontend.md |

@@ -749,7 +749,7 @@ harness create
 | 6 | 開発人数 | 1人／複数人 | |
 | 7 | フロントエンドの技術 | React（TypeScript） | 自動で決定 |
 | 8 | バックエンドの技術 | Hono（TypeScript） | 自動で決定 |
-| 9 | インフラ・デプロイ先 | Cloudflare | 自動で決定。環境は開発・検証・本番の3つ（[C-40](common/project-env.md#c-40)） |
+| 9 | インフラ・デプロイ先 | Cloudflare | 自動で決定。開発・検証は手元で環境変数を切り替え、Cloudflare上は本番だけ（[C-40](common/project-env.md#c-40)） |
 | 10 | DB | Cloudflare D1（標準）／PostgreSQL（Hyperdrive経由）／なし | |
 | 11 | PostgreSQLの提供元 | Neon／Supabase／その他 | 10でPostgreSQLを選んだ場合だけ聞く |
 | 12 | データアクセスのライブラリ | Drizzle ORM | [F-24](#f-24)の技術プロファイルから選ぶ。初回はDrizzleのみのため自動で決定 |
