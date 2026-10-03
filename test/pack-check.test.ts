@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import { runWithCleanup } from "../scripts/pack-check.js";
 
@@ -45,5 +48,19 @@ describe("#30 AC-2: pack-check の runWithCleanup", () => {
     expect(caught).toBeInstanceOf(AggregateError);
     expect((caught as AggregateError).errors).toEqual([mainError, cleanupError]);
     expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("#34 AC-3: pack-check が、配布物からの生成を確かめる", () => {
+  const script = readFileSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "scripts", "pack-check.ts"),
+    "utf8",
+  );
+
+  it("#34 AC-3: 「生成は Issue #34 で実装予定」を期待しなくなり、生成されたファイル（.harness/config.yaml・AGENTS.md）を確かめる", () => {
+    expect(script).not.toContain("生成は Issue #34 で実装予定");
+    expect(script).toContain(".harness");
+    expect(script).toContain("config.yaml");
+    expect(script).toContain("AGENTS.md");
   });
 });

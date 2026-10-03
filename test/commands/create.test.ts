@@ -10,27 +10,42 @@
 //   export interface CreateOutcome { exitCode: number; answers?: Answers; acceptedWarnings?: AcceptedWarning[]; result?: CheckResult }
 //   export async function runCreate(options: CreateOptions, deps: CreateDeps): Promise<CreateOutcome>;
 //     - 質問 → チェック → 回答の一覧とチェックの結果の表示 → 確認（confirm "confirm_generate"。--yes なら省く）
-//     - 確認の後：stderr に「生成は Issue #34 で実装予定です」を出し、exitCode 1（ファイルは作らない）。確認で「いいえ」なら何もせず exitCode 0
+//     - 確認の後（#34）：<cwd>/<app_name> に生成する（一時的な場所で組み立てて移す）。生成した場所と次の手順（README を読む・npm install）を
+//       prompter.note で表示し、exitCode 0。確認で「いいえ」なら何もせず exitCode 0
+//     - 生成の失敗（GenerateError・書き込みの失敗）：日本語のメッセージを stderr に示し、exitCode 1。生成先にも一時的な場所にも何も残さない
+//     - 生成の最中の SIGINT（Ctrl+C）：生成の間だけ SIGINT を受ける処理を登録し、受けたら止めて一時的な場所を消し、
+//       stderr に「中断しました」を出して exitCode 130。生成が完了した後（rename の後）に届いたときは生成先を残し、
+//       「生成は完了しています」を出して exitCode 130。処理を外すので、終わった後は SIGINT の受け手が増えたままにならない
+//   CreateDeps に generateFs?: Partial<FsOps>（write.ts の FsOps。テストで書き込み・名前の変更などを差し替える入口）を足す
+//   CreateOutcome に projectDir?: string（生成した場所。<cwd>/<app_name>）を足す
 //     - CancelledError：stderr に「中断しました。ファイルは作成していません。」を出し、exitCode 130
 //     - 対話しない（interactive = false）：足りない回答・承知していない警告・--yes なしの確認のいずれかがあれば、
 //       その一覧を stderr に示して exitCode 1（prompter の入力は使わない）
 //     - --answers のエラー（ファイルがない・AnswersError）：日本語で stderr に示して exitCode 1
 //     - チェックのエラー（対話しない）：エラーの一覧（ルールの id とメッセージ）を stderr に示して exitCode 1
 //   createCommand(deps?: Partial<CreateDeps>)・createProgram(deps?: Partial<CreateDeps>) も同じ deps を受け取れる
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { lstat, readdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-import { stringify } from "yaml";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { parse, stringify } from "yaml";
 import { runCreate, type CreateDeps } from "../../src/commands/create.js";
 import type { ToolStatus } from "../../src/checks/tools.js";
 import { questionDefinitions as defs } from "../../src/questions/definitions.js";
 import { CancelledError } from "../../src/questions/prompter.js";
 import { FakePrompter, baseAnswers, cleanupTmp, makeTmp } from "../questions/helpers.js";
-import { offlineFetch } from "../versions/helpers.js";
+import { FIXED_NOW, offlineFetch } from "../versions/helpers.js";
 
 afterEach(cleanupTmp);
 
-const STUB_MESSAGE = "生成は Issue #34 で実装予定です";
+/** #34 で生成するようになったので、もう表示しない */
+const OLD_STUB_MESSAGE = "生成は Issue #34 で実装予定です";
+
+/** 生成先（<cwd>/testapp-001）に、記録のファイルまでできているか */
+const generated = (cwd: string, app = "testapp-001") =>
+  existsSync(path.join(cwd, app, ".harness", "config.yaml"));
 const CANCEL_MESSAGE = "中断しました。ファイルは作成していません。";
 
 const okTools = async (): Promise<ToolStatus[]> => [
@@ -51,6 +66,7 @@ function setup(script: Record<string, unknown[]> = {}, over: Partial<CreateDeps>
     checkTools: okTools,
     // #33：本物のネットワークにはつながない。つながらない状態にしておく（方針 verified なら、検証済みで止まらず進む。R6）
     fetch: offlineFetch().fn,
+    now: () => FIXED_NOW,
     ...over,
   };
   const writeAnswers = (obj: Record<string, unknown>, name = "answers.yaml") => {
@@ -65,14 +81,16 @@ const title = (id: string) => defs.find((d) => d.id === id)?.title ?? "";
 const listing = (dir: string) => readdirSync(dir);
 
 describe("#32 AC-4: --answers で質問に答えずに同じ回答を渡す", () => {
-  it("#32 AC-4: 完全な YAML と --yes で、入力のメソッドを一度も呼ばずに確認まで進み、「生成は #34 で実装予定」で終了コード1", async () => {
+  it("#32 AC-4: 完全な YAML と --yes で、入力のメソッドを一度も呼ばずに確認まで進み、生成して終了コード0", async () => {
     const s = setup();
     const file = s.writeAnswers(baseAnswers() as Record<string, unknown>);
     const out = await runCreate({ answers: file, yes: true }, s.deps);
     expect(s.prompter.inputs).toHaveLength(0);
-    expect(out.exitCode).toBe(1);
-    expect(s.err()).toContain(STUB_MESSAGE);
-    expect(listing(s.tmp.cwd)).toEqual([]); // ファイルは作らない
+    expect(out.exitCode).toBe(0);
+    expect(generated(s.tmp.cwd)).toBe(true); // 生成した
+    expect(s.err()).not.toContain(OLD_STUB_MESSAGE); // 「実装予定」の表示はやめた
+    expect(listing(s.tmp.cwd)).toEqual(["testapp-001"]); // 生成先だけ（一時的な場所は残らない）
+    expect(out.projectDir).toBe(path.join(s.tmp.cwd, "testapp-001"));
   });
 
   it("#32 AC-4: 同じ YAML なら、同じ回答になる", async () => {
@@ -120,7 +138,7 @@ describe("#32 AC-4: --answers で質問に答えずに同じ回答を渡す", ()
     expect(out.exitCode).toBe(1);
     expect(s.err()).toContain("colour");
     expect(s.err()).toContain("visibility");
-    expect(s.err()).not.toContain(STUB_MESSAGE);
+    expect(generated(s.tmp.cwd)).toBe(false); // 生成しない
     expect(s.prompter.inputs).toHaveLength(0);
   });
 
@@ -144,7 +162,7 @@ describe("#32 AC-4: 足りない回答", () => {
     expect(out.exitCode).toBe(1);
     expect(s.err()).toContain("team_size");
     expect(s.err()).toContain("version_policy");
-    expect(s.err()).not.toContain(STUB_MESSAGE);
+    expect(generated(s.tmp.cwd)).toBe(false); // 生成しない
     expect(s.prompter.inputs).toHaveLength(0);
   });
 
@@ -167,8 +185,8 @@ describe("#32 AC-4: 足りない回答", () => {
     const out = await runCreate({ answers: s.writeAnswers(answers) }, s.deps);
     expect(s.prompter.askedIds).toEqual(["team_size", "check_location", "confirm_generate"]);
     expect(out.answers?.team_size).toBe("team");
-    expect(out.exitCode).toBe(1);
-    expect(s.err()).toContain(STUB_MESSAGE);
+    expect(out.exitCode).toBe(0);
+    expect(generated(s.tmp.cwd)).toBe(true); // 生成した
   });
 });
 
@@ -181,18 +199,18 @@ describe("#32 AC-1: 確認（--yes と対話）", () => {
     );
     expect(out.exitCode).toBe(1);
     expect(s.err()).toContain("--yes");
-    expect(s.err()).not.toContain(STUB_MESSAGE);
+    expect(generated(s.tmp.cwd)).toBe(false); // 生成しない
     expect(s.prompter.inputs).toHaveLength(0);
   });
 
-  it("#32 AC-1: 端末で「この内容で生成しますか」に「はい」なら、「生成は #34 で実装予定」で終了コード1", async () => {
+  it("#32 AC-1: 端末で「この内容で生成しますか」に「はい」なら、生成して終了コード0", async () => {
     const s = setup({ confirm_generate: [true] }, { interactive: true });
     const out = await runCreate(
       { answers: s.writeAnswers(baseAnswers() as Record<string, unknown>) },
       s.deps,
     );
-    expect(out.exitCode).toBe(1);
-    expect(s.err()).toContain(STUB_MESSAGE);
+    expect(out.exitCode).toBe(0);
+    expect(generated(s.tmp.cwd)).toBe(true); // 生成した
     expect(s.prompter.inputs[0]?.method).toBe("confirm");
     expect(s.prompter.inputs[0]?.message).toContain("この内容で生成しますか");
   });
@@ -204,7 +222,7 @@ describe("#32 AC-1: 確認（--yes と対話）", () => {
       s.deps,
     );
     expect(out.exitCode).toBe(0);
-    expect(s.err()).not.toContain(STUB_MESSAGE);
+    expect(generated(s.tmp.cwd)).toBe(false); // 生成しない
     expect(listing(s.tmp.cwd)).toEqual([]);
   });
 
@@ -215,8 +233,8 @@ describe("#32 AC-1: 確認（--yes と対話）", () => {
       s.deps,
     );
     expect(s.prompter.inputs).toHaveLength(0);
-    expect(out.exitCode).toBe(1);
-    expect(s.err()).toContain(STUB_MESSAGE);
+    expect(out.exitCode).toBe(0);
+    expect(generated(s.tmp.cwd)).toBe(true); // 生成した
   });
 
   it("#32 AC-1: --answers なしの端末では、質問から始まり、最後に確認を聞く", async () => {
@@ -257,8 +275,8 @@ describe("#32 AC-1: 確認（--yes と対話）", () => {
       admin: "undecided",
       availability: "undecided",
     });
-    expect(out.exitCode).toBe(1);
-    expect(s.err()).toContain(STUB_MESSAGE);
+    expect(out.exitCode).toBe(0);
+    expect(generated(s.tmp.cwd)).toBe(true); // 生成した
   });
 });
 
@@ -272,14 +290,14 @@ describe("#32 AC-3: 警告・エラー（--answers）", () => {
       s.deps,
     );
     expect(out.acceptedWarnings).toEqual([]);
-    expect(s.err()).toContain(STUB_MESSAGE);
+    expect(generated(s.tmp.cwd)).toBe(true); // 生成した
   });
 
   it("#32 AC-3: 警告あり＋accepted_warnings に承知あり → 確認まで進み、承知した内容が結果に入る", async () => {
     const s = setup();
     const file = s.writeAnswers({ ...warnYaml(), accepted_warnings: ["team-needs-ci"] });
     const out = await runCreate({ answers: file, yes: true }, s.deps);
-    expect(s.err()).toContain(STUB_MESSAGE);
+    expect(generated(s.tmp.cwd)).toBe(true); // 生成した
     expect(out.acceptedWarnings?.map((w) => w.id)).toEqual(["team-needs-ci"]);
     expect(out.acceptedWarnings?.[0]?.message).toBeTruthy();
     expect(out.acceptedWarnings?.[0]?.reason).toBeTruthy();
@@ -293,7 +311,7 @@ describe("#32 AC-3: 警告・エラー（--answers）", () => {
     expect(out.exitCode).toBe(1);
     expect(s.err()).toContain("team-needs-ci");
     expect(s.err()).toContain("accepted_warnings");
-    expect(s.err()).not.toContain(STUB_MESSAGE);
+    expect(generated(s.tmp.cwd)).toBe(false); // 生成しない
     expect(s.prompter.inputs).toHaveLength(0);
   });
 
@@ -301,7 +319,7 @@ describe("#32 AC-3: 警告・エラー（--answers）", () => {
     const s = setup({ "accept_warning:team-needs-ci": [false] }, { interactive: true });
     const out = await runCreate({ answers: s.writeAnswers(warnYaml()), yes: true }, s.deps);
     expect(out.exitCode).toBe(0);
-    expect(s.err()).not.toContain(STUB_MESSAGE);
+    expect(generated(s.tmp.cwd)).toBe(false); // 生成しない
   });
 
   it("#32 AC-3: 端末で警告を承知すると、承知した内容が結果に入り、確認まで進む", async () => {
@@ -311,7 +329,7 @@ describe("#32 AC-3: 警告・エラー（--answers）", () => {
     );
     const out = await runCreate({ answers: s.writeAnswers(warnYaml()) }, s.deps);
     expect(out.acceptedWarnings?.map((w) => w.id)).toEqual(["team-needs-ci"]);
-    expect(s.err()).toContain(STUB_MESSAGE);
+    expect(generated(s.tmp.cwd)).toBe(true); // 生成した
   });
 
   it("#32 AC-3: エラー（ルール1）→ エラーの一覧（id とメッセージ）を示して終了コード1（端末でない）", async () => {
@@ -323,7 +341,7 @@ describe("#32 AC-3: 警告・エラー（--answers）", () => {
     expect(out.exitCode).toBe(1);
     expect(s.err()).toContain("auth-needs-db");
     expect(s.err()).toContain("認証が「アプリ独自認証」または「併用」で、DBが「なし」です");
-    expect(s.err()).not.toContain(STUB_MESSAGE);
+    expect(generated(s.tmp.cwd)).toBe(false); // 生成しない
   });
 
   it("#32 AC-3: 手元の道具がない（ルール8）ときは、導入の案内を含む警告になる", async () => {
@@ -344,7 +362,7 @@ describe("#32 AC-3: 警告・エラー（--answers）", () => {
     expect(out.exitCode).toBe(1);
     expect(s.err()).toContain("missing-tools");
     expect(s.err()).toContain("docker");
-    expect(s.err()).not.toContain(STUB_MESSAGE);
+    expect(generated(s.tmp.cwd)).toBe(false); // 生成しない
   });
 
   it("#32 AC-3: 手元の道具の警告も、accepted_warnings で承知すれば進める", async () => {
@@ -359,7 +377,7 @@ describe("#32 AC-3: 警告・エラー（--answers）", () => {
     const file = s.writeAnswers({ ...baseAnswers(), accepted_warnings: ["missing-tools"] });
     const out = await runCreate({ answers: file, yes: true }, s.deps);
     expect(out.acceptedWarnings?.map((w) => w.id)).toEqual(["missing-tools"]);
-    expect(s.err()).toContain(STUB_MESSAGE);
+    expect(generated(s.tmp.cwd)).toBe(true); // 生成した
   });
 
   it("#32 AC-3: 生成先に中身がある（ルール10）と、フォルダを変えずにエラーで終了コード1", async () => {
@@ -389,7 +407,7 @@ describe("#32 AC-3: 警告・エラー（--answers）", () => {
     expect(out.exitCode).toBe(1);
     expect(s.err()).toContain("invalid-app-name");
     expect(s.err()).not.toContain("target-dir-not-empty");
-    expect(s.err()).not.toContain(STUB_MESSAGE);
+    expect(generated(s.tmp.cwd)).toBe(false); // 生成しない
   });
 
   it("#32 AC-3: 端末でエラーが出ると、聞き直せる（fix_question）", async () => {
@@ -407,7 +425,7 @@ describe("#32 AC-3: 警告・エラー（--answers）", () => {
     const out = await runCreate({ answers: file }, s.deps);
     expect(s.prompter.askedIds).toEqual(["fix_question", "database", "confirm_generate"]);
     expect(out.answers?.database).toBe("d1");
-    expect(s.err()).toContain(STUB_MESSAGE);
+    expect(generated(s.tmp.cwd)).toBe(true); // 生成した
   });
 });
 
@@ -417,7 +435,7 @@ describe("#32 AC-5: 質問の途中でやめる（Ctrl+C）", () => {
     const out = await runCreate({}, s.deps);
     expect(out.exitCode).toBe(130);
     expect(s.err()).toContain(CANCEL_MESSAGE);
-    expect(s.err()).not.toContain(STUB_MESSAGE);
+    expect(generated(s.tmp.cwd)).toBe(false); // 生成しない
     expect(listing(s.tmp.cwd)).toEqual([]); // 生成先（一時フォルダ）が空のまま
   });
 
@@ -585,7 +603,7 @@ describe("#32 AC-4: YAML の回答と対話の回答の矛盾は、黙って消�
       admin: "yes",
       collaborative: "yes",
     });
-    expect(s.err()).toContain(STUB_MESSAGE);
+    expect(generated(s.tmp.cwd)).toBe(true); // 生成した
   });
 
   it("#32 AC-4: 矛盾する YAML の回答を1つずつ捨てると、auth = none のまま進み、idp は消え、admin・collaborative は no になる", async () => {
@@ -644,7 +662,7 @@ describe("#32 AC-4: YAML の回答と対話の回答の矛盾は、黙って消�
     const out = await runCreate({ answers: s.writeAnswers(conflictYaml()), yes: true }, s.deps);
     expect(out.exitCode).toBe(1);
     expect(s.err()).toContain("auth");
-    expect(s.err()).not.toContain(STUB_MESSAGE);
+    expect(generated(s.tmp.cwd)).toBe(false); // 生成しない
     expect(s.prompter.inputs).toHaveLength(0);
   });
 });
@@ -665,7 +683,7 @@ describe("#32 AC-2: 質問A〜G は聞かずに「未定」（利用者の判断
       delete a[id];
     const out = await runCreate({ answers: s.writeAnswers(a), yes: true }, s.deps);
     expect(s.prompter.inputs).toHaveLength(0);
-    expect(s.err()).toContain(STUB_MESSAGE);
+    expect(generated(s.tmp.cwd)).toBe(true); // 生成した
     expect(out.answers).toMatchObject({
       personal_data: "undecided",
       admin: "undecided",
@@ -721,7 +739,7 @@ describe("#32 AC-4: critical_ops_kinds だけを書いた YAML（レビュー3�
     expect(s.prompter.askedIds).not.toContain("fix_question");
     expect(out.exitCode).toBe(1);
     expect(s.err()).toContain("critical_ops_kinds");
-    expect(s.err()).not.toContain(STUB_MESSAGE);
+    expect(generated(s.tmp.cwd)).toBe(false); // 生成しない
   });
 
   it("#32 AC-4: critical_ops: no と書いた場合も同じ（端末でない）", async () => {
@@ -733,6 +751,512 @@ describe("#32 AC-4: critical_ops_kinds だけを書いた YAML（レビュー3�
     const out = await runCreate({ answers: s.writeAnswers(a), yes: true }, s.deps);
     expect(s.prompter.inputs).toHaveLength(0);
     expect(out.exitCode).toBe(1);
-    expect(s.err()).not.toContain(STUB_MESSAGE);
+    expect(generated(s.tmp.cwd)).toBe(false); // 生成しない
   });
 });
+
+// ---------------------------------------------------------------------------
+// #34：生成の仕組みと記録（harness create の最後）
+//   生成先は必ずテストの一時的なフォルダ（makeTmp。afterEach で cleanupTmp が消す）
+// ---------------------------------------------------------------------------
+
+const APP = "testapp-001";
+const TMP_PREFIX = `.${APP}.harness-tmp-`;
+const answersYaml = (over: Record<string, unknown> = {}) =>
+  baseAnswers(over) as Record<string, unknown>;
+
+/** 生成した場所の、すべてのファイルを "/" 区切りの相対パス → 中身 で返す */
+function treeOf(dir: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const rel of readdirSync(dir, { recursive: true, encoding: "utf8" })) {
+    const full = path.join(dir, rel);
+    if (statSync(full).isFile()) out[rel.split(path.sep).join("/")] = readFileSync(full, "utf8");
+  }
+  return out;
+}
+
+describe("#34 AC-3: 生成する（harness create の最後）", () => {
+  it("#34 AC-3: 確認で「はい」→ <cwd>/<アプリ名> に生成し、終了コード0。.harness/config.yaml と AGENTS.md ができる", async () => {
+    const s = setup({ confirm_generate: [true] }, { interactive: true });
+    const out = await runCreate({ answers: s.writeAnswers(answersYaml()) }, s.deps);
+    expect(out.exitCode).toBe(0);
+    const dir = path.join(s.tmp.cwd, APP);
+    expect(existsSync(path.join(dir, ".harness", "config.yaml"))).toBe(true);
+    expect(existsSync(path.join(dir, "AGENTS.md"))).toBe(true);
+    expect(existsSync(path.join(dir, "CLAUDE.md"))).toBe(true);
+    expect(existsSync(path.join(dir, "package.json"))).toBe(true);
+    expect(listing(s.tmp.cwd)).toEqual([APP]);
+  });
+
+  it("#34 AC-3: 生成した場所と次の手順（README を読む・npm install）を表示する", async () => {
+    const s = setup();
+    await runCreate({ answers: s.writeAnswers(answersYaml()), yes: true }, s.deps);
+    const shown = s.prompter.notes.join("\n");
+    expect(shown).toContain(path.join(s.tmp.cwd, APP));
+    expect(shown).toContain("README");
+    expect(shown).toContain("npm install");
+  });
+
+  it("#34 AC-3: config.yaml には、回答・承知した警告・版・生成した日（now）が記録される", async () => {
+    const s = setup();
+    const file = s.writeAnswers({
+      ...answersYaml({ team_size: "team", check_location: "local" }),
+      accepted_warnings: ["team-needs-ci"],
+    });
+    const out = await runCreate({ answers: file, yes: true }, s.deps);
+    expect(out.exitCode).toBe(0);
+    const cfg = parse(
+      readFileSync(path.join(s.tmp.cwd, APP, ".harness", "config.yaml"), "utf8"),
+    ) as {
+      generated_on: string;
+      answers: Record<string, unknown>;
+      accepted_warnings: { id: string }[];
+      versions: { name: string }[];
+    };
+    expect(cfg.generated_on).toBe("2026-10-03");
+    expect(cfg.answers).toMatchObject({
+      app_name: APP,
+      team_size: "team",
+      check_location: "local",
+    });
+    expect(cfg.accepted_warnings.map((w) => w.id)).toEqual(["team-needs-ci"]);
+    expect(cfg.versions.length).toBeGreaterThan(10);
+    // 承知した警告は ADR にも残る
+    const adr = readFileSync(
+      path.join(s.tmp.cwd, APP, "docs", "adr", "0001-accepted-warnings.md"),
+      "utf8",
+    );
+    expect(adr).toContain("team-needs-ci");
+  });
+
+  it("#34 AC-3: 承知した警告がなければ、ADR は作られない", async () => {
+    const s = setup();
+    await runCreate({ answers: s.writeAnswers(answersYaml()), yes: true }, s.deps);
+    expect(existsSync(path.join(s.tmp.cwd, APP, "docs", "adr"))).toBe(false);
+  });
+
+  it("#34 AC-3: Git の初期化はしない（#55 で決める）", async () => {
+    const s = setup();
+    await runCreate({ answers: s.writeAnswers(answersYaml()), yes: true }, s.deps);
+    expect(existsSync(path.join(s.tmp.cwd, APP, ".git"))).toBe(false);
+  });
+
+  it("#34 AC-3: Codex だけを選ぶと、Codex の出力だけができる", async () => {
+    const s = setup();
+    await runCreate(
+      { answers: s.writeAnswers(answersYaml({ ais: ["codex"] })), yes: true },
+      s.deps,
+    );
+    const dir = path.join(s.tmp.cwd, APP);
+    expect(existsSync(path.join(dir, ".codex"))).toBe(true);
+    expect(existsSync(path.join(dir, ".agents"))).toBe(true);
+    expect(existsSync(path.join(dir, ".claude"))).toBe(false);
+    expect(existsSync(path.join(dir, "CLAUDE.md"))).toBe(false);
+  });
+});
+
+describe("#34 AC-4: 同じ --answers で2回生成すると、同じ結果になる", () => {
+  it("#34 AC-4: 別々のフォルダに2回生成して、ファイルの一覧と中身がすべて同じ（version_policy: verified・fetch はつながらない偽物・now は固定）", async () => {
+    const run = async () => {
+      const s = setup();
+      const out = await runCreate(
+        {
+          answers: s.writeAnswers(
+            answersYaml({
+              ais: ["claude", "codex"],
+              database: "postgresql",
+              postgres_provider: "neon",
+            }),
+          ),
+          yes: true,
+        },
+        s.deps,
+      );
+      expect(out.exitCode).toBe(0);
+      return treeOf(path.join(s.tmp.cwd, APP));
+    };
+    const a = await run();
+    const b = await run();
+    expect(Object.keys(a).length).toBeGreaterThan(40);
+    expect(Object.keys(b)).toEqual(Object.keys(a));
+    expect(b).toEqual(a);
+  });
+});
+
+describe("#34 AC-1: 生成先に中身があるときは、エラーにして止める（create）", () => {
+  it("#34 AC-1: 生成先が、同じ名前のファイルのときも、整合性チェックのエラーで止まる。ファイルは変わらない", async () => {
+    const s = setup();
+    writeFileSync(path.join(s.tmp.cwd, APP), "ファイルの中身");
+    const out = await runCreate({ answers: s.writeAnswers(answersYaml()), yes: true }, s.deps);
+    expect(out.exitCode).toBe(1);
+    expect(s.err()).toContain("target-dir-not-empty");
+    expect(readFileSync(path.join(s.tmp.cwd, APP), "utf8")).toBe("ファイルの中身");
+    expect(listing(s.tmp.cwd)).toEqual([APP]);
+  });
+
+  it("#34 AC-1: 空のフォルダなら生成できる", async () => {
+    const s = setup();
+    mkdirSync(path.join(s.tmp.cwd, APP));
+    const out = await runCreate({ answers: s.writeAnswers(answersYaml()), yes: true }, s.deps);
+    expect(out.exitCode).toBe(0);
+    expect(generated(s.tmp.cwd)).toBe(true);
+    expect(listing(s.tmp.cwd)).toEqual([APP]);
+  });
+
+  it("#34 AC-1: チェックの後、書く直前に別のファイルが置かれたら、既存のものには触らず、エラーで終了コード1（一時的な場所は残らない）", async () => {
+    const s = setup();
+    let n = 0;
+    const out = await runCreate(
+      { answers: s.writeAnswers(answersYaml()), yes: true },
+      {
+        ...s.deps,
+        generateFs: {
+          writeFile: async (file, content) => {
+            n += 1;
+            await writeFile(file, content, "utf8");
+            if (n === 3) {
+              mkdirSync(path.join(s.tmp.cwd, APP));
+              writeFileSync(path.join(s.tmp.cwd, APP, "other.txt"), "別のプロセスのファイル");
+            }
+          },
+        },
+      },
+    );
+    expect(out.exitCode).toBe(1);
+    expect(s.err()).toMatch(/[ぁ-んァ-ヶ一-龠]/);
+    expect(treeOf(path.join(s.tmp.cwd, APP))).toEqual({ "other.txt": "別のプロセスのファイル" });
+    expect(listing(s.tmp.cwd)).toEqual([APP]);
+  });
+});
+
+describe("#34 AC-2: 生成が途中で失敗したとき、生成先にファイルが残らない（create）", () => {
+  it("#34 AC-2: 3つ目の書き込みで例外にすると、エラーを日本語で示して終了コード1。生成先も一時的な場所も残らない", async () => {
+    const s = setup();
+    let n = 0;
+    const out = await runCreate(
+      { answers: s.writeAnswers(answersYaml()), yes: true },
+      {
+        ...s.deps,
+        generateFs: {
+          writeFile: async (file, content) => {
+            n += 1;
+            if (n === 3) throw new Error("disk full (fake)");
+            await writeFile(file, content, "utf8");
+          },
+        },
+      },
+    );
+    expect(out.exitCode).toBe(1);
+    expect(s.err()).toContain("disk full (fake)");
+    expect(s.err()).toMatch(/[ぁ-んァ-ヶ一-龠]/);
+    expect(listing(s.tmp.cwd)).toEqual([]);
+    expect(s.prompter.notes.join("\n")).not.toContain("npm install"); // 成功の案内は出さない
+  });
+
+  it("#34 AC-2: 一時的な場所を消せないときは、エラーに場所（.<アプリ名>.harness-tmp-…）が示され、終了コード1", async () => {
+    const s = setup();
+    let n = 0;
+    const out = await runCreate(
+      { answers: s.writeAnswers(answersYaml()), yes: true },
+      {
+        ...s.deps,
+        generateFs: {
+          writeFile: async (file, content) => {
+            n += 1;
+            if (n === 2) throw new Error("disk full (fake)");
+            await writeFile(file, content, "utf8");
+          },
+          rm: async () => {
+            throw Object.assign(new Error("EBUSY (fake)"), { code: "EBUSY" });
+          },
+        },
+      },
+    );
+    expect(out.exitCode).toBe(1);
+    expect(s.err()).toContain(TMP_PREFIX);
+  });
+});
+
+describe("#34 R2: 生成の最中の中断（SIGINT）", () => {
+  // 実際の SIGINT の送信は Windows では難しいため、プロセス内で process.emit("SIGINT") で代える（計画 R2）。
+  // 実際の CLI を子のプロセスで起動して SIGINT を送るテストは、Windows 以外の CI（macOS・Linux）で別に行う。
+  const interrupt = () => process.emit("SIGINT", "SIGINT");
+
+  it("#34 R2: 書き込みの途中で SIGINT → 終了コード130。「中断しました」を表示し、生成先も一時的な場所も残らない", async () => {
+    const s = setup();
+    let n = 0;
+    const out = await runCreate(
+      { answers: s.writeAnswers(answersYaml()), yes: true },
+      {
+        ...s.deps,
+        generateFs: {
+          writeFile: async (file, content) => {
+            n += 1;
+            await writeFile(file, content, "utf8");
+            if (n === 3) interrupt();
+          },
+        },
+      },
+    );
+    expect(out.exitCode).toBe(130);
+    expect(s.err()).toContain("中断しました");
+    expect(s.err()).not.toContain("生成は完了しています");
+    expect(n).toBe(3); // 要求の後に、次の書き込みは始めない
+    expect(listing(s.tmp.cwd)).toEqual([]);
+  });
+
+  it("#34 R2: SIGINT を受ける処理は、生成の間だけ登録され、終わると外れる（成功・失敗・中断のどれでも）", async () => {
+    const before = process.listenerCount("SIGINT");
+    // 成功
+    const ok = setup();
+    let during = -1;
+    await runCreate(
+      { answers: ok.writeAnswers(answersYaml()), yes: true },
+      {
+        ...ok.deps,
+        generateFs: {
+          writeFile: async (file, content) => {
+            during = process.listenerCount("SIGINT");
+            await writeFile(file, content, "utf8");
+          },
+        },
+      },
+    );
+    expect(during).toBeGreaterThan(before); // 生成の間は登録されている
+    expect(process.listenerCount("SIGINT")).toBe(before);
+    // 失敗
+    const ng = setup();
+    await runCreate(
+      { answers: ng.writeAnswers(answersYaml()), yes: true },
+      {
+        ...ng.deps,
+        generateFs: {
+          writeFile: async () => {
+            throw new Error("disk full (fake)");
+          },
+        },
+      },
+    );
+    expect(process.listenerCount("SIGINT")).toBe(before);
+    // 中断
+    const stop = setup();
+    await runCreate(
+      { answers: stop.writeAnswers(answersYaml()), yes: true },
+      {
+        ...stop.deps,
+        generateFs: {
+          writeFile: async (file, content) => {
+            await writeFile(file, content, "utf8");
+            interrupt();
+          },
+        },
+      },
+    );
+    expect(process.listenerCount("SIGINT")).toBe(before);
+  });
+
+  it("#34 R2: 質問・チェックの間（生成の前）には、SIGINT を受ける処理を登録しない", async () => {
+    const before = process.listenerCount("SIGINT");
+    const s = setup({ confirm_generate: [false] }, { interactive: true });
+    await runCreate({ answers: s.writeAnswers(answersYaml()) }, s.deps);
+    expect(process.listenerCount("SIGINT")).toBe(before);
+  });
+
+  it("#34 R2: 移動の直前に SIGINT → 終了コード130。生成先は作られず、一時的な場所も残らない", async () => {
+    const s = setup();
+    const target = path.join(s.tmp.cwd, APP);
+    let targetChecks = 0;
+    const out = await runCreate(
+      { answers: s.writeAnswers(answersYaml()), yes: true },
+      {
+        ...s.deps,
+        generateFs: {
+          rename: async () => {
+            throw new Error("到達しないはず：中断の要求の後に rename しない");
+          },
+          lstat: async (p) => {
+            // 2回目の確かめ（移動の直前）の最中に中断する
+            if (path.resolve(p) === path.resolve(target)) {
+              targetChecks += 1;
+              if (targetChecks === 2) interrupt();
+            }
+            return lstat(p);
+          },
+        },
+      },
+    );
+    expect(out.exitCode).toBe(130);
+    expect(s.err()).toContain("中断しました");
+    expect(listing(s.tmp.cwd)).toEqual([]);
+  });
+
+  it("#34 R2: 移動（rename）の直後に SIGINT → 生成は完了しているので生成先を残し、「生成は完了しています」を表示して終了コード130", async () => {
+    const s = setup();
+    const out = await runCreate(
+      { answers: s.writeAnswers(answersYaml()), yes: true },
+      {
+        ...s.deps,
+        generateFs: {
+          rename: async (from, to) => {
+            await rename(from, to);
+            // 最後の項目の移動の後（一時的な場所が空になったとき）だけ中断する
+            if ((await readdir(path.dirname(from))).length === 0) interrupt();
+          },
+        },
+      },
+    );
+    expect(out.exitCode).toBe(130);
+    expect(s.err()).toContain("生成は完了しています");
+    expect(generated(s.tmp.cwd)).toBe(true);
+    expect(listing(s.tmp.cwd)).toEqual([APP]);
+  });
+
+  it("#34 R2: 移動の再試行（EPERM）の途中で SIGINT → 終了コード130。生成先は作られず、一時的な場所も残らない", async () => {
+    const s = setup();
+    let calls = 0;
+    const out = await runCreate(
+      { answers: s.writeAnswers(answersYaml()), yes: true },
+      {
+        ...s.deps,
+        generateFs: {
+          rename: async () => {
+            calls += 1;
+            throw Object.assign(new Error("EPERM (fake)"), { code: "EPERM" });
+          },
+          sleep: async () => {
+            interrupt();
+          },
+        },
+      },
+    );
+    expect(out.exitCode).toBe(130);
+    expect(calls).toBe(1);
+    expect(listing(s.tmp.cwd)).toEqual([]);
+  });
+});
+
+describe("#34 AC-3: 環境変数・取得の失敗の理由を、生成したファイルに書かない（create）", () => {
+  const MARKER = "HARNESS_TEST_SECRET_MARKER_001";
+
+  it("#34 AC-3: process.env の項目と、取得の失敗の理由に目印を入れて生成しても、生成したすべてのファイル（パスを含む）に目印が含まれない", async () => {
+    const names = ["HARNESS_TEST_ENV_MARKER_001", "HARNESS_TEST_TOKEN_001", "DATABASE_URL"];
+    const saved = names.map((n) => process.env[n]);
+    for (const n of names) process.env[n] = MARKER;
+    try {
+      const failing = (async () => {
+        throw new Error(`ECONNREFUSED ${MARKER}`);
+      }) as typeof fetch;
+      const s = setup({}, { fetch: failing });
+      const out = await runCreate({ answers: s.writeAnswers(answersYaml()), yes: true }, s.deps);
+      expect(out.exitCode).toBe(0);
+      const tree = treeOf(path.join(s.tmp.cwd, APP));
+      expect(Object.keys(tree).length).toBeGreaterThan(40);
+      for (const [p, content] of Object.entries(tree)) {
+        expect(p, p).not.toContain(MARKER);
+        expect(content, p).not.toContain(MARKER);
+      }
+    } finally {
+      names.forEach((n, i) => {
+        const v = saved[i];
+        if (v === undefined) delete process.env[n];
+        else process.env[n] = v;
+      });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #34 R2：実際の CLI を子のプロセスで起動して SIGINT を送る（Windows 以外）
+//   Windows では、子のプロセスへ SIGINT を送れない（kill("SIGINT") は強制終了になり、Ctrl+C の処理が動かない）ため skip する。
+//   Windows の動作は、上の describe のプロセス内のテスト（process.emit("SIGINT")）で確かめる。
+//   書き込みを遅くする入口：環境変数ではなく、テストが一時的に書く小さな起動スクリプトが、組み立て済みの dist/commands/create.js の
+//   runCreate に、遅い generateFs（writeFile）を渡す。tsx は使わない（実装に必要なのは CreateDeps.generateFs だけ）。
+//   dist は、このテストの beforeAll で `tsc -p tsconfig.build.json` を実行して作る。
+// ---------------------------------------------------------------------------
+describe.skipIf(process.platform === "win32")(
+  "#34 R2: 実際の CLI の SIGINT（子のプロセス）",
+  () => {
+    const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+
+    beforeAll(() => {
+      execFileSync(
+        process.execPath,
+        [
+          path.join(rootDir, "node_modules", "typescript", "bin", "tsc"),
+          "-p",
+          "tsconfig.build.json",
+        ],
+        { cwd: rootDir, stdio: "pipe" },
+      );
+    }, 120_000);
+
+    it("#34 R2: 書き込みが始まったら SIGINT を送ると、終了コード130で終わり、生成先も一時的な場所も残らない", async () => {
+      const tmp = makeTmp();
+      const answersFile = path.join(tmp.inputDir, "answers.yaml");
+      writeFileSync(answersFile, stringify(answersYaml()));
+      const createUrl = pathToFileURL(path.join(rootDir, "dist", "commands", "create.js")).href;
+      const script = path.join(tmp.inputDir, "slow-create.mjs");
+      writeFileSync(
+        script,
+        `import { writeFile } from "node:fs/promises";
+import { runCreate } from ${JSON.stringify(createUrl)};
+const fail = () => { throw new Error("到達しないはず"); };
+const prompter = { note() {}, text: fail, select: fail, multiselect: fail, confirm: fail };
+let first = true;
+const out = await runCreate(
+  { answers: process.argv[2], yes: true },
+  {
+    prompter,
+    cwd: process.argv[3],
+    interactive: false,
+    stderr: (t) => process.stderr.write(t),
+    checkTools: async () => [
+      { name: "node", state: "ok", version: "24.0.0" },
+      { name: "git", state: "ok", version: "2.45.0" },
+      { name: "docker", state: "ok", version: "27.0.1" },
+    ],
+    fetch: async () => { throw new Error("offline (fake)"); },
+    now: () => new Date("2026-10-03T12:00:00Z"),
+    generateFs: {
+      writeFile: async (file, content) => {
+        if (first) { first = false; process.stdout.write("WRITING\\n"); }
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        await writeFile(file, content, "utf8");
+      },
+    },
+  },
+);
+process.exitCode = out.exitCode;
+`,
+      );
+      const child = spawn(process.execPath, [script, answersFile, tmp.cwd], {
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      let stderr = "";
+      child.stderr.on("data", (d: Buffer) => (stderr += d.toString()));
+      const exit = new Promise<number | null>((resolve) =>
+        child.on("close", (code) => resolve(code)),
+      );
+      await new Promise<void>((resolve, reject) => {
+        let seen = "";
+        const timer = setTimeout(() => reject(new Error("書き込みが始まりません")), 60_000);
+        child.stdout.on("data", (d: Buffer) => {
+          seen += d.toString();
+          if (seen.includes("WRITING")) {
+            clearTimeout(timer);
+            resolve();
+          }
+        });
+        child.on("close", () => {
+          clearTimeout(timer);
+          reject(new Error(`書き込みの前に終わりました：${stderr}`));
+        });
+      });
+      child.kill("SIGINT");
+      const code = await exit;
+      expect(code, stderr).toBe(130);
+      expect(stderr).toContain("中断しました");
+      expect(readdirSync(tmp.cwd)).toEqual([]); // 生成先も一時的な場所も残らない
+    }, 120_000);
+  },
+);

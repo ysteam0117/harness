@@ -10,7 +10,7 @@
 //     承知していない場合の stderr にも、該当するパッケージを示す
 //   - 整合性チェックの聞き直しで回答が変わったら、プロファイル・対象を計算し直し、増えた対象だけを調べる（既に選んだものはそのまま）
 // 実際の templates/profiles は、実装の役割が profile.yaml に version_ranges などを足す前提（test/generate/profile.test.ts の冒頭）
-import { writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { stringify } from "yaml";
@@ -28,7 +28,9 @@ import {
 
 afterEach(cleanupTmp);
 
-const STUB_MESSAGE = "生成は Issue #34 で実装予定です";
+/** 生成先（<cwd>/testapp-001）に、記録のファイルまでできているか（#34） */
+const generated = (cwd: string) =>
+  existsSync(path.join(cwd, "testapp-001", ".harness", "config.yaml"));
 const RULE7 = "version-newer-than-verified";
 
 const okTools = async (): Promise<ToolStatus[]> => [
@@ -60,7 +62,7 @@ function setup(
     writeFileSync(file, stringify(obj));
     return file;
   };
-  return { prompter, deps, err: () => errs.join(""), writeAnswers, fetcher };
+  return { prompter, deps, cwd: tmp.cwd, err: () => errs.join(""), writeAnswers, fetcher };
 }
 
 const row = (md: string, name: string) =>
@@ -81,13 +83,14 @@ const newerRegistry = () =>
   });
 
 describe("#33 R6・R8: 方針 verified（既定）でも調べて記録し、つながらなくても止めない", () => {
-  it("#33 R6: 方針 verified：すべて検証済みを採用。fetch は呼ばれ、最新の安定版と調べた日が記録される。生成の案内（#34）まで進む", async () => {
+  it("#33 R6: 方針 verified：すべて検証済みを採用。fetch は呼ばれ、最新の安定版と調べた日が記録される。生成まで進む（#34）", async () => {
     const s = setup(newerRegistry());
     const out = await runCreate(
       { answers: s.writeAnswers(baseAnswers() as Record<string, unknown>), yes: true },
       s.deps,
     );
-    expect(s.err()).toContain(STUB_MESSAGE);
+    expect(out.exitCode).toBe(0);
+    expect(generated(s.cwd)).toBe(true); // 生成した（#34）
     expect(s.fetcher.calls.length).toBeGreaterThan(0);
     expect(s.prompter.inputs).toHaveLength(0);
     const entries = out.versions?.entries ?? [];
@@ -108,7 +111,8 @@ describe("#33 R6・R8: 方針 verified（既定）でも調べて記録し、つ
       { answers: s.writeAnswers(baseAnswers() as Record<string, unknown>) },
       s.deps,
     );
-    expect(s.err()).toContain(STUB_MESSAGE);
+    expect(out.exitCode).toBe(0);
+    expect(generated(s.cwd)).toBe(true); // 生成した（#34）
     expect(s.prompter.askedIds).toEqual(["confirm_generate"]);
     for (const e of out.versions?.entries ?? []) {
       expect(e.version).toBe(e.verified);
@@ -139,7 +143,8 @@ describe("#33 AC-1・AC-2・AC-3・AC-5: 方針 latest（--answers・対話し�
     const s = setup(newerRegistry());
     const file = s.writeAnswers({ ...latestYaml(), accepted_warnings: [RULE7] });
     const out = await runCreate({ answers: file, yes: true }, s.deps);
-    expect(s.err()).toContain(STUB_MESSAGE);
+    expect(out.exitCode).toBe(0);
+    expect(generated(s.cwd)).toBe(true); // 生成した（#34）
     const get = (n: string) => out.versions?.entries.find((e) => e.name === n);
     expect(get("vitest")?.version).toBe("4.2.0");
     expect(get("typescript")?.version).toBe("6.0.9");
@@ -155,7 +160,7 @@ describe("#33 AC-1・AC-2・AC-3・AC-5: 方針 latest（--answers・対話し�
     expect(s.err()).toContain(RULE7);
     expect(s.err()).toContain("accepted_warnings");
     expect(s.err()).toContain("vitest");
-    expect(s.err()).not.toContain(STUB_MESSAGE);
+    expect(generated(s.cwd)).toBe(false); // 生成しない
   });
 
   it("#33 AC-3: 大きな版が違うもの（axios 1 → 2）は、警告の理由に、パッケージ名と大きな版が違う旨が添えられる", async () => {
@@ -184,7 +189,8 @@ describe("#33 AC-1・AC-2・AC-3・AC-5: 方針 latest（--answers・対話し�
   it("#33 AC-3: 最新の安定版が検証済みと同じなら、警告は出ない（ルール7が当たらない）", async () => {
     const s = setup(registryForReal());
     const out = await runCreate({ answers: s.writeAnswers(latestYaml()), yes: true }, s.deps);
-    expect(s.err()).toContain(STUB_MESSAGE);
+    expect(out.exitCode).toBe(0);
+    expect(generated(s.cwd)).toBe(true); // 生成した（#34）
     expect(out.result?.warnings.map((w) => w.id)).not.toContain(RULE7);
     expect(out.versions?.newerThanVerified).toBe(false);
   });
@@ -192,7 +198,8 @@ describe("#33 AC-1・AC-2・AC-3・AC-5: 方針 latest（--answers・対話し�
   it("#33 AC-1: 試験版（99.0.0-rc.1 など）しか新しいものがないときは、検証済みのままで警告にならない", async () => {
     const s = setup(registryForReal({}, { distTags: { latest: "99.0.0-rc.1" } }));
     const out = await runCreate({ answers: s.writeAnswers(latestYaml()), yes: true }, s.deps);
-    expect(s.err()).toContain(STUB_MESSAGE);
+    expect(out.exitCode).toBe(0);
+    expect(generated(s.cwd)).toBe(true); // 生成した（#34）
     expect(out.versions?.entries.every((e) => e.version === e.verified)).toBe(true);
   });
 
@@ -228,7 +235,7 @@ describe("#33 AC-1・AC-2・AC-3・AC-5: 方針 latest（--answers・対話し�
     );
     expect(out.exitCode).toBe(1);
     expect(s.err()).toContain("no-such-package");
-    expect(s.err()).not.toContain(STUB_MESSAGE);
+    expect(generated(s.cwd)).toBe(false); // 生成しない
   });
 
   it("#33 R4: DB なしのとき drizzle-orm は対象にない。versions に書くとエラー（対象は回答で決まる）", async () => {
@@ -263,7 +270,7 @@ describe("#33 AC-1・AC-2・AC-3・AC-5: 方針 latest（--answers・対話し�
       const s = setup(newerRegistry());
       const out = await runCreate({ answers: s.writeAnswers(yamlObj), yes: true }, s.deps);
       expect(out.exitCode).toBe(1);
-      expect(s.err()).not.toContain(STUB_MESSAGE);
+      expect(generated(s.cwd)).toBe(false); // 生成しない
       expect(s.fetcher.calls).toHaveLength(0);
       expect(s.prompter.inputs).toHaveLength(0);
     }
@@ -285,7 +292,7 @@ describe("#33 AC-4: ネットワークにつながらない場合（方針 lates
     expect(s.err()).toContain("hono");
     expect(s.err()).toContain("500");
     expect(s.err()).toContain("versions_offline");
-    expect(s.err()).not.toContain(STUB_MESSAGE);
+    expect(generated(s.cwd)).toBe(false); // 生成しない
     expect(s.prompter.inputs).toHaveLength(0);
   });
 
@@ -295,7 +302,8 @@ describe("#33 AC-4: ネットワークにつながらない場合（方針 lates
       { answers: s.writeAnswers(latestYaml({ versions_offline: "verified" })), yes: true },
       s.deps,
     );
-    expect(s.err()).toContain(STUB_MESSAGE);
+    expect(out.exitCode).toBe(0);
+    expect(generated(s.cwd)).toBe(true); // 生成した（#34）
     expect(out.versions?.entries.every((e) => e.version === e.verified)).toBe(true);
     expect(out.versions?.newerThanVerified).toBe(false);
     expect(s.prompter.inputs).toHaveLength(0);
@@ -306,7 +314,7 @@ describe("#33 AC-4: ネットワークにつながらない場合（方針 lates
     const out = await runCreate({ answers: s.writeAnswers(latestYaml()) }, s.deps);
     expect(out.exitCode).toBe(1);
     expect(s.prompter.askedIds).toEqual(["versions_offline_confirm"]);
-    expect(s.err()).not.toContain(STUB_MESSAGE);
+    expect(generated(s.cwd)).toBe(false); // 生成しない
   });
 
   it("#33 AC-4: 対話：「はい」なら検証済みで進み、最後の確認まで行く", async () => {
@@ -317,7 +325,8 @@ describe("#33 AC-4: ネットワークにつながらない場合（方針 lates
     );
     const out = await runCreate({ answers: s.writeAnswers(latestYaml()) }, s.deps);
     expect(s.prompter.askedIds).toEqual(["versions_offline_confirm", "confirm_generate"]);
-    expect(s.err()).toContain(STUB_MESSAGE);
+    expect(out.exitCode).toBe(0);
+    expect(generated(s.cwd)).toBe(true); // 生成した（#34）
     expect(out.versions?.entries.every((e) => e.version === e.verified)).toBe(true);
   });
 });
@@ -421,7 +430,8 @@ describe("#33 R3: 整合性チェックの聞き直しで回答が変わった�
       baseAnswers({ auth: "app", idp: undefined, database: "none" }) as Record<string, unknown>,
     );
     const out = await runCreate({ answers: file }, s.deps);
-    expect(s.err()).toContain(STUB_MESSAGE);
+    expect(out.exitCode).toBe(0);
+    expect(generated(s.cwd)).toBe(true); // 生成した（#34）
     expect(s.prompter.askedIds).toEqual([
       "fix_question",
       "database",
@@ -516,7 +526,7 @@ describe("#33 レビュー指摘1：version_policy を対話で選び、YAML の
     expect(s.fetcher.calls).toHaveLength(0);
     expect(s.err()).toContain("version_policy");
     expect(s.err()).toContain("versions");
-    expect(s.err()).not.toContain(STUB_MESSAGE);
+    expect(generated(s.cwd)).toBe(false); // 生成しない
     expect(s.prompter.askedIds).toEqual(["version_policy"]);
   });
 

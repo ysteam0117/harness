@@ -1,0 +1,8 @@
+# 知見（knowledge/）のうち、回答に関係するものだけを、生成するプロジェクトの Skill「知見」に写す対応表（F-18）。
+# ここに書かないファイルは、常に写す（README.md は写さない）。
+#
+# path : knowledge/ からの相対パス。"<分野>/<ファイル名>" か、分野のすべてを表す "<分野>/*"
+# when : 質問の id（answer）と、equals・in・notEquals のどれか1つ（consistency-rules.yaml の answer 条件と同じ書き方）
+
+- path: db/*
+  when: { answer: database, notEquals: none }

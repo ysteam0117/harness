@@ -5,3 +5,10 @@
 node:
   verified: "24.19.0"
   policy: lts
+
+# wrangler.jsonc の compatibility_date（Cloudflare Workers の互換性の日付）。
+# テストの道具（@cloudflare/vitest-pool-workers）に同梱された実行エンジンが対応する日付以下にする（新しすぎると起動しない）。
+# テストの道具のバージョンを上げるとき（verified_versions の更新）に、対応する日付を確かめて見直す。
+# 確かめ方：npm view @cloudflare/vitest-pool-workers@<版> dependencies で miniflare の版を見る。版の中の日付（例：5.20260815.0 → 2026-08-15）が上限。
+# 2026-10-03 確認：vitest-pool-workers 0.22.0 → miniflare 5.20260815.0 → 上限 2026-08-15。下の値はこれ以下。
+compatibility_date: "2026-08-04"

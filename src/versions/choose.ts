@@ -166,12 +166,10 @@ function warningNotes(entries: VersionEntry[], prompter: Prompter): void {
   const major = entries.filter((e) => e.majorDiffers);
   if (major.length > 0) {
     prompter.note(
-      major
-        .map(
-          (e) =>
-            `- ${label(e.name)}：検証済み ${e.verified ?? "なし"} → 採用 ${e.version}（大きな版が違い、ハーネスで動作を確認していません）`,
-        )
-        .join("\n"),
+      `${alignTable(
+        ["パッケージ", "検証済み", "採用"],
+        major.map((e) => [label(e.name), e.verified ?? "なし", e.version]),
+      ).join("\n")}\n\nこれらは大きな版が違い、ハーネスで動作を確認していません`,
       "警告：大きな版が、検証済みと違います",
     );
   }

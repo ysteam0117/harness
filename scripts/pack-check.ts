@@ -1,7 +1,7 @@
 // 配布物の確認：組み立て → npm pack → 一時フォルダへインストール → harness --help の確認。
 // 手元の環境を汚さないよう、グローバルへのインストールは使わない。
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -65,7 +65,8 @@ function npm(args: string[], cwd: string): string {
 }
 
 /** 配布物の確認に使う、架空の回答（実在しない値だけ）。手元の道具の警告は環境で変わるため、承知済みにしておく */
-const SAMPLE_ANSWERS = `app_name: testapp-001
+const SAMPLE_APP_NAME = "testapp-001";
+const SAMPLE_ANSWERS = `app_name: ${SAMPLE_APP_NAME}
 ais: [claude]
 visibility: private
 team_size: solo
@@ -87,7 +88,9 @@ accepted_warnings: [missing-tools]
 
 /**
  * インストールした配布物で `harness create --answers <架空の回答> --yes` を実行し、
- * ルールのデータ（data/）を読めて「生成は Issue #34 で実装予定」で終わる（終了コード1）ことを確かめる。
+ * ルールのデータ（data/）・ひな形（templates/）・知見（knowledge/）を読んで、インストール先の一時的なフォルダの中に
+ * プロジェクトが生成され（終了コード0）、.harness/config.yaml と AGENTS.md ができることを確かめる。
+ * 生成先は一時的なフォルダ（workDir の中）で、pack-check の最後に workDir ごと消える。
  * 失敗する終了コードを例外にせず、内容を確かめるため spawnSync を使う（shell は使わない）。
  */
 function checkCreate(workDir: string, installDir: string): void {
@@ -107,11 +110,19 @@ function checkCreate(workDir: string, installDir: string): void {
   }
   const output = `${r.stdout}
 ${r.stderr}`;
-  if (r.status !== 1 || !output.includes("生成は Issue #34 で実装予定")) {
+  if (r.status !== 0) {
     throw new Error(
-      `harness create の結果が想定と違います（終了コード ${String(r.status)}。想定は 1 と「生成は Issue #34 で実装予定」の表示）：
+      `harness create の結果が想定と違います（終了コード ${String(r.status)}。想定は 0）：
 ${output}`,
     );
+  }
+  // 生成先は <installDir>/<アプリ名>。記録のファイルと AI 向けの本体ができていること
+  const projectDir = path.join(installDir, SAMPLE_APP_NAME);
+  for (const rel of [path.join(".harness", "config.yaml"), "AGENTS.md"]) {
+    if (!existsSync(path.join(projectDir, rel))) {
+      throw new Error(`生成したプロジェクトに ${rel} がありません（生成先：${projectDir}）：
+${output}`);
+    }
   }
 }
 
@@ -136,7 +147,9 @@ function checkPackage(workDir: string): void {
   }
   console.log(help);
   checkCreate(workDir, installDir);
-  console.log("harness create（ルールのデータの読み込みを含む）の確認に成功しました。");
+  console.log(
+    "harness create（データ・ひな形・知見の読み込みと、一時的なフォルダへの生成を含む）の確認に成功しました。",
+  );
   console.log("配布物の確認に成功しました。");
 }
 

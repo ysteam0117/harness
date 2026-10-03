@@ -1,0 +1,219 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import type { AcceptedWarning } from "../checks/review.js";
+import type { Answers } from "../questions/answers.js";
+import type { VersionResult } from "../versions/choose.js";
+import { selectProfiles } from "../versions/profile-selection.js";
+import { renderTechStack } from "../versions/tech-stack.js";
+import type { Ai } from "./adapter.js";
+import { stripHarnessComments, stripMarkerComments } from "./comments.js";
+import { buildConfigText, CONFIG_PATH, localDay } from "./config.js";
+import { GenerateError } from "./errors.js";
+import { judge } from "./judgment.js";
+import { selectKnowledge } from "./knowledge.js";
+import { buildOutputs } from "./plan.js";
+import { buildPackageJson } from "./package-json.js";
+import { checkOutputPaths } from "./paths.js";
+import { resolveProfiles } from "./profile.js";
+import { rolesFor } from "./roles.js";
+import { normalizeNewlines, renderTemplate } from "./template.js";
+import { buildValues } from "./values.js";
+import { findTemplatesDir } from "./templates-dir.js";
+
+export type ProjectFile = {
+  /** "/" 区切りの相対パス */
+  path: string;
+  /** 改行は LF */
+  content: string;
+  /** ハーネスが管理するファイル（F-27）か。false はプロジェクトのもの */
+  managed: boolean;
+};
+
+export interface BuildProjectInput {
+  /** 完全な回答（自動で決まる値・未定を含む） */
+  answers: Answers;
+  /** 承知した警告 */
+  acceptedWarnings: AcceptedWarning[];
+  /** #33 で選んだ版 */
+  versions: VersionResult;
+  /** 生成した日（generated_on・ADR の承知した日）。ローカルの日付を使う */
+  now: Date;
+  /** 既定は findTemplatesDir() */
+  templatesDir?: string;
+  /** 既定はハーネスの knowledge/ */
+  knowledgeDir?: string;
+}
+
+/** ひな形から出力する文書・スクリプト・Issue のテンプレート（ひな形 → 出力先） */
+const TEMPLATE_FILES: { source: string; destination: string }[] = [
+  { source: "docs/secrets.md", destination: "docs/secrets.md" },
+  { source: "docs/project-rules.md", destination: "docs/project-rules.md" },
+  { source: "docs/pentest-plan.md", destination: "docs/testing/pentest-plan.md" },
+  { source: "scripts/env-check.mjs", destination: "scripts/env-check.mjs" },
+  {
+    source: ".github/ISSUE_TEMPLATE/harness-feedback.md",
+    destination: ".github/ISSUE_TEMPLATE/harness-feedback.md",
+  },
+];
+
+const ADR_PATH = "docs/adr/0001-accepted-warnings.md";
+
+/** ハーネスが管理するファイル（F-27）。それ以外はプロジェクトのもの（アプリのコード・設定・docs/ の記録など） */
+export function isManagedPath(p: string): boolean {
+  return (
+    p === "AGENTS.md" ||
+    p === "CLAUDE.md" ||
+    p.startsWith(".claude/skills/") ||
+    p.startsWith(".agents/skills/") ||
+    p.startsWith(".claude/agents/") ||
+    p.startsWith(".codex/agents/") ||
+    p === ".claude/settings.json" ||
+    p === ".codex/rules/default.rules" ||
+    p.startsWith(".github/ISSUE_TEMPLATE/") ||
+    p === "scripts/env-check.mjs" ||
+    p === "docs/secrets.md"
+  );
+}
+
+function readTemplate(templatesDir: string, rel: string): string {
+  try {
+    return normalizeNewlines(readFileSync(path.join(templatesDir, ...rel.split("/")), "utf8"));
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new GenerateError(`必須のひな形 ${rel} がありません`, { cause: e });
+    }
+    throw new GenerateError(`${rel} を読めません`, { cause: e });
+  }
+}
+
+const cell = (text: string): string => text.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+
+/** 承知した警告の ADR（C-35：背景・選択肢・決定・理由・影響） */
+function buildAdr(warnings: AcceptedWarning[], day: string): string {
+  const rows = warnings.map(
+    (w) => `| ${cell(w.id)} | ${cell(w.message)} | ${cell(w.reason)} | ${day} |`,
+  );
+  return `${[
+    "# 0001：警告を承知して、プロジェクトを生成した",
+    "",
+    "- 状態：採用",
+    `- 日付：${day}`,
+    "- 関係：C-35、F-08",
+    "",
+    "## 背景",
+    "",
+    "プロジェクトを生成する前の整合性チェックで、次の警告が見つかった。警告は、成り立つが推奨しない組み合わせである。利用者は、内容と理由を確認したうえで、承知して続けることを選んだ。",
+    "",
+    "| ルールの id | 内容 | 理由 | 承知した日 |",
+    "| --- | --- | --- | --- |",
+    ...rows,
+    "",
+    "## 選択肢",
+    "",
+    "1. 回答を変える",
+    "   - 警告が出ない回答に直して、生成し直す",
+    "2. リスクを承知して続ける",
+    "   - 警告の内容を受け入れて、そのまま生成する",
+    "",
+    "## 決定",
+    "",
+    "選択肢2（承知して続ける）を採る。",
+    "",
+    "## 理由",
+    "",
+    "利用者が、警告の内容と理由を確認し、承知して続けることを選んだ。",
+    "",
+    "## 影響",
+    "",
+    "- 上の表の警告の理由に書かれたリスクを、このプロジェクトが引き受ける",
+    "- 警告を解消する場合は、回答を変えて、必要な設定を直す。そのときは、このADRを消さずに、新しいADRを追加する",
+  ].join("\n")}\n`;
+}
+
+/**
+ * 生成するすべてのファイル（パスと中身）をメモリ上で組み立てる。ディスクには書かない。
+ * AI向けの出力・プロファイルのコード・文書・スクリプト・package.json・知見の写し・技術スタック・
+ * 承知した警告のADR・.harness/config.yaml を含む。パスの順に並べ、同じ入力なら同じ結果になる。
+ * 誤り（値の漏れ・ひな形の不足・出力先の重なり）は GenerateError。
+ */
+export function buildProject(input: BuildProjectInput): { files: ProjectFile[] } {
+  const { answers, acceptedWarnings, versions, now } = input;
+  const templatesDir = input.templatesDir ?? findTemplatesDir();
+  const ais: Ai[] = answers.ais;
+
+  const profileKeys = selectProfiles(answers);
+  const profiles = resolveProfiles(templatesDir, profileKeys);
+  const judgment = judge(answers);
+  const knowledge = selectKnowledge(answers, {
+    ...(input.knowledgeDir !== undefined ? { knowledgeDir: input.knowledgeDir } : {}),
+  });
+  const values = buildValues({ answers, judgment, knowledge });
+
+  // AI向けの出力・プロファイルの files
+  const built = buildOutputs({ templatesDir, ais, profiles: profileKeys, values });
+  const outputs: { path: string; content: string }[] = [...built.files];
+
+  // 文書・スクリプト・Issue のテンプレート
+  for (const file of TEMPLATE_FILES) {
+    const text = stripMarkerComments(
+      stripHarnessComments(readTemplate(templatesDir, file.source), file.source),
+    );
+    outputs.push({
+      path: file.destination,
+      content: renderTemplate(text, values, { templatesDir, fileName: file.source }),
+    });
+  }
+
+  outputs.push({ path: "docs/tech-stack.md", content: renderTechStack(versions, profiles) });
+  if (acceptedWarnings.length > 0) {
+    outputs.push({ path: ADR_PATH, content: buildAdr(acceptedWarnings, localDay(now)) });
+  }
+
+  const packageJson = buildPackageJson({
+    appName: answers.app_name,
+    answers,
+    profiles,
+    versions,
+  });
+  outputs.push({ path: "package.json", content: `${JSON.stringify(packageJson, null, 2)}\n` });
+  const node = versions.entries.find((e) => e.name === "node");
+  if (node === undefined) {
+    throw new GenerateError(".node-version に使う Node.js の版が、選んだ版にありません");
+  }
+  outputs.push({ path: ".node-version", content: `${node.version}\n` });
+
+  // 知見の写し：Skill「知見」の references/（選んだAIごと）
+  const skillRoots = [
+    ...(ais.includes("claude") ? [".claude/skills"] : []),
+    ...(ais.includes("codex") ? [".agents/skills"] : []),
+  ];
+  for (const root of skillRoots) {
+    for (const entry of knowledge) {
+      outputs.push({
+        path: `${root}/knowledge/references/${entry.source}`,
+        content: entry.content,
+      });
+    }
+  }
+
+  // 出力先の重なりを、記録のファイルを作る前に確かめる
+  checkOutputPaths([...outputs.map((f) => f.path), CONFIG_PATH]);
+
+  const withManaged: ProjectFile[] = outputs.map((f) => ({
+    ...f,
+    managed: isManagedPath(f.path),
+  }));
+  const config = buildConfigText({
+    answers,
+    acceptedWarnings,
+    judgment,
+    versions,
+    roles: rolesFor(ais),
+    managed: withManaged.filter((f) => f.managed),
+    now,
+  });
+  withManaged.push({ path: CONFIG_PATH, content: config, managed: false });
+
+  const files = withManaged.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  return { files };
+}

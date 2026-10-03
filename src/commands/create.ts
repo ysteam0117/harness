@@ -12,7 +12,9 @@ import {
 import type { ToolStatus } from "../checks/tools.js";
 import { GenerateError } from "../generate/errors.js";
 import { resolveProfiles } from "../generate/profile.js";
+import { buildProject } from "../generate/project.js";
 import { findTemplatesDir } from "../generate/templates-dir.js";
+import { GenerationInterrupted, writeProject, type FsOps } from "../generate/write.js";
 import {
   AnswersError,
   parseAnswersYaml,
@@ -41,8 +43,10 @@ export interface CreateDeps {
   checkTools?: () => Promise<ToolStatus[]>;
   /** バージョンの調査（npm・Node.js の登録情報の取得）の差し替え（テスト用）。既定は globalThis.fetch */
   fetch?: typeof fetch;
-  /** 調べた日の差し替え（テスト用）。既定は現在の日時 */
+  /** 調べた日・生成した日の差し替え（テスト用）。既定は現在の日時 */
   now?: () => Date;
+  /** 生成のファイル操作（書き込み・名前の変更など）の差し替え（テスト用）。既定は本物 */
+  generateFs?: Partial<FsOps>;
 }
 
 export interface CreateOptions {
@@ -59,12 +63,13 @@ export interface CreateOutcome {
   result?: CheckResult;
   /** 技術ごとに採用したバージョンと選定理由（F-19） */
   versions?: VersionResult;
-  /** docs/tech-stack.md の中身。ファイルへの保存は Issue #34 */
+  /** docs/tech-stack.md の中身 */
   techStack?: string;
+  /** 生成した場所（<cwd>/<app_name>）。生成したときだけ入る */
+  projectDir?: string;
 }
 
 const RULE7 = "version-newer-than-verified";
-const STUB_MESSAGE = "生成は Issue #34 で実装予定です";
 const CANCEL_MESSAGE = "中断しました。ファイルは作成していません。";
 
 function titleOf(id: string): string {
@@ -122,12 +127,17 @@ function formatVersions(result: VersionResult): string {
 function formatNewerDetail(result: VersionResult): string | undefined {
   const newer = result.entries.filter((e) => e.newerThanVerified);
   if (newer.length === 0) return undefined;
-  return newer
-    .map(
-      (e) =>
-        `- ${e.name}：検証済み ${e.verified ?? "なし"} → 採用 ${e.version}${e.majorDiffers ? "（大きな版が違い、ハーネスで動作を確認していません）" : ""}`,
-    )
-    .join("\n");
+  const rows = newer.map((e) => [
+    e.name,
+    e.verified ?? "なし",
+    e.version,
+    e.majorDiffers ? "大" : "小",
+  ]);
+  const table = alignTable(["パッケージ", "検証済み", "採用", "差"], rows).join("\n");
+  const notes = ["差：小は小さな版の違い、大は大きな版の違い"];
+  if (newer.some((e) => e.majorDiffers))
+    notes.push("大きな版が違うものは、ハーネスで動作を確認していません");
+  return `${table}\n\n${notes.join("\n")}`;
 }
 
 /** バージョンの調査で進めなくなった（取得できない・検証済みのない版を戻せない） */
@@ -153,7 +163,7 @@ function readAnswersFile(file: string, deps: CreateDeps): ParsedAnswers | undefi
   }
 }
 
-/** 質問 → チェック → 回答の一覧とチェックの結果の表示 → 確認。生成は #34 で実装する */
+/** 質問 → チェック → 回答の一覧とチェックの結果の表示 → 確認 → 生成（一時的な場所で組み立てて移す） */
 export async function runCreate(options: CreateOptions, deps: CreateDeps): Promise<CreateOutcome> {
   try {
     return await run(options, deps);
@@ -304,7 +314,7 @@ async function run(options: CreateOptions, deps: CreateDeps): Promise<CreateOutc
     throw e;
   }
 
-  // docs/tech-stack.md の中身（保存は #34）。最終の回答に合うプロファイルで作る
+  // docs/tech-stack.md の中身。最終の回答に合うプロファイルで作る
   let techStack: string;
   try {
     techStack = renderTechStack(
@@ -369,8 +379,86 @@ async function run(options: CreateOptions, deps: CreateDeps): Promise<CreateOutc
     if (!go) return { exitCode: 0, ...done };
   }
 
-  deps.stderr(`${STUB_MESSAGE}\n`);
-  return { exitCode: 1, ...done };
+  return generate(done, deps, now);
+}
+
+interface Confirmed {
+  answers: Answers;
+  acceptedWarnings: AcceptedWarning[];
+  result: CheckResult;
+  versions: VersionResult;
+  techStack: string;
+}
+
+function nextSteps(dir: string): string {
+  return [
+    `生成した場所：${dir}`,
+    "",
+    "次の手順",
+    "1. 生成した場所に移動して、README を読む",
+    "2. npm install で、依存するパッケージを入れる",
+    "",
+    "（Git の初期化・リモートリポジトリの作成は、まだ行っていません）",
+  ].join("\n");
+}
+
+/**
+ * 生成する。書き込みから移動までの間だけ、SIGINT（Ctrl+C）を受ける処理を登録する。
+ * 受けたら書き込みを止めて一時的な場所を消す（終了コード130）。移動（rename）が終わった後に受けたときは、
+ * 生成が完了しているので生成先を残す（終了コード130）。
+ */
+async function generate(
+  done: Confirmed,
+  deps: CreateDeps,
+  now: () => Date,
+): Promise<CreateOutcome> {
+  let files;
+  try {
+    files = buildProject({
+      answers: done.answers,
+      acceptedWarnings: done.acceptedWarnings,
+      versions: done.versions,
+      now: now(),
+    }).files;
+  } catch (e) {
+    if (!(e instanceof GenerateError)) throw e;
+    deps.stderr(`エラー: ${e.message}\n`);
+    return { exitCode: 1, ...done };
+  }
+
+  const controller = new AbortController();
+  const onSigint = (): void => controller.abort();
+  process.on("SIGINT", onSigint);
+  try {
+    const written = await writeProject({
+      cwd: deps.cwd,
+      appName: done.answers.app_name,
+      files,
+      ...(deps.generateFs ? { fs: deps.generateFs } : {}),
+      signal: controller.signal,
+    });
+    if (written.interrupted) {
+      deps.stderr(
+        `中断の要求を受けましたが、生成は完了しています（生成先は残しています）：${written.dir}\n`,
+      );
+      return { exitCode: 130, ...done, projectDir: written.dir };
+    }
+    deps.prompter.note(nextSteps(written.dir), "生成しました");
+    return { exitCode: 0, ...done, projectDir: written.dir };
+  } catch (e) {
+    if (e instanceof GenerationInterrupted) {
+      deps.stderr(`${CANCEL_MESSAGE}\n`);
+      return { exitCode: 130, ...done };
+    }
+    if (e instanceof GenerateError) {
+      deps.stderr(`エラー: ${e.message}\n`);
+    } else {
+      deps.stderr(`エラー: 生成に失敗しました：${e instanceof Error ? e.message : String(e)}\n`);
+    }
+    return { exitCode: 1, ...done };
+  } finally {
+    process.off("SIGINT", onSigint);
+  }
 }
 
 export function createCommand(deps: Partial<CreateDeps> = {}): Command {
@@ -387,6 +475,7 @@ export function createCommand(deps: Partial<CreateDeps> = {}): Command {
         ...(deps.checkTools ? { checkTools: deps.checkTools } : {}),
         ...(deps.fetch ? { fetch: deps.fetch } : {}),
         ...(deps.now ? { now: deps.now } : {}),
+        ...(deps.generateFs ? { generateFs: deps.generateFs } : {}),
       });
       process.exitCode = outcome.exitCode;
     });

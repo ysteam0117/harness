@@ -1,0 +1,52 @@
+# 生成するプロジェクトの、環境変数（秘密情報・環境ごとの設定）の項目の一覧（C-05・F-25）。
+# docs/secrets.md の「設定する項目の一覧」の表になる。.env.example の項目（Issue #56）も、同じ一覧から作る。
+# 実際の値は書かない。各環境で何を入れるかの説明だけを書く。
+#
+# name        : 環境変数の名前
+# purpose     : 用途
+# development : 開発（手元）で入れるもの
+# test        : 検証（手元。テストが読む .env.test）で入れるもの
+# production  : 本番（Cloudflare）で入れるもの
+# when        : 書かなければ常に入れる。書く場合は、質問の id（answer）と、equals・in・notEquals のどれか1つ
+#
+# 表のセルに | と改行は書かない。
+
+- name: APP_ENV
+  purpose: 環境の名前
+  development: development
+  test: test
+  production: production
+
+- name: ALLOWED_ORIGINS
+  purpose: 状態を変える要求を許可する送信元（カンマ区切り）
+  development: 手元の画面のURL
+  test: 手元の画面のURL
+  production: 本番のドメイン（wrangler.jsonc の vars・IaC で設定する）
+
+- name: DATABASE_URL
+  purpose: PostgreSQL の接続先（パスワードを含む）
+  development: 手元のDBの接続先
+  test: 開発とは別の、手元の検証用DBの接続先
+  production: Hyperdrive の設定（wrangler secret・IaC。手元のファイルには書かない）
+  when: { answer: database, equals: postgresql }
+
+- name: SESSION_SECRET
+  purpose: ログインの状態（セッション）を署名する秘密の値
+  development: 開発用に生成したランダムな値
+  test: 検証用に生成したランダムな値（開発とは別にする）
+  production: 本番用に生成したランダムな値（wrangler secret put で入力する）
+  when: { answer: auth, notEquals: none }
+
+- name: OIDC_CLIENT_ID
+  purpose: 外部IdPに登録したアプリの識別子
+  development: 開発用に登録した値
+  test: 検証用に登録した値（開発とは別にする）
+  production: 本番用に登録した値
+  when: { answer: auth, in: [oidc, both] }
+
+- name: OIDC_CLIENT_SECRET
+  purpose: 外部IdPに登録したアプリの秘密の値
+  development: 開発用に登録した値
+  test: 検証用に登録した値（開発とは別にする）
+  production: 本番用に登録した値（wrangler secret put で入力する）
+  when: { answer: auth, in: [oidc, both] }

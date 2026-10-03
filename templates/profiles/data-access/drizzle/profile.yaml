@@ -12,6 +12,8 @@ packages:
 packages_when:
   - when: { database: postgresql }
     packages: [pg]
+# 開発でだけ使うもの（生成する package.json の devDependencies に入れる）。残りは dependencies に入れる
+dev_packages: [drizzle-kit]
 # ひな形で動作を確かめたバージョン。ハーネスのリリースごとに更新する
 verified_versions:        # 2026-09-30 試作（Issue #18）で確認
   drizzle-orm: "0.45.3"

@@ -34,3 +34,32 @@ describe("#30 AC-3: ライブラリのバージョンの固定", () => {
     }
   });
 });
+
+describe("#34 AC-3: 配布物に、生成に使うものが入る", () => {
+  const files = (
+    JSON.parse(readFileSync(path.join(rootDir, "package.json"), "utf8")) as {
+      files: string[];
+    }
+  ).files;
+
+  it("#34 AC-3: package.json の files に、dist・templates・data・knowledge がある（知見は Skill に写すため配布物に入れる）", () => {
+    for (const name of ["dist", "templates", "data", "knowledge"]) {
+      expect(files, name).toContain(name);
+    }
+  });
+
+  it("#34 AC-3: 生成に使うデータ（data/）がそろっている", () => {
+    for (const file of [
+      "template-values.yaml",
+      "env-items.yaml",
+      "role-models.yaml",
+      "knowledge-selection.yaml",
+      "runtimes.yaml",
+      "profile-selection.yaml",
+      "consistency-rules.yaml",
+    ]) {
+      const full = path.join(rootDir, "data", file);
+      expect(() => readFileSync(full, "utf8"), file).not.toThrow();
+    }
+  });
+});

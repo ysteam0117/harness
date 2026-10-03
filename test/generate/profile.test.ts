@@ -631,3 +631,84 @@ describe("#33 R2: packages_when（回答に合うときだけ足すパッケー�
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// #34 R3：dev_packages（devDependencies に入れるパッケージ）
+//   Profile に devPackages: string[] を足す（書いてなければ []）。
+//   検証：dev_packages の名前は、packages と、すべての packages_when のパッケージの和集合に含まれること（なければ GenerateError）
+// ---------------------------------------------------------------------------
+describe("#34 R3: dev_packages", () => {
+  it("#34 R3: dev_packages が読める。書いていなければ空", () => {
+    const withDev = verTemplates(`packages: [pkg-a, pkg-b]
+verified_versions:
+  pkg-a: "1.2.0"
+  pkg-b: "2.0.0"
+dev_packages: [pkg-b]
+`);
+    expect(loadProfile(withDev, "lib/alpha").devPackages).toEqual(["pkg-b"]);
+    const without = verTemplates(`packages: [pkg-a]
+verified_versions:
+  pkg-a: "1.2.0"
+`);
+    expect(loadProfile(without, "lib/alpha").devPackages).toEqual([]);
+  });
+
+  it("#34 R3: packages_when のパッケージも dev_packages に書ける", () => {
+    const dir = verTemplates(`packages: [pkg-a]
+packages_when:
+  - when: { database: postgresql }
+    packages: [pkg-pg]
+verified_versions:
+  pkg-a: "1.2.0"
+  pkg-pg: "8.0.0"
+dev_packages: [pkg-pg]
+`);
+    expect(loadProfile(dir, "lib/alpha").devPackages).toEqual(["pkg-pg"]);
+  });
+
+  it("#34 R3: packages にも packages_when にもない名前は、エラー（名前を示す）", () => {
+    const dir = verTemplates(`packages: [pkg-a]
+verified_versions:
+  pkg-a: "1.2.0"
+dev_packages: [pkg-stray]
+`);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(GenerateError);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(/pkg-stray/);
+  });
+
+  it("#34 R3: 文字列の一覧でなければエラー", () => {
+    const dir = verTemplates(`packages: [pkg-a]
+verified_versions:
+  pkg-a: "1.2.0"
+dev_packages: pkg-a
+`);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(GenerateError);
+  });
+
+  it("#34 R3: 実際のプロファイル：テスト・品質の道具は devPackages、実行に使うものは入らない", () => {
+    const test = loadProfile(realTemplatesDir, "test-framework/vitest-playwright");
+    expect(test.devPackages).toEqual(
+      expect.arrayContaining(["vitest", "@playwright/test", "jsdom", "msw", "fast-check"]),
+    );
+    const quality = loadProfile(realTemplatesDir, "quality/typescript-standard");
+    expect(quality.devPackages).toEqual(
+      expect.arrayContaining(["eslint", "typescript", "prettier", "jscpd"]),
+    );
+    const hono = loadProfile(realTemplatesDir, "backend-framework/hono");
+    expect(hono.devPackages).toContain("wrangler");
+    expect(hono.devPackages).not.toContain("hono");
+    expect(hono.devPackages).not.toContain("zod");
+    const drizzle = loadProfile(realTemplatesDir, "data-access/drizzle");
+    expect(drizzle.devPackages).toContain("drizzle-kit");
+    expect(drizzle.devPackages).not.toContain("drizzle-orm");
+    expect(drizzle.devPackages).not.toContain("pg");
+  });
+
+  it("#34 R3: 実際のすべてのプロファイルで、devPackages の名前は packages・packages_when のどれかにある", () => {
+    for (const key of REAL_PROFILES) {
+      const p = loadProfile(realTemplatesDir, key);
+      const known = new Set([...p.packages, ...p.packagesWhen.flatMap((w) => w.packages)]);
+      for (const name of p.devPackages) expect(known.has(name), `${key}：${name}`).toBe(true);
+    }
+  });
+});

@@ -5,6 +5,8 @@ name: Hono
 languages: [typescript]
 runtimes: [cloudflare-workers]
 packages: [hono, "@hono/zod-validator", zod, wrangler]
+# 開発・ビルド・デプロイでだけ使うもの（生成する package.json の devDependencies に入れる）。残りは dependencies に入れる
+dev_packages: [wrangler]
 # ひな形で動作を確かめたバージョン（2026-09-30、Issue #19 の試作で確認）
 verified_versions:
   hono: "4.13.12"

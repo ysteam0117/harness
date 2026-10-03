@@ -1,0 +1,41 @@
+# 役割ごとの、使うモデルの初期値（C-66「役割とAI・モデルの割り当て」の表）。
+# 生成時に、選んだAIの分だけを、エージェントの定義と .harness/config.yaml に書く。
+# モデルは変わるため、プロジェクトごとに .harness/config.yaml とエージェントの定義の両方で変えられる。
+#
+# claude : Claude Code のモデル。別名（opus・sonnet・haiku）で書く（具体的な版は Claude Code が解決する）
+# codex  : Codex のモデルと推論の強さ（model・effort）。モデル名は、Codex の設定（model = "..."）にそのまま書ける名前
+#          2026-10-03 に、手元の Codex（codex-cli 0.157.1）のモデルの一覧（~/.codex/models_cache.json）で確かめた
+#          （GPT-6 Sol：gpt-6-sol、GPT-6 Luna：gpt-6-luna、GPT-6 Astra：gpt-6-astra）
+# 統括（orchestrator）は、会話そのもののモデルのため、Claude Code の分だけ持つ（Codex はユーザーが選んだ会話のモデルを使う）
+#
+# 注意：計画レビュー・コードレビューは、原則として「別の会社のAI」で行う（C-33）。ここに書くのは、
+#       別のAIを使えないときに代わりに使う、エージェントの定義のモデル。
+#       上位のモデル（GPT-6 Astra・Opus）への切り替えは、影響の大きい処理のとき、呼び出し時に指定する。
+
+roles:
+  orchestrator:
+    claude: { model: opus }
+  planner:
+    claude: { model: opus }
+    codex: { model: gpt-6-sol, effort: high }
+  plan_reviewer:
+    claude: { model: opus }
+    codex: { model: gpt-6-sol, effort: high }
+  implementer:
+    claude: { model: sonnet }
+    codex: { model: gpt-6-sol, effort: medium }
+  test_writer:
+    claude: { model: sonnet }
+    codex: { model: gpt-6-sol, effort: medium }
+  code_reviewer:
+    claude: { model: opus }
+    codex: { model: gpt-6-sol, effort: high }
+  quality_checker:
+    claude: { model: sonnet }
+    codex: { model: gpt-6-luna, effort: low }
+  prototyper:
+    claude: { model: sonnet }
+    codex: { model: gpt-6-sol, effort: medium }
+  doc_writer:
+    claude: { model: sonnet }
+    codex: { model: gpt-6-luna, effort: medium }

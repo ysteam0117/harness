@@ -54,3 +54,25 @@ export function stripHarnessComments(text: string, fileName: string): string {
   if (!m) return stripPreambleComments(text, true);
   return (m[1] ?? "") + stripPreambleComments(m[2] ?? "", false);
 }
+
+const MARKER_COMMENT_RE = /^[ \t]*<!--.*もとになった共通仕様.*-->[ \t]*$/;
+
+/**
+ * 文書（Markdown）のどこにあっても、「もとになった共通仕様」を書いた1行のコメントを取り除く
+ * （見出しの後ろにある場合も含む）。ほかのコメントは残す。コメントの前後の空行が重ならないようにする。
+ */
+export function stripMarkerComments(text: string): string {
+  const lines = text.split("\n");
+  if (!lines.some((line) => MARKER_COMMENT_RE.test(line))) return text;
+  const kept: string[] = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i] ?? "";
+    if (!MARKER_COMMENT_RE.test(line)) {
+      kept.push(line);
+      continue;
+    }
+    const previousBlank = kept.length === 0 || kept[kept.length - 1] === "";
+    if (previousBlank && lines[i + 1] === "") i += 1;
+  }
+  return kept.join("\n");
+}

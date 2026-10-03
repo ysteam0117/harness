@@ -4,6 +4,8 @@ category: quality
 name: ESLint・Prettier・tsc・Stryker・dependency-cruiser・jscpd
 languages: [typescript]
 packages: [eslint, typescript, typescript-eslint, eslint-plugin-react-hooks, prettier, "@stryker-mutator/core", "@stryker-mutator/vitest-runner", dependency-cruiser, jscpd]
+# 品質チェックの道具は、すべて開発でだけ使う（生成する package.json の devDependencies に入れる）
+dev_packages: [eslint, typescript, typescript-eslint, eslint-plugin-react-hooks, prettier, "@stryker-mutator/core", "@stryker-mutator/vitest-runner", dependency-cruiser, jscpd]
 # ひな形で動作を確かめたバージョン（2026-09-30、Issue #19 の試作で確認）
 verified_versions:
   eslint: "10.11.0"

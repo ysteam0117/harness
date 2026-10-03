@@ -103,6 +103,7 @@ export function fakeValues(): Record<string, string> {
     "backup_notes",
     "auth_method",
     "allowed_origins",
+    "data_access_guide",
   ];
   for (const name of others) values[name] = `dummy-${name.replaceAll("_", "-")}`;
   return values;

@@ -1,0 +1,80 @@
+# ひな形（templates/）の {{名前}} に入れる値のうち、回答の条件で決まるもの（F-28）。
+# 書き方：
+#   名前: 値                       常に同じ値
+#   名前:                          回答の条件で選ぶ。上から順に見て、最初に条件に合うものを使う
+#     - when: { answer: <質問の id>, equals | in | notEquals: ... }
+#       value: 値
+#     - value: 値                  when を書かない行は、常に合う（最後に書いて、既定にする）
+# 条件の書き方は consistency-rules.yaml の answer 条件と同じ。
+#
+# ここに書かない値は、回答から計算する（src/generate/values.ts）：
+#   app_name・auth_method・database・asvs_level・pentest_requirement・knowledge_index・secrets_table・
+#   compatibility_date（runtimes.yaml）・役割とモデル（role-models.yaml）
+
+check_command: npm run check
+
+error_handler: Honoの`app.onError`（`backend/src/lib/error-handler.ts`）
+
+# テストの道具の画面のURL（Vite の開発サーバーの標準のポート）
+e2e_port: "5173"
+
+# 開発の値。本番の値は、環境変数（ALLOWED_ORIGINS）で、環境ごとに設定する（Skill「バックエンド」の Hono の項・docs/secrets.md）
+allowed_origins: http://localhost:5173
+
+# ミューテーションテストの対象（業務ロジックを置く層）。影響の大きい処理に合わせて増やす
+mutation_targets: backend/src/services/**/*.ts
+
+dev_env_notes:
+  - when: { answer: database, equals: postgresql }
+    value: PostgreSQLのコンテナを`docker-compose.yml`に含める。接続先は`.env`から読み込み、開発用と検証用でDBを分ける
+  - when: { answer: database, equals: d1 }
+    value: D1は手元ではwranglerのローカルのD1（`--persist-to`で保存先を指定）で動かし、DB用のコンテナは作らない
+  - value: DBは使わないため、DB用のコンテナは作らない
+
+backup_notes:
+  - when: { answer: database, equals: postgresql }
+    value: 選んだ提供元のバックアップ・時点復旧の機能を使う。保持期間は提供元とプランで違うため、公式の情報で確かめる
+  - when: { answer: database, equals: d1 }
+    value: D1のTime Travel（時点を指定して戻す機能）を使う。保持期間はプランで違うため、公式の情報で確かめる
+  - value: DBを使わないため、対象外
+
+transaction_notes:
+  - when: { answer: database, equals: postgresql }
+    value: PostgreSQLでは`db.transaction()`を使う。Workersから接続するため、トランザクションの中で長い処理をしない（接続はHyperdrive経由）
+  - when: { answer: database, equals: d1 }
+    value: D1では`db.transaction()`を使わず、`db.batch()`で複数の文をまとめて実行する（1回の`batch`が1つのトランザクションとして扱われる）
+  - value: DBを使わないため、トランザクションの決まりは今はない。DBを足すときに、技術に合わせて決める
+
+batch_notes:
+  - when: { answer: database, equals: postgresql }
+    value: Workersの実行時間の上限に収まるよう小分けにし、途中から再開できるようにする。DBへの接続はHyperdrive経由で行う
+  - when: { answer: database, equals: d1 }
+    value: WorkersのCron Triggersから起動し、1回の実行時間と処理量の上限に収まるよう小分けにする
+  - value: 定期実行はWorkersのCron Triggersを使う。DBがないため、実行の履歴はログに残す
+
+postgres_migration_notes:
+  - when: { answer: database, equals: postgresql }
+    value: "`drizzle-kit migrate`で適用する。検証・本番への適用は、利用者の承認を得て行い、AIは実行しない"
+  - when: { answer: database, equals: d1 }
+    value: このプロジェクトはD1を使うため、PostgreSQLの適用の手順は使わない（PostgreSQLに変えるときに決める）
+  - value: このプロジェクトはDBを使わないため、使わない
+
+data_access_library:
+  - when: { answer: database, notEquals: none }
+    value: Drizzle ORM
+  - value: 使わない
+
+data_access_skill:
+  - when: { answer: database, notEquals: none }
+    value: data-access-drizzle
+  - value: 使わない
+
+# Skill「バックエンド」の、データアクセスの案内の行（DBがないときは、DBを使わない旨だけを書く）
+data_access_guide:
+  - when: { answer: database, notEquals: none }
+    value: |-
+      - データアクセスのライブラリは、このプロジェクトでは Drizzle ORM を使う。1つのプロジェクトで書き方を複数用意しない
+      - 書き分けの基準・CRUDの書き方・生SQL・トランザクション・マイグレーションの具体的な書き方は、Skill「data-access-drizzle」を読む
+  - value: |-
+      - このプロジェクトはDBを使わないため、データアクセスのライブラリは決めていない
+      - DBを足すときは、利用者と相談して技術を選び、理由をADRに記録する

@@ -432,6 +432,7 @@ templates/profiles/
    └─ <ライブラリ>/
       ├─ profile.yaml          対応する言語・DB、バージョンを調べるパッケージ名（packages）、
       │                         回答に合うときだけ足すパッケージ（packages_when。例：PostgreSQLのときだけpg）、
+      │                         開発でだけ使うパッケージ（dev_packages。packages・packages_when の一部。生成する package.json の devDependencies に入れ、残りは dependencies に入れる）、
       │                         検証済みのバージョン（verified_versions）、
       │                         組み合わせの条件のうち版の範囲で表せるもの（version_ranges。例：Vitestは4系）と文章の説明（compatibility_notes）、
       │                         npmで入れない道具（external_tools。例：k6。バージョンの調査の対象にしない）、

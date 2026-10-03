@@ -54,7 +54,7 @@ function intersectRanges(a: string, b: string): string {
   return joined.join(" || ");
 }
 
-function wantedPackages(profile: Profile, answers: Partial<Answers>): string[] {
+export function wantedPackages(profile: Profile, answers: Partial<Answers>): string[] {
   const record = answers as Readonly<Record<string, unknown>>;
   const names = [...profile.packages];
   for (const entry of profile.packagesWhen) {

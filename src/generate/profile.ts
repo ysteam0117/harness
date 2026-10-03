@@ -30,6 +30,8 @@ export type Profile = {
   packages: string[];
   /** 回答に合うときだけ足すパッケージ（書いてなければ []） */
   packagesWhen: PackagesWhen[];
+  /** devDependencies に入れるパッケージ（packages・packages_when の一部。書いてなければ []。残りは dependencies） */
+  devPackages: string[];
   /** ひな形で動作を確かめた版（パッケージ名 → 版） */
   verifiedVersions: Record<string, string>;
   /** 組み合わせの条件（パッケージ名 → semver の範囲） */
@@ -60,6 +62,7 @@ const KNOWN_FIELDS = new Set([
   "version_ranges",
   "external_tools",
   "packages_when",
+  "dev_packages",
   "unverified",
   "requires",
   "includes",
@@ -290,6 +293,15 @@ export function loadProfile(templatesDir: string, key: string): Profile {
   const externalTools = stringArrayField(data, "external_tools", where);
   const unverified = stringArrayField(data, "unverified", where);
   const packagesWhen = packagesWhenField(data, where);
+  const devPackages = stringArrayField(data, "dev_packages", where);
+  const selectable = new Set([...packages, ...packagesWhen.flatMap((w) => w.packages)]);
+  for (const name of devPackages) {
+    if (!selectable.has(name)) {
+      throw new GenerateError(
+        `${where}：dev_packages の ${name} が、packages にも packages_when にもありません`,
+      );
+    }
+  }
   const verifiedVersions = stringRecord(data, "verified_versions", where, "名前: 版");
   const versionRanges = stringRecord(data, "version_ranges", where, "名前: 範囲");
   checkVersions({
@@ -376,6 +388,7 @@ export function loadProfile(templatesDir: string, key: string): Profile {
     packageJson,
     packages,
     packagesWhen,
+    devPackages,
     verifiedVersions,
     versionRanges,
     externalTools,

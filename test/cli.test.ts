@@ -6,6 +6,7 @@ import { stringify } from "yaml";
 import { CancelledError } from "../src/questions/prompter.js";
 import { createProgram } from "../src/program.js";
 import { FakePrompter, baseAnswers, cleanupTmp, makeTmp } from "./questions/helpers.js";
+import { FIXED_NOW, offlineFetch } from "./versions/helpers.js";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(readFileSync(path.join(rootDir, "package.json"), "utf8")) as {
@@ -199,7 +200,7 @@ describe("#32 R5: create コマンド（CLI 経由）", () => {
     { name: "docker" as const, state: "ok" as const, version: "27.0.1" },
   ];
 
-  it("#32 AC-4: --answers の完全な YAML と --yes で、確認まで進み「生成は Issue #34 で実装予定です」で終了コード1。入力は求めない", async () => {
+  it("#32 AC-4: --answers の完全な YAML と --yes で、確認まで進み、生成して終了コード0。入力は求めない（#34）", async () => {
     const tmp = makeTmp();
     const file = path.join(tmp.inputDir, "answers.yaml");
     writeFileSync(file, stringify(baseAnswers()));
@@ -209,11 +210,13 @@ describe("#32 R5: create コマンド（CLI 経由）", () => {
       cwd: tmp.cwd,
       interactive: false,
       checkTools: okTools,
+      fetch: offlineFetch().fn, // 本物のネットワークにはつながない
+      now: () => FIXED_NOW,
     });
-    expect(err).toContain("生成は Issue #34 で実装予定です");
+    expect(err).not.toContain("生成は Issue #34 で実装予定です");
     expect(prompter.inputs).toHaveLength(0);
-    expect(process.exitCode).toBe(1);
-    expect(readdirSync(tmp.cwd)).toEqual([]);
+    expect(process.exitCode).toBe(0);
+    expect(readdirSync(tmp.cwd)).toEqual(["testapp-001"]); // 生成先だけ（一時的な場所は残らない）
   });
 
   it("#32 AC-1: --answers なしで、質問を始める（最初の質問は app_name）", async () => {

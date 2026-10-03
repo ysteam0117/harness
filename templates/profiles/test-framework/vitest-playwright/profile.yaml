@@ -4,6 +4,8 @@ category: test-framework
 name: Vitest・Playwright ほか
 languages: [typescript]
 packages: [vitest, "@cloudflare/vitest-pool-workers", "@testing-library/react", "@testing-library/dom", "@testing-library/user-event", jsdom, msw, fast-check, "@playwright/test"]
+# テストの道具は、すべて開発でだけ使う（生成する package.json の devDependencies に入れる）
+dev_packages: [vitest, "@cloudflare/vitest-pool-workers", "@testing-library/react", "@testing-library/dom", "@testing-library/user-event", jsdom, msw, fast-check, "@playwright/test"]
 # npm で入れない道具。バージョンの調査の対象にせず、手順書（docs/testing/）で導入する
 external_tools: [k6]
 # ひな形で動作を確かめたバージョン（2026-09-30、Issue #19 の試作で確認）

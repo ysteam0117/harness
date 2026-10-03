@@ -4,6 +4,8 @@ category: frontend-build
 name: Vite＋React Router
 languages: [typescript]
 packages: [vite, "@vitejs/plugin-react", "@cloudflare/vite-plugin", react, react-dom, react-router]
+# ビルドの道具（生成する package.json の devDependencies に入れる）。残りは dependencies に入れる
+dev_packages: [vite, "@vitejs/plugin-react", "@cloudflare/vite-plugin"]
 # ひな形で動作を確かめたバージョン（2026-09-30、Issue #19 の試作で確認）
 verified_versions:
   vite: "8.3.1"
