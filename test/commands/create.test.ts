@@ -26,6 +26,7 @@ import type { ToolStatus } from "../../src/checks/tools.js";
 import { questionDefinitions as defs } from "../../src/questions/definitions.js";
 import { CancelledError } from "../../src/questions/prompter.js";
 import { FakePrompter, baseAnswers, cleanupTmp, makeTmp } from "../questions/helpers.js";
+import { offlineFetch } from "../versions/helpers.js";
 
 afterEach(cleanupTmp);
 
@@ -48,6 +49,8 @@ function setup(script: Record<string, unknown[]> = {}, over: Partial<CreateDeps>
     interactive: false,
     stderr: (s) => errs.push(s),
     checkTools: okTools,
+    // #33：本物のネットワークにはつながない。つながらない状態にしておく（方針 verified なら、検証済みで止まらず進む。R6）
+    fetch: offlineFetch().fn,
     ...over,
   };
   const writeAnswers = (obj: Record<string, unknown>, name = "answers.yaml") => {

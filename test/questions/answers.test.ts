@@ -264,3 +264,104 @@ describe("#32 AC-2・AC-4: 質問A〜G は --answers に書かれていれば検
     expect(parseAnswersYaml(yaml(a as Record<string, unknown>)).answers).toEqual(a);
   });
 });
+
+// ---------------------------------------------------------------------------
+// #33 R4：--answers の versions・versions_offline
+//
+// 想定する型：ParsedAnswers に項目を足す
+//   export interface ParsedAnswers {
+//     answers: Partial<Answers>; acceptedWarnings: string[];
+//     versions?: Record<string, "verified" | "latest">;   // versions: を書いたときだけ（書いてなければ undefined）
+//     versionsOffline?: "verified";                        // versions_offline: を書いたときだけ
+//   }
+//   - versions は「パッケージ名 → verified | latest」。回答（answers）には入れない。accepted_warnings と同じ並びのキー
+//   - versions_offline は verified だけ（ネットワークにつながらないとき、検証済みで進めることを承知する）
+//   - 次は AnswersError：versions が連想配列でない／値が verified・latest 以外／versions_offline が verified 以外
+//     version_policy: verified なのに versions に latest がある（矛盾）
+//   - 対象にないパッケージ名の確かめは、対象が回答で決まるため、ここではなく create で行う（create.test の versions の describe）
+// ---------------------------------------------------------------------------
+
+describe("#33 R4: versions・versions_offline の読み込みと検証", () => {
+  it("#33 R4: versions（一部のパッケージだけ）と versions_offline を読む。回答（answers）には混ぜない", () => {
+    const parsed = parseAnswersYaml(
+      yaml(
+        baseAnswers({
+          version_policy: "latest",
+          versions: { vitest: "verified", typescript: "latest" },
+          versions_offline: "verified",
+        }),
+      ),
+    );
+    expect(parsed.versions).toEqual({ vitest: "verified", typescript: "latest" });
+    expect(parsed.versionsOffline).toBe("verified");
+    expect(parsed.answers).not.toHaveProperty("versions");
+    expect(parsed.answers).not.toHaveProperty("versions_offline");
+    expect(parsed.answers.version_policy).toBe("latest");
+  });
+
+  it("#33 R4: 書いていなければ、versions・versionsOffline は undefined", () => {
+    const parsed = parseAnswersYaml(yaml(baseAnswers()));
+    expect(parsed.versions).toBeUndefined();
+    expect(parsed.versionsOffline).toBeUndefined();
+  });
+
+  it("#33 R4: スコープ付きのパッケージ名（@scope/name）をキーにできる", () => {
+    const parsed = parseAnswersYaml(
+      yaml(
+        baseAnswers({
+          version_policy: "latest",
+          versions: { "@testing-library/user-event": "latest" },
+        }),
+      ),
+    );
+    expect(parsed.versions).toEqual({ "@testing-library/user-event": "latest" });
+  });
+
+  it("#33 R4: version_policy: verified で versions に verified だけを書くのは矛盾しない", () => {
+    const parsed = parseAnswersYaml(
+      yaml(baseAnswers({ version_policy: "verified", versions: { vitest: "verified" } })),
+    );
+    expect(parsed.versions).toEqual({ vitest: "verified" });
+  });
+
+  it("#33 R4: 不正な値（verified・latest 以外）はエラー（パッケージ名を示す）", () => {
+    const errors = errorsOf(
+      yaml(baseAnswers({ version_policy: "latest", versions: { vitest: "newest" } })),
+    );
+    expect(errors.some((m) => m.includes("versions") && m.includes("vitest"))).toBe(true);
+  });
+
+  it("#33 R4: versions が連想配列でない（配列・文字列）とエラー", () => {
+    expect(
+      errorsOf(yaml(baseAnswers({ versions: ["vitest"] }))).some((m) => m.includes("versions")),
+    ).toBe(true);
+    expect(
+      errorsOf(yaml(baseAnswers({ versions: "latest" }))).some((m) => m.includes("versions")),
+    ).toBe(true);
+  });
+
+  it("#33 R4: versions_offline が verified 以外（latest・真偽値）だとエラー", () => {
+    for (const value of ["latest", true, "yes"]) {
+      const errors = errorsOf(yaml(baseAnswers({ versions_offline: value })));
+      expect(
+        errors.some((m) => m.includes("versions_offline")),
+        String(value),
+      ).toBe(true);
+    }
+  });
+
+  it("#33 R4: version_policy: verified なのに、versions に latest を書くと矛盾でエラー（両方のキー名を示す）", () => {
+    const errors = errorsOf(
+      yaml(baseAnswers({ version_policy: "verified", versions: { vitest: "latest" } })),
+    );
+    const hit = errors.find((m) => m.includes("version_policy"));
+    expect(hit).toBeDefined();
+    expect(hit).toContain("versions");
+  });
+
+  it("#33 R4: ほかの問題と一緒に、まとめて示される（知らないキーと versions の不正な値）", () => {
+    const errors = errorsOf(yaml(baseAnswers({ colour: "red", versions: { vitest: "newest" } })));
+    expect(errors.some((m) => m.includes("colour"))).toBe(true);
+    expect(errors.some((m) => m.includes("vitest"))).toBe(true);
+  });
+});

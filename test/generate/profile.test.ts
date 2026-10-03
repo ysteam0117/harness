@@ -23,6 +23,7 @@
 //   export function mergePackageJson(profiles: Profile[]): Record<string, unknown>;
 //   すべて、誤りは GenerateError（日本語のメッセージ）を投げる
 import { afterAll, describe, expect, it } from "vitest";
+import { prerelease as semverPrerelease, satisfies as semverSatisfies } from "semver";
 import { GenerateError } from "../../src/generate/errors.js";
 import {
   loadProfile,
@@ -370,5 +371,263 @@ describe("#31 AC-4: mergePackageJson", () => {
     ) as { scripts: Record<string, string>; overrides: Record<string, unknown> };
     expect(merged.scripts["check"]).toContain("npm run lint");
     expect(merged.overrides["@typeschema/zod"]).toEqual({ zod: "$zod" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #33 バージョンの調査：profile.yaml に足す項目（version_ranges・external_tools・packages_when・unverified）
+//
+// Profile に足す項目（想定）
+//   packages: string[]                       // 書いてなければ []
+//   verifiedVersions: Record<string, string> // 書いてなければ {}
+//   versionRanges: Record<string, string>    // 書いてなければ {}
+//   externalTools: string[]                  // npm で入れない道具（例：k6）。書いてなければ []
+//   unverified: string[]                     // 検証済みのないパッケージ。書いてなければ []
+//   compatibilityNotes: string[]             // 書いてなければ []
+//   packagesWhen: { when: Record<string, string>; packages: string[] }[]   // 書いてなければ []
+//     profile.yaml では：packages_when: [{ when: { database: postgresql }, packages: [pg] }]
+//
+// 実際の templates/profiles を使うテストは、実装の役割が profile.yaml に次を書く前提（R1・R2・R8）
+//   test-framework/vitest-playwright：version_ranges { vitest: "^4" }、external_tools [k6]（packages から k6 を除く）、
+//     @testing-library/user-event の検証済みの版を verified_versions に（範囲に合う安定版。unverified は空）
+//   quality/typescript-standard：version_ranges { typescript: ">=6.0.0 <6.1.0" }
+//   data-access/drizzle：packages_when [{ when: { database: postgresql }, packages: [pg] }]、
+//     verified_versions に pg: "8.23.0"、version_ranges { pg: ">=8.13.0" }
+// ---------------------------------------------------------------------------
+
+const VER_BASE = `id: alpha
+category: lib
+name: Alpha
+skill_name: lib-alpha
+`;
+
+function verTemplates(body: string): string {
+  return alphaTemplates(`${VER_BASE}${body}`);
+}
+
+describe("#33 AC-2: 実際のプロファイルの組み合わせの条件（version_ranges）", () => {
+  it("#33 AC-2: vitest-playwright の version_ranges は vitest ^4。k6 は external_tools で、packages に入らない（R1）", () => {
+    const p = loadProfile(realTemplatesDir, "test-framework/vitest-playwright");
+    expect(p.versionRanges["vitest"]).toBe("^4");
+    expect(p.externalTools).toContain("k6");
+    expect(p.packages).not.toContain("k6");
+    expect(p.packages).toContain("vitest");
+    expect(p.compatibilityNotes.length).toBeGreaterThan(0); // 文章の説明は残す
+  });
+
+  it("#33 AC-2: typescript-standard の version_ranges は typescript >=6.0.0 <6.1.0", () => {
+    const p = loadProfile(realTemplatesDir, "quality/typescript-standard");
+    expect(p.versionRanges["typescript"]).toBe(">=6.0.0 <6.1.0");
+  });
+
+  it("#33 R5: 範囲を持つ実際のパッケージの検証済みは、範囲に合う", () => {
+    for (const key of REAL_PROFILES) {
+      const p = loadProfile(realTemplatesDir, key);
+      for (const [name, range] of Object.entries(p.versionRanges)) {
+        const verified = p.verifiedVersions[name];
+        expect(verified, `${key} の ${name} の検証済み`).toBeDefined();
+        expect(semverSatisfies(verified ?? "", range), `${key} の ${name}`).toBe(true);
+      }
+    }
+  });
+
+  it("#33 R5: 実際の8つのプロファイルの verified_versions はすべて安定版（試験版でない）", () => {
+    for (const key of REAL_PROFILES) {
+      const p = loadProfile(realTemplatesDir, key);
+      for (const [name, v] of Object.entries(p.verifiedVersions)) {
+        expect(semverPrerelease(v), `${key} の ${name}`).toBeNull();
+      }
+    }
+  });
+
+  it("#33 AC-2: 範囲を書いていないプロファイルは versionRanges が空", () => {
+    expect(loadProfile(realTemplatesDir, "http-client/axios").versionRanges).toEqual({});
+    expect(loadProfile(realTemplatesDir, "logger/structured-logger").verifiedVersions).toEqual({});
+  });
+});
+
+describe("#33 AC-2: version_ranges の検証（エラー）", () => {
+  it("#33 AC-2: 範囲が semver の範囲として正しければ読める", () => {
+    const dir = verTemplates(`packages: [pkg-a]
+verified_versions:
+  pkg-a: "1.2.0"
+version_ranges:
+  pkg-a: ">=1.0.0 <2.0.0"
+`);
+    expect(loadProfile(dir, "lib/alpha").versionRanges).toEqual({ "pkg-a": ">=1.0.0 <2.0.0" });
+  });
+
+  it("#33 AC-2: 正しくない範囲はエラー（パッケージ名を示す）", () => {
+    const dir = verTemplates(`packages: [pkg-a]
+verified_versions:
+  pkg-a: "1.2.0"
+version_ranges:
+  pkg-a: "えらい版"
+`);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(GenerateError);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(/pkg-a/);
+  });
+
+  it("#33 AC-2: 範囲の値が文字列でなければエラー", () => {
+    const dir = verTemplates(`packages: [pkg-a]
+verified_versions:
+  pkg-a: "1.2.0"
+version_ranges:
+  pkg-a: 4
+`);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(GenerateError);
+  });
+
+  it("#33 AC-2: version_ranges が連想配列でなければエラー", () => {
+    const dir = verTemplates(`packages: [pkg-a]
+version_ranges: ["pkg-a"]
+`);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(GenerateError);
+  });
+
+  it("#33 AC-2: packages にも packages_when にもない名前の範囲はエラー（名前を示す）", () => {
+    const dir = verTemplates(`packages: [pkg-a]
+verified_versions:
+  pkg-a: "1.2.0"
+version_ranges:
+  pkg-zzz: "^1"
+`);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(GenerateError);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(/pkg-zzz/);
+  });
+
+  it("#33 R9: packages_when だけに書かれた名前の範囲・検証済みは、エラーにならない", () => {
+    const dir = verTemplates(`packages: [pkg-a]
+packages_when:
+  - when: { database: postgresql }
+    packages: [pkg-pg]
+verified_versions:
+  pkg-a: "1.2.0"
+  pkg-pg: "8.23.0"
+version_ranges:
+  pkg-pg: ">=8.13.0"
+`);
+    const p = loadProfile(dir, "lib/alpha");
+    expect(p.versionRanges).toEqual({ "pkg-pg": ">=8.13.0" });
+    expect(p.verifiedVersions["pkg-pg"]).toBe("8.23.0");
+  });
+
+  it("#33 R9: verified_versions の名前が、packages にも packages_when にもなければエラー", () => {
+    const dir = verTemplates(`packages: [pkg-a]
+verified_versions:
+  pkg-a: "1.2.0"
+  pkg-stray: "1.0.0"
+`);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(GenerateError);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(/pkg-stray/);
+  });
+
+  it("#33 R5: 検証済みの版が範囲に合わなければ、プロファイルの誤りとしてエラー（読み込みの時点）", () => {
+    const dir = verTemplates(`packages: [pkg-a]
+verified_versions:
+  pkg-a: "5.0.0"
+version_ranges:
+  pkg-a: "^4"
+`);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(GenerateError);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(/pkg-a/);
+  });
+
+  it("#33 R5: 検証済みの版が試験版（-rc）ならエラー", () => {
+    const dir = verTemplates(`packages: [pkg-a]
+verified_versions:
+  pkg-a: "2.0.0-rc.1"
+`);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(GenerateError);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(/pkg-a/);
+  });
+
+  it("#33 R5: 検証済みの版が semver として読めなければエラー", () => {
+    const dir = verTemplates(`packages: [pkg-a]
+verified_versions:
+  pkg-a: "最新"
+`);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(GenerateError);
+  });
+});
+
+describe("#33 R1: external_tools と unverified", () => {
+  it("#33 R1: external_tools・unverified が読める。書いていなければ空", () => {
+    const dir = verTemplates(`packages: [pkg-a, pkg-new]
+verified_versions:
+  pkg-a: "1.2.0"
+external_tools: [fake-bench]
+unverified: [pkg-new]
+`);
+    const p = loadProfile(dir, "lib/alpha");
+    expect(p.externalTools).toEqual(["fake-bench"]);
+    expect(p.unverified).toEqual(["pkg-new"]);
+    const plain = loadProfile(alphaTemplates(ALPHA_YAML), "lib/alpha");
+    expect(plain.externalTools).toEqual([]);
+    expect(plain.unverified).toEqual([]);
+    expect(plain.packages).toEqual([]);
+    expect(plain.packagesWhen).toEqual([]);
+    expect(plain.versionRanges).toEqual({});
+    expect(plain.verifiedVersions).toEqual({});
+    expect(plain.compatibilityNotes).toEqual([]);
+  });
+
+  it("#33 R1: 外部の道具が packages にも書かれているとエラー（二重に扱わない）", () => {
+    const dir = verTemplates(`packages: [pkg-a, fake-bench]
+verified_versions:
+  pkg-a: "1.2.0"
+external_tools: [fake-bench]
+`);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(GenerateError);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(/fake-bench/);
+  });
+
+  it("#33 R1: unverified の名前が packages・packages_when になければエラー", () => {
+    const dir = verTemplates(`packages: [pkg-a]
+verified_versions:
+  pkg-a: "1.2.0"
+unverified: [pkg-ghost]
+`);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(GenerateError);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(/pkg-ghost/);
+  });
+
+  it("#33 R1: unverified に書いたパッケージに、検証済みの版も書いてあると矛盾なのでエラー", () => {
+    const dir = verTemplates(`packages: [pkg-a]
+verified_versions:
+  pkg-a: "1.2.0"
+unverified: [pkg-a]
+`);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(GenerateError);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(/pkg-a/);
+  });
+
+  it("#33 R1: external_tools が文字列の一覧でなければエラー", () => {
+    const dir = verTemplates(`packages: [pkg-a]
+external_tools: { fake-bench: 1 }
+`);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(GenerateError);
+  });
+});
+
+describe("#33 R2: packages_when（回答に合うときだけ足すパッケージ）", () => {
+  it("#33 R2: 実際の drizzle：database が postgresql のとき pg を足す。pg の検証済みは 8.23.0・範囲は >=8.13.0", () => {
+    const p = loadProfile(realTemplatesDir, "data-access/drizzle");
+    expect(p.packagesWhen).toEqual([{ when: { database: "postgresql" }, packages: ["pg"] }]);
+    expect(p.packages).not.toContain("pg");
+    expect(p.verifiedVersions["pg"]).toBe("8.23.0");
+    expect(p.versionRanges["pg"]).toBe(">=8.13.0");
+  });
+
+  it("#33 R2: 形が誤っているとエラー（when が連想配列でない・packages が文字列の一覧でない・項目がない）", () => {
+    const bad = [
+      "packages: [pkg-a]\npackages_when:\n  - when: postgresql\n    packages: [pkg-pg]\n",
+      "packages: [pkg-a]\npackages_when:\n  - when: { database: postgresql }\n    packages: pkg-pg\n",
+      "packages: [pkg-a]\npackages_when:\n  - when: { database: postgresql }\n",
+      "packages: [pkg-a]\npackages_when: { database: postgresql }\n",
+    ];
+    for (const body of bad) {
+      expect(() => loadProfile(verTemplates(body), "lib/alpha"), body).toThrow(GenerateError);
+    }
   });
 });

@@ -105,7 +105,7 @@ export const questionDefinitions: readonly QuestionDefinition[] = [
     id: "infra",
     title: "インフラ・デプロイ先",
     kind: "select",
-    options: opts(["cloudflare", "Cloudflare（開発・検証・本番の3環境）"]),
+    options: opts(["cloudflare", "Cloudflare（本番。開発・検証は手元で環境変数を切り替える）"]),
   },
   {
     id: "database",
@@ -182,7 +182,7 @@ export const questionDefinitions: readonly QuestionDefinition[] = [
   },
   {
     id: "critical_ops",
-    title: "重要な操作（決済・公開・削除・権限の変更など）",
+    title: "重要な操作（決済・公開範囲を広げる・削除・権限の変更など）",
     interactive: false,
     defaultValue: "undecided",
     kind: "select",

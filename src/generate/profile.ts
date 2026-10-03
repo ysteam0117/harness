@@ -1,9 +1,13 @@
 import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { prerelease, satisfies, valid, validRange } from "semver";
 import { parse as parseYaml } from "yaml";
 import { GenerateError } from "./errors.js";
 
 export type ProfileFile = { source: string; destination: string };
+
+/** 回答に合うときだけ足すパッケージ（packages_when） */
+export type PackagesWhen = { when: Record<string, string>; packages: string[] };
 
 export type Profile = {
   /** "<分類>/<id>"（例："backend-framework/hono"） */
@@ -22,6 +26,20 @@ export type Profile = {
   optionalPackages: string[];
   files: ProfileFile[];
   packageJson: Record<string, unknown>;
+  /** CLI が最新の安定版を調べるパッケージ（書いてなければ []） */
+  packages: string[];
+  /** 回答に合うときだけ足すパッケージ（書いてなければ []） */
+  packagesWhen: PackagesWhen[];
+  /** ひな形で動作を確かめた版（パッケージ名 → 版） */
+  verifiedVersions: Record<string, string>;
+  /** 組み合わせの条件（パッケージ名 → semver の範囲） */
+  versionRanges: Record<string, string>;
+  /** npm で入れない道具（バージョンの調査の対象にしない） */
+  externalTools: string[];
+  /** 検証済みの版のないパッケージ */
+  unverified: string[];
+  /** 組み合わせの条件の説明（文章） */
+  compatibilityNotes: string[];
 };
 
 const SEGMENT = "[A-Za-z0-9][A-Za-z0-9_-]*";
@@ -39,6 +57,10 @@ const KNOWN_FIELDS = new Set([
   "packages",
   "verified_versions",
   "compatibility_notes",
+  "version_ranges",
+  "external_tools",
+  "packages_when",
+  "unverified",
   "requires",
   "includes",
   "skill_name",
@@ -76,6 +98,49 @@ function stringArrayField(data: Record<string, unknown>, field: string, where: s
   return value as string[];
 }
 
+function stringRecord(
+  data: Record<string, unknown>,
+  field: string,
+  where: string,
+  shape: string,
+): Record<string, string> {
+  const value = data[field];
+  if (value === undefined) return {};
+  if (!isPlainObject(value)) {
+    throw new GenerateError(`${where}：項目 ${field} は「${shape}」の形で書いてください`);
+  }
+  const out: Record<string, string> = {};
+  for (const [name, v] of Object.entries(value)) {
+    if (typeof v !== "string" || v === "") {
+      throw new GenerateError(
+        `${where}：${field} の ${name} は、空でない文字列で書いてください（${JSON.stringify(v)}）`,
+      );
+    }
+    out[name] = v;
+  }
+  return out;
+}
+
+function packagesWhenField(data: Record<string, unknown>, where: string): PackagesWhen[] {
+  const value = data["packages_when"];
+  if (value === undefined) return [];
+  const shape =
+    "packages_when は「- when: {質問の id: 回答}、packages: [名前]」の並びで書いてください";
+  if (!Array.isArray(value)) throw new GenerateError(`${where}：${shape}`);
+  return value.map((item, index): PackagesWhen => {
+    const at = `${where}：packages_when の ${index + 1} 番目`;
+    if (!isPlainObject(item)) throw new GenerateError(`${at}が連想配列ではありません。${shape}`);
+    const when = stringRecord(item, "when", at, "質問の id: 回答");
+    if (!isPlainObject(item["when"]) || Object.keys(when).length === 0) {
+      throw new GenerateError(`${at}：項目 when は、質問の id と回答を1つ以上書いてください`);
+    }
+    if (!Array.isArray(item["packages"]) || !item["packages"].every((v) => typeof v === "string")) {
+      throw new GenerateError(`${at}：項目 packages は文字列の一覧で書いてください`);
+    }
+    return { when, packages: item["packages"] as string[] };
+  });
+}
+
 /** 出力先・元のパスの形を確かめる（相対・"/" 区切り・空の部分や . や .. を含まない）。 */
 function checkRelativePath(value: string, where: string, label: string): void {
   const bad =
@@ -88,6 +153,73 @@ function checkRelativePath(value: string, where: string, label: string): void {
     throw new GenerateError(
       `${where}：${label} ${value} が誤っています（相対パスで、"/" 区切り、空の部分・. ・.. を含めない）`,
     );
+  }
+}
+
+/** 版・範囲・外部の道具・未検証の指定が、packages などと食い違っていないかを確かめる（R1・R5・R9） */
+function checkVersions(p: {
+  where: string;
+  packages: string[];
+  packagesWhen: PackagesWhen[];
+  verifiedVersions: Record<string, string>;
+  versionRanges: Record<string, string>;
+  externalTools: string[];
+  unverified: string[];
+}): void {
+  const known = new Set([...p.packages, ...p.packagesWhen.flatMap((w) => w.packages)]);
+  for (const tool of p.externalTools) {
+    if (known.has(tool)) {
+      throw new GenerateError(
+        `${p.where}：external_tools の ${tool} が packages（または packages_when）にも書かれています（npm で入れる道具と、入れない道具を二重に扱えません）`,
+      );
+    }
+  }
+  for (const name of p.unverified) {
+    if (!known.has(name)) {
+      throw new GenerateError(
+        `${p.where}：unverified の ${name} が、packages にも packages_when にもありません`,
+      );
+    }
+    if (name in p.verifiedVersions) {
+      throw new GenerateError(
+        `${p.where}：${name} は unverified に書かれていますが、verified_versions にも版があります（矛盾）`,
+      );
+    }
+  }
+  for (const [name, version] of Object.entries(p.verifiedVersions)) {
+    if (!known.has(name)) {
+      throw new GenerateError(
+        `${p.where}：verified_versions の ${name} が、packages にも packages_when にもありません`,
+      );
+    }
+    if (valid(version) === null) {
+      throw new GenerateError(
+        `${p.where}：verified_versions の ${name} の版 ${JSON.stringify(version)} は、semver の版として読めません`,
+      );
+    }
+    if (prerelease(version) !== null) {
+      throw new GenerateError(
+        `${p.where}：verified_versions の ${name} の版 ${version} は試験版です（安定版を書いてください）`,
+      );
+    }
+  }
+  for (const [name, range] of Object.entries(p.versionRanges)) {
+    if (!known.has(name)) {
+      throw new GenerateError(
+        `${p.where}：version_ranges の ${name} が、packages にも packages_when にもありません`,
+      );
+    }
+    if (validRange(range) === null) {
+      throw new GenerateError(
+        `${p.where}：version_ranges の ${name} の範囲 ${JSON.stringify(range)} は、semver の範囲として読めません`,
+      );
+    }
+    const verified = p.verifiedVersions[name];
+    if (verified !== undefined && !satisfies(verified, range)) {
+      throw new GenerateError(
+        `${p.where}：${name} の検証済みの版 ${verified} が、範囲 ${range} に合いません（プロファイルの誤り）`,
+      );
+    }
   }
 }
 
@@ -153,11 +285,22 @@ export function loadProfile(templatesDir: string, key: string): Profile {
   const optionalPackages = stringArrayField(data, "optional_packages", where);
   stringArrayField(data, "runtimes", where);
   stringArrayField(data, "databases", where);
-  stringArrayField(data, "packages", where);
-  stringArrayField(data, "compatibility_notes", where);
-  if (data["verified_versions"] !== undefined && !isPlainObject(data["verified_versions"])) {
-    throw new GenerateError(`${where}：項目 verified_versions は「名前: 版」の形で書いてください`);
-  }
+  const packages = stringArrayField(data, "packages", where);
+  const compatibilityNotes = stringArrayField(data, "compatibility_notes", where);
+  const externalTools = stringArrayField(data, "external_tools", where);
+  const unverified = stringArrayField(data, "unverified", where);
+  const packagesWhen = packagesWhenField(data, where);
+  const verifiedVersions = stringRecord(data, "verified_versions", where, "名前: 版");
+  const versionRanges = stringRecord(data, "version_ranges", where, "名前: 範囲");
+  checkVersions({
+    where,
+    packages,
+    packagesWhen,
+    verifiedVersions,
+    versionRanges,
+    externalTools,
+    unverified,
+  });
 
   for (const req of requires) {
     if (!KEY_RE.test(req)) {
@@ -231,6 +374,13 @@ export function loadProfile(templatesDir: string, key: string): Profile {
     optionalPackages,
     files,
     packageJson,
+    packages,
+    packagesWhen,
+    verifiedVersions,
+    versionRanges,
+    externalTools,
+    unverified,
+    compatibilityNotes,
   };
 }
 

@@ -3,7 +3,7 @@ id: typescript-standard
 category: quality
 name: ESLint・Prettier・tsc・Stryker・dependency-cruiser・jscpd
 languages: [typescript]
-packages: [eslint, typescript-eslint, eslint-plugin-react-hooks, prettier, typescript, "@stryker-mutator/core", "@stryker-mutator/vitest-runner", dependency-cruiser, jscpd]
+packages: [eslint, typescript, typescript-eslint, eslint-plugin-react-hooks, prettier, "@stryker-mutator/core", "@stryker-mutator/vitest-runner", dependency-cruiser, jscpd]
 # ひな形で動作を確かめたバージョン（2026-09-30、Issue #19 の試作で確認）
 verified_versions:
   eslint: "10.11.0"
@@ -15,6 +15,9 @@ verified_versions:
   "@stryker-mutator/vitest-runner": "10.0.0"
   dependency-cruiser: "18.4.0"
   jscpd: "5.3.3"
+# 組み合わせの条件のうち、版の範囲で表せるもの（文章の説明は compatibility_notes に残す）
+version_ranges:
+  typescript: ">=6.0.0 <6.1.0"   # typescript-eslint が TypeScript 6.1 未満にだけ対応する
 compatibility_notes:
   - "typescript-eslint は TypeScript 6.1 未満にだけ対応する（7系は不可）"
   - "npm 11 では esbuild・workerd のインストール時の処理が既定で実行されないため、package.json に allowScripts を設定する"

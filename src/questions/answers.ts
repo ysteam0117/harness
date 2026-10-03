@@ -52,9 +52,18 @@ export interface ParsedAnswers {
   answers: Partial<Answers>;
   /** accepted_warnings に書かれた、承知した警告のルールの id */
   acceptedWarnings: string[];
+  /** versions に書かれた、技術ごとの選択（パッケージ名 → verified・latest）。書いたときだけ入る */
+  versions?: Record<string, VersionChoice>;
+  /** versions_offline に書かれた、つながらないとき検証済みで進めることの承知。書いたときだけ入る */
+  versionsOffline?: "verified";
 }
 
+export type VersionChoice = "verified" | "latest";
+
 const ACCEPTED_WARNINGS_KEY = "accepted_warnings";
+const VERSIONS_KEY = "versions";
+const VERSIONS_OFFLINE_KEY = "versions_offline";
+const EXTRA_KEYS: readonly string[] = [ACCEPTED_WARNINGS_KEY, VERSIONS_KEY, VERSIONS_OFFLINE_KEY];
 
 /**
  * --answers の YAML を読んで検証する。書いた回答だけを返す（自動で決まる値は補わない）。
@@ -82,7 +91,7 @@ export function parseAnswersYaml(
   const known = new Set(definitions.map((d) => d.id));
 
   for (const key of Object.keys(raw)) {
-    if (key !== ACCEPTED_WARNINGS_KEY && !known.has(key)) {
+    if (!EXTRA_KEYS.includes(key) && !known.has(key)) {
       errors.push(`知らないキーです：${key}`);
     }
   }
@@ -94,6 +103,36 @@ export function parseAnswersYaml(
       acceptedWarnings = v as string[];
     } else {
       errors.push(`${ACCEPTED_WARNINGS_KEY}：ルールの id の一覧（文字列の配列）で指定してください`);
+    }
+  }
+
+  let versions: Record<string, VersionChoice> | undefined;
+  if (VERSIONS_KEY in raw) {
+    const v = raw[VERSIONS_KEY];
+    if (typeof v !== "object" || v === null || Array.isArray(v)) {
+      errors.push(
+        `${VERSIONS_KEY}：「パッケージ名: verified または latest」の形（連想配列）で書いてください`,
+      );
+    } else {
+      versions = {};
+      for (const [name, choice] of Object.entries(v)) {
+        if (choice === "verified" || choice === "latest") versions[name] = choice;
+        else {
+          errors.push(
+            `${VERSIONS_KEY}：${name} の値 ${JSON.stringify(choice)} が誤っています（verified か latest で書いてください）`,
+          );
+        }
+      }
+    }
+  }
+
+  let versionsOffline: "verified" | undefined;
+  if (VERSIONS_OFFLINE_KEY in raw) {
+    if (raw[VERSIONS_OFFLINE_KEY] === "verified") versionsOffline = "verified";
+    else {
+      errors.push(
+        `${VERSIONS_OFFLINE_KEY}：verified だけ書けます（つながらないとき、検証済みのバージョンで進めることを承知する指定です）`,
+      );
     }
   }
 
@@ -138,6 +177,22 @@ export function parseAnswersYaml(
     }
   }
 
+  if (valid["version_policy"] === "verified" && versions) {
+    const latest = Object.entries(versions)
+      .filter(([, choice]) => choice === "latest")
+      .map(([name]) => name);
+    if (latest.length > 0) {
+      errors.push(
+        `version_policy が verified（検証済み）なのに、${VERSIONS_KEY} で latest（最新の安定版）を選んでいます：${latest.join("、")}（どちらかを直してください）`,
+      );
+    }
+  }
+
   if (errors.length > 0) throw new AnswersError(errors);
-  return { answers: valid as Partial<Answers>, acceptedWarnings };
+  return {
+    answers: valid as Partial<Answers>,
+    acceptedWarnings,
+    ...(versions ? { versions } : {}),
+    ...(versionsOffline ? { versionsOffline } : {}),
+  };
 }

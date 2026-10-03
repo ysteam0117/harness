@@ -1,0 +1,16 @@
+# 回答から、使う技術プロファイルを決める対応表（F-24）。
+# 「harness create」のバージョンの調査（F-19）と、ひな形の差し込み（#34）が、同じ対応表を使う。
+#
+# profile : "<分類>/<id>"（templates/profiles にあるプロファイル）
+# when    : 書かなければ常に選ぶ。書く場合は、質問の id（answer）と、equals・in・notEquals のどれか1つ
+#           （consistency-rules.yaml の answer 条件と同じ書き方）
+
+- profile: backend-framework/hono
+- profile: logger/structured-logger
+- profile: frontend-build/vite-react-router
+- profile: http-client/axios
+- profile: frontend-state/tanstack-query-rhf-zod
+- profile: test-framework/vitest-playwright
+- profile: quality/typescript-standard
+- profile: data-access/drizzle
+  when: { answer: database, notEquals: none }

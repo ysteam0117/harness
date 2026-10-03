@@ -6,11 +6,11 @@
 
 | コマンド | 役割                                       | 状態                          | 担当の Issue |
 | -------- | ------------------------------------------ | ----------------------------- | ------------ |
-| `create` | 質問に答えて、プロジェクトを生成する | 質問と整合性チェックまで（生成は #34） | #31〜#34     |
+| `create` | 質問に答えて、プロジェクトを生成する | 質問・バージョンの調査・整合性チェックまで（生成は #34） | #31〜#34     |
 | `update` | 生成済みのプロジェクトに、新しいハーネスを反映する | 未実装（同上）                | #35          |
 | `status` | 今のハーネスのバージョン・最新のバージョン・主な変更点を表示する | 未実装（同上）                | #35          |
 
-`create` は、質問（`--answers <file>` で回答のファイルも渡せる）と整合性チェックを行い、回答の一覧とチェックの結果を見せて確認するところまでを行う。確認の後は「生成は Issue #34 で実装予定です」と表示して終了コード1で終わる（`--yes` で最後の確認を省ける）。詳細は [questions.md](questions.md)。
+`create` は、質問（`--answers <file>` で回答のファイルも渡せる）、バージョンの調査と選択、整合性チェックを行い、回答の一覧・採用するバージョン・チェックの結果を見せて確認するところまでを行う。バージョンの結果と `docs/tech-stack.md` の中身は結果として返す（保存は #34）。確認の後は「生成は Issue #34 で実装予定です」と表示して終了コード1で終わる（`--yes` で最後の確認を省ける）。詳細は [questions.md](questions.md)・[versions.md](versions.md)。
 
 ## ディレクトリと役割
 
@@ -20,7 +20,8 @@
 | `src/generate/` | ひな形の差し込み・プロファイルの読み込み・AIごとの出し分け。出力するファイルの一覧をメモリ上で作る（[generator.md](generator.md)） |
 | `src/questions/` | 質問の定義・質問の進め方・`--answers` の読み込みと検証・入力の窓口（[questions.md](questions.md)） |
 | `src/checks/` | 整合性チェック（ルールの読み込みと判定）・事実の収集・手元の道具の確かめ（[questions.md](questions.md)） |
-| `data/`      | データファイル（整合性チェックのルール `consistency-rules.yaml`。配布物に含める） |
+| `src/versions/` | バージョンの調査と選定：使うプロファイルの決定・調べる対象・npm と Node.js の登録情報の取得・最新の安定版の選び方・利用者の選択・tech-stack.md の中身（[versions.md](versions.md)） |
+| `data/`      | データファイル（整合性チェックのルール `consistency-rules.yaml`、使うプロファイルの対応表 `profile-selection.yaml`、Node.js の検証済みの版 `runtimes.yaml`。配布物に含める） |
 | `scripts/`   | 開発とCIで使う確認のスクリプト（共通仕様の対応の確認、配布物の確認）                                 |
 | `test/`      | テスト（vitest）                                                                                     |
 | `templates/` | 生成するハーネスのひな形（配布物に含める）                                                           |
@@ -41,7 +42,7 @@ flowchart LR
 
 1. `src/cli.ts` が `createProgram()` を呼び、コマンドの引数を解析して実行する
 2. `src/program.ts` が、バージョン・ヘルプ・日本語化・サブコマンドの登録を行う
-3. `src/commands/` の各コマンドが処理する（`create` は質問と整合性チェックまで。`update`・`status` は未実装の表示のみ）
+3. `src/commands/` の各コマンドが処理する（`create` は質問・バージョンの調査・整合性チェックまで。`update`・`status` は未実装の表示のみ）
 
 ## 開発のコマンド
 
@@ -56,4 +57,5 @@ flowchart LR
 - [CLIの土台（Issue #30）](cli-foundation.md)
 - [ひな形の差し込みとプロファイルの読み込み（Issue #31）](generator.md)
 - [質問と整合性チェック（Issue #32）](questions.md)
+- [バージョンの調査と選定（Issue #33）](versions.md)
 - 決定の記録：[0001 CIでコンテナを使わない](../adr/0001-ci-without-container.md)

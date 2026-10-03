@@ -3,17 +3,23 @@ id: vitest-playwright
 category: test-framework
 name: Vitest・Playwright ほか
 languages: [typescript]
-packages: [vitest, "@cloudflare/vitest-pool-workers", "@testing-library/react", "@testing-library/dom", "@testing-library/user-event", jsdom, msw, fast-check, "@playwright/test", k6]
+packages: [vitest, "@cloudflare/vitest-pool-workers", "@testing-library/react", "@testing-library/dom", "@testing-library/user-event", jsdom, msw, fast-check, "@playwright/test"]
+# npm で入れない道具。バージョンの調査の対象にせず、手順書（docs/testing/）で導入する
+external_tools: [k6]
 # ひな形で動作を確かめたバージョン（2026-09-30、Issue #19 の試作で確認）
 verified_versions:
   vitest: "4.1.11"
   "@cloudflare/vitest-pool-workers": "0.22.0"
   "@testing-library/react": "16.3.3"
   "@testing-library/dom": "10.4.2"
+  "@testing-library/user-event": "14.6.7"   # 2026-10-03、Issue #33 の試作で確認
   jsdom: "30.1.1"
   msw: "3.0.1"
   fast-check: "4.10.2"
   "@playwright/test": "1.63.0"
+# 組み合わせの条件のうち、版の範囲で表せるもの（文章の説明は compatibility_notes に残す）
+version_ranges:
+  vitest: "^4"   # @cloudflare/vitest-pool-workers が Vitest 4系にだけ対応する
 compatibility_notes:
   - "@cloudflare/vitest-pool-workers は Vitest 4系にだけ対応する（5系は不可）"
   - "vitest-pool-workers の中では pg（PostgreSQLのドライバ）を読み込めない。Workers＋PostgreSQL は wrangler dev に対するAPIのテストで確かめる"

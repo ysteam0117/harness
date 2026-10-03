@@ -430,7 +430,12 @@ templates/profiles/
 └─ <分類>/                     例：data-access、logger、http-client、test-framework、backend-framework
    ├─ _shared/                 分類の中で共通の部分
    └─ <ライブラリ>/
-      ├─ profile.yaml          対応する言語・DB、バージョンを調べるパッケージ名、検証済みのバージョン、組み合わせの条件、
+      ├─ profile.yaml          対応する言語・DB、バージョンを調べるパッケージ名（packages）、
+      │                         回答に合うときだけ足すパッケージ（packages_when。例：PostgreSQLのときだけpg）、
+      │                         検証済みのバージョン（verified_versions）、
+      │                         組み合わせの条件のうち版の範囲で表せるもの（version_ranges。例：Vitestは4系）と文章の説明（compatibility_notes）、
+      │                         npmで入れない道具（external_tools。例：k6。バージョンの調査の対象にしない）、
+      │                         検証済みのバージョンのないパッケージ（unverified。最新の安定版を使い、未検証の警告を出す）、
       │                         引用する共通の部分（includes）、必要なほかのプロファイル（requires）、
       │                         package.json に加える設定（package_json）、出力するファイルの対応（files）
       ├─ SKILL.md              そのライブラリ固有のルール

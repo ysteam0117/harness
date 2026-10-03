@@ -8,10 +8,18 @@ databases: [cloudflare-d1, postgresql]
 packages:
   - drizzle-orm
   - drizzle-kit
+# 回答に合うときだけ足すパッケージ（PostgreSQL のドライバ）
+packages_when:
+  - when: { database: postgresql }
+    packages: [pg]
 # ひな形で動作を確かめたバージョン。ハーネスのリリースごとに更新する
 verified_versions:        # 2026-09-30 試作（Issue #18）で確認
   drizzle-orm: "0.45.3"
   drizzle-kit: "0.31.11"
+  pg: "8.23.0"          # 2026-09-30 に PostgreSQL 18.6 で確認
+# 組み合わせの条件のうち、版の範囲で表せるもの（文章の説明は compatibility_notes に残す）
+version_ranges:
+  pg: ">=8.13.0"        # node-postgres 8.13.0 以上
 # 組み合わせる道具の条件（試作で見つかったもの）
 compatibility_notes:
   - "PostgreSQLのドライバは pg（node-postgres 8.13.0 以上）。2026-09-30 に pg 8.23.0・PostgreSQL 18.6 で確認"
