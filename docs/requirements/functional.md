@@ -114,6 +114,8 @@
 | 認証の処理とテストのひな形 | 認証あり（方式に応じて変わる） |
 | アップロード処理とテストのひな形、R2のIaC | ファイルのアップロードを使う（[F-20](#f-20)） |
 | `.github/workflows/` | 品質チェックの実行場所がGitHub Actionsを含む |
+| `.github/`（全体） | リポジトリの置き場所が「GitHub」 |
+| `docs/issues/`・`.githooks/`・取り込みのコマンド | リポジトリの置き場所が「使わない（手元のGitだけ）」（[C-83](common/workflow.md#c-83)） |
 | それ以外 | 常に生成する。ブランチ保護の設定手順（[C-42](common/workflow.md#c-42)）はREADMEに記載し、仮のアイコンの差し替え用Issue（[C-55](common/frontend.md#c-55)）は常に作成する |
 
 <a id="f-15"></a>
@@ -359,7 +361,7 @@ knowledge/
 **核（`AGENTS.md`に常に書く）**
 
 - 日本語での表示（[C-67](common/workflow.md#c-67)）
-- 作業の流れ：Issue → ブランチ → PR、`main`の保護、ブランチ名・コミット・PR（[C-01](common/workflow.md#c-01)・[C-21](common/workflow.md#c-21)〜[C-23](common/workflow.md#c-23)・[C-42](common/workflow.md#c-42)）
+- 作業の流れ：Issue → ブランチ → PR、`main`の保護、ブランチ名・コミット・PR（[C-01](common/workflow.md#c-01)・[C-21](common/workflow.md#c-21)〜[C-23](common/workflow.md#c-23)・[C-42](common/workflow.md#c-42)）。GitHubを使わない場合の代わり（[C-83](common/workflow.md#c-83)）
 - 実装の進め方の要点と、立ち止まる条件（[C-66](common/workflow.md#c-66)）
 - 秘密情報・テストデータの禁止事項（[C-05](common/security.md#c-05)）
 - AIの作業ルール（[C-53](common/design-principles.md#c-53)）、完了の定義（[C-34](common/workflow.md#c-34)）
@@ -751,6 +753,7 @@ harness create
 | 2 | 使用AI | Claude Code／Codex（複数選択） | |
 | 3 | プロジェクト種別 | Webアプリ | 自動で決定 |
 | 4 | フロントエンド・バックエンドの有無 | 両方あり | Webアプリなので自動で決定 |
+| 4-1 | リポジトリの置き場所 | GitHub／使わない（手元のGitだけ） | [C-83](common/workflow.md#c-83)。使わない場合は、5（公開・非公開）を聞かずに「非公開」とし、15（品質チェックの実行場所）を聞かずに「ローカルのみ」とする |
 | 5 | 公開・非公開 | 公開／非公開 | |
 | 6 | 開発人数 | 1人／複数人 | |
 | 7 | フロントエンドの技術 | React（TypeScript） | 自動で決定 |
