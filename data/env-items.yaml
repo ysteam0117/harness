@@ -7,6 +7,7 @@
 # development : 開発（手元）で入れるもの
 # test        : 検証（手元。テストが読む .env.test）で入れるもの
 # production  : 本番（Cloudflare）で入れるもの
+# example     : .env.example に書く値。書かなければ空。実際の値は書かない（空か、changeme・<…> のプレースホルダだけ）
 # when        : 書かなければ常に入れる。書く場合は、質問の id（answer）と、equals・in・notEquals のどれか1つ
 #
 # 表のセルに | と改行は書かない。
@@ -16,18 +17,66 @@
   development: development
   test: test
   production: production
+  example: development
 
 - name: ALLOWED_ORIGINS
   purpose: 状態を変える要求を許可する送信元（カンマ区切り）
   development: 手元の画面のURL
   test: 手元の画面のURL
   production: 本番のドメイン（wrangler.jsonc の vars・IaC で設定する）
+  example: http://localhost:5173
+
+- name: APP_PORT
+  purpose: Docker で動かすときに、手元で開くポート（docker-compose.yml が読む）
+  development: 5173（ほかのアプリと重なるときだけ変える。変えたら ALLOWED_ORIGINS も合わせる）
+  test: "5173"
+  production: 使わない（Cloudflare の Workers で動く）
+  example: "5173"
+
+- name: POSTGRES_USER
+  purpose: 手元の PostgreSQL のコンテナのユーザー名（docker-compose.yml が読む）
+  development: 開発用に決めた名前
+  test: 検証用に決めた名前（開発とは別にする）
+  production: 使わない（本番の DB の認証情報は IaC・Hyperdrive の設定で決める）
+  when: { answer: database, equals: postgresql }
+
+- name: POSTGRES_PASSWORD
+  purpose: 手元の PostgreSQL のコンテナのパスワード（docker-compose.yml が読む。URL で使える文字だけにする）
+  development: 開発用に生成したランダムな値
+  test: 検証用に生成したランダムな値（開発とは別にする）
+  production: 使わない（本番の DB の認証情報は IaC・Hyperdrive の設定で決める）
+  when: { answer: database, equals: postgresql }
+
+- name: POSTGRES_DB
+  purpose: 手元の PostgreSQL のコンテナのデータベース名（docker-compose.yml が読む）
+  development: 開発用のデータベース名
+  test: 検証用のデータベース名（開発とは別にする）
+  production: 使わない
+  example: app_dev
+  when: { answer: database, equals: postgresql }
+
+- name: POSTGRES_PORT
+  purpose: 手元の PostgreSQL のコンテナを開くポート（docker-compose.yml が読む）
+  development: 5432（ほかの PostgreSQL と重なるときだけ変える）
+  test: "5432"
+  production: 使わない
+  example: "5432"
+  when: { answer: database, equals: postgresql }
 
 - name: DATABASE_URL
-  purpose: PostgreSQL の接続先（パスワードを含む）
-  development: 手元のDBの接続先
+  purpose: PostgreSQL の接続先（パスワードを含む）。drizzle-kit（マイグレーション）が読む
+  development: 手元のDBの接続先（localhost）
   test: 開発とは別の、手元の検証用DBの接続先
   production: Hyperdrive の設定（wrangler secret・IaC。手元のファイルには書かない）
+  example: "<postgresql://ユーザー名:パスワード@localhost:5432/データベース名>"
+  when: { answer: database, equals: postgresql }
+
+- name: CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE
+  purpose: 手元の開発サーバー（workerd）が、Hyperdrive の代わりにつなぐ PostgreSQL の接続先（Cloudflare が決めた名前。wrangler.jsonc には書かない）
+  development: 手元のDBの接続先（localhost）。Docker の中では docker-compose.yml が db のサービス名に上書きする
+  test: 開発とは別の、手元の検証用DBの接続先
+  production: 使わない（本番は Hyperdrive の設定に従う）
+  example: "<postgresql://ユーザー名:パスワード@localhost:5432/データベース名>"
   when: { answer: database, equals: postgresql }
 
 - name: SESSION_SECRET

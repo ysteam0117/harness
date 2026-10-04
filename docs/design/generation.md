@@ -6,7 +6,7 @@
 
 - 作るもの：テンプレートの値の決定、F-26 の判定、`package.json` の組み立て、知見の写し、`docs/tech-stack.md`・承知した警告のADRの保存、`.harness/config.yaml`（管理するファイルの指紋を含む）、一時的な場所での生成と移動、`harness create` の最後の生成
 - 作らないもの（Issue を分けた）
-  - #56：まだテンプレートがないアプリのひな形（アプリのコード・`.env.example`・要件定義書のひな形・PR のテンプレートなど）
+  - #56：アプリのひな形（アプリのコード・`.env.example`・`wrangler.jsonc`・`docker-compose.yml`）は、#56 で追加した（[skeleton.md](skeleton.md)）。要件定義書のひな形・PR のテンプレートなどは #63 に移った
   - #57：生成の直後の `npm install` と品質チェックによる確認
   - #55：GitHub を使わない（手元の Git だけの）プロジェクトへの対応。リモートリポジトリ・Issue の作成もこれで決める
 - 生成は手元のフォルダまで。Git の初期化はしない（#55 で決める）
@@ -38,16 +38,18 @@
 | `src/generate/conditions.ts` | `parseWhen`・`whenMatches`：データファイルの条件（`when`）の検証と判定 |
 | `src/generate/data.ts` | `readDataYaml`・`dataPath`・`isPlainObject`：`data/` の YAML の読み込み |
 | `src/generate/comments.ts` | `stripMarkerComments`（追加）：文書のどこにあっても、「もとになった共通仕様」の1行のコメントを取り除く |
-| `src/generate/profile.ts` | `dev_packages` の読み込みと検証（`Profile.devPackages`）を追加 |
+| `src/generate/profile.ts` | `dev_packages` の読み込みと検証（`Profile.devPackages`）を追加。#56 で `files_when`・`wrangler`・`wrangler_when`・`package_json_when` の読み込みと、まとめ方（`selectProfileFiles`・`mergeWrangler`・`mergePackageJson`）を追加（[skeleton.md](skeleton.md)） |
+| `src/generate/wrangler.ts` | `buildWranglerJsonc`：`wrangler.jsonc` の組み立て（#56。[skeleton.md](skeleton.md)） |
 | `src/commands/create.ts` | 確認の後の生成（`generate`）：`buildProject` → `writeProject`、SIGINT の登録、終了コード、次の手順の表示 |
 | `data/template-values.yaml` | 回答の条件で決まるテンプレートの値 |
 | `data/role-models.yaml` | 役割ごとのモデルの初期値（C-66 の表） |
-| `data/env-items.yaml` | 環境変数の項目の一覧（`docs/secrets.md` の表。#56 の `.env.example` も同じ一覧を使う） |
+| `data/env-items.yaml` | 環境変数の項目の一覧（`docs/secrets.md` の表。`.env.example` も同じ一覧から `buildEnvExample`（`values.ts`）が作る。項目ごとの `example` が `.env.example` の値） |
 | `data/knowledge-selection.yaml` | 知見のファイルと、写す条件の対応 |
 | `data/runtimes.yaml` | Node.js の検証済みの版に加えて、`compatibility_date` を持つ |
 | `test/generate/*.test.ts`・`project-helpers.ts`・`__snapshots__/` | テスト。`judgment`・`knowledge`・`package-json`・`values`・`project`・`write` |
 | `test/commands/create.test.ts` | 生成・AC-1・AC-2・SIGINT（実際の子プロセスを含む）・秘密情報のテスト |
 | `scripts/pack-check.ts` | 配布物から生成できることの確認 |
+| `scripts/smoke-generated.ts` | 生成したプロジェクトが動くことの確認（#56。[skeleton.md](skeleton.md)） |
 
 ## 処理の流れ
 
@@ -60,7 +62,7 @@ flowchart TD
         J --> K["selectKnowledge<br/>関係する知見だけ"]
         K --> V["buildValues<br/>テンプレートの値"]
         V --> BO["buildOutputs（#31）<br/>AI向けの出力・プロファイルの files"]
-        BO --> TF["文書・スクリプト・Issue のテンプレート<br/>tech-stack・ADR・package.json・.node-version・知見の写し"]
+        BO --> TF["文書・スクリプト・Issue のテンプレート・アプリの土台<br/>wrangler.jsonc・.env.example・tech-stack・ADR・package.json・.node-version・知見の写し"]
         TF --> CK["checkOutputPaths<br/>出力先の重なり"]
         CK --> CFG["buildConfigText<br/>.harness/config.yaml（最後に作る）"]
     end
@@ -150,13 +152,13 @@ Codex のモデル名は、設定（`model = "..."`）にそのまま書ける�
 
 `buildPackageJson` が組み立てる。キーの並びは固定で、同じ入力なら同じ中身になる。
 
-- 先頭から：`name`（アプリ名）・`version`（`0.0.0`）・`private`（`true`）・`type`（`module`）・`engines`（`node` は選んだ Node.js の大きな版以上）。続けて、プロファイルの `package_json` を深くまとめたもの（`mergePackageJson`。`scripts`・`overrides` など）、`dependencies`、`devDependencies`
+- 先頭から：`name`（アプリ名）・`version`（`0.0.0`）・`private`（`true`）・`type`（`module`）・`engines`（`node` は選んだ Node.js の大きな版以上）。続けて、プロファイルの `package_json` と、回答に合う `package_json_when` を深くまとめたもの（`mergePackageJson`。`scripts`・`overrides` など）、`dependencies`、`devDependencies`
 - プロファイルの `package_json` に、ハーネスが決める項目（`name`・`version`・`private`・`type`・`engines`・`dependencies`・`devDependencies`）を書くと `GenerateError`
 - 入れるのは、実際に選ばれた依存だけ。`packages` と、回答に合う `packages_when`（`wantedPackages`）の和である。たとえば `pg` は PostgreSQL のときだけ入る
 - 版は、#33 で選んだ版を**正確な版**で書く（`^`・`~` なし。C-62）。選んだ版にない依存は `GenerateError`
 - `dependencies` と `devDependencies` の振り分けは、`profile.yaml` の **`dev_packages`** で決める。`dev_packages` に入っている名前は `devDependencies`、それ以外は `dependencies`。複数のプロファイルが同じ名前を持つ場合は、すべてが `dev_packages` に書いたときだけ `devDependencies` にする。名前は昇順に並べる
 - `dev_packages` の検証（`loadProfile`）：名前は、`packages` と、すべての `packages_when` のパッケージの和集合に含まれなければならない。ないとエラー（書き間違いの検出）
-- `.node-version`：選んだ Node.js の版（末尾に改行）。#56 のひな形と合わせる
+- `.node-version`：選んだ Node.js の版（末尾に改行）。`docker-compose.yml` の `image: node:<版>` も同じ版を使う（値 `node_version`）
 - ハーネス自身の `package.json` の `files` に `knowledge` を加えた。配布物に知見を入れるため
 
 ## 知見の写し
@@ -306,7 +308,7 @@ Windows では、ウイルス対策ソフトなどの影響で `rename` が一�
 
 ## 引き継ぎ
 
-- #56：アプリのひな形・`.env.example`（`data/env-items.yaml` を使う）・要件定義書のひな形（判定の結果を記録する）・PR のテンプレート（管理するファイルに加える）
+- #56（アプリのひな形・`.env.example`）は済み（[skeleton.md](skeleton.md)）。#63：要件定義書のひな形（判定の結果を記録する）・PR のテンプレート（管理するファイルに加える）
 - #57：生成の直後の `npm install` と品質チェック
 - #55：Git の初期化・リモートリポジトリ・GitHub を使わない場合
 - #35：`.harness/config.yaml` の `managed_files`・`harness_version` を使って、更新の差分を取る

@@ -32,3 +32,62 @@ includes:
   - data-access/_shared
 # 出力するSkillの名前
 skill_name: data-access-drizzle
+files:
+  files/sample-user.repository.ts: backend/src/db/sample-user.repository.ts
+  files/sample-users.service.ts: backend/src/services/sample-users.service.ts
+  files/sample-users.service.test.ts: backend/src/services/sample-users.service.test.ts
+  files/sample-users.route.ts: backend/src/routes/sample-users.ts
+  files/index.ts: backend/src/index.ts
+  files/seed.sql: backend/db/seeds/seed.sql
+  files/cleanup.sql: backend/db/seeds/cleanup.sql
+# DB の種類で変わるファイル。マイグレーション（SQL と meta の journal・snapshot）は、drizzle-kit generate で実際に作ったもの
+files_when:
+  - when: { answer: database, equals: d1 }
+    files:
+      files/database.d1.ts: backend/src/db/database.ts
+      files/schema.d1.ts: backend/db/schema.ts
+      files/drizzle.d1.config.ts: drizzle.config.ts
+      files/sample-user.repository.test.ts: backend/src/db/sample-user.repository.test.ts
+      files/sample-users.route.test.ts: backend/src/routes/sample-users.test.ts
+      files/migrations-d1/0000_init.sql: backend/db/migrations/0000_init.sql
+      files/migrations-d1/meta/_journal.json: backend/db/migrations/meta/_journal.json
+      files/migrations-d1/meta/0000_snapshot.json: backend/db/migrations/meta/0000_snapshot.json
+  - when: { answer: database, equals: postgresql }
+    files:
+      files/database.pg.ts: backend/src/db/database.ts
+      files/schema.pg.ts: backend/db/schema.ts
+      files/drizzle.pg.config.ts: drizzle.config.ts
+      files/migrations-pg/0000_init.sql: backend/db/migrations/0000_init.sql
+      files/migrations-pg/meta/_journal.json: backend/db/migrations/meta/_journal.json
+      files/migrations-pg/meta/0000_snapshot.json: backend/db/migrations/meta/0000_snapshot.json
+# wrangler.jsonc に足す設定。D1 は migrations_dir まで。PostgreSQL は Hyperdrive の名前だけ（手元の接続先は環境変数で渡す。ここに書かない）
+wrangler_when:
+  - when: { answer: database, equals: d1 }
+    wrangler:
+      d1_databases:
+        - binding: DB
+          database_name: "{{app_name}}-db"
+          migrations_dir: backend/db/migrations
+  - when: { answer: database, equals: postgresql }
+    wrangler:
+      hyperdrive:
+        - binding: HYPERDRIVE
+          id: HYPERDRIVE_ID
+      compatibility_flags: [nodejs_compat]
+package_json_when:
+  - when: { answer: database, equals: d1 }
+    package_json:
+      scripts:
+        db:generate: "drizzle-kit generate"
+        db:migrate:local: "wrangler d1 migrations apply DB --local"
+        db:seed:local: "wrangler d1 execute DB --local --file backend/db/seeds/seed.sql"
+        db:reset:local: "node -e \"require('node:fs').rmSync('.wrangler/state/v3/d1',{recursive:true,force:true})\" && npm run db:migrate:local && npm run db:seed:local"
+        db:cleanup: "wrangler d1 execute DB --local --file backend/db/seeds/cleanup.sql"
+  - when: { answer: database, equals: postgresql }
+    package_json:
+      scripts:
+        db:generate: "drizzle-kit generate"
+        db:migrate: "drizzle-kit migrate"
+        db:seed:local: "docker compose exec -T db psql -v ON_ERROR_STOP=1 < backend/db/seeds/seed.sql"
+        db:reset:local: "docker compose exec -T db psql -v ON_ERROR_STOP=1 -c \"DROP SCHEMA IF EXISTS public CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE; CREATE SCHEMA public;\" && npm run db:migrate && npm run db:seed:local"
+        db:cleanup: "docker compose exec -T db psql -v ON_ERROR_STOP=1 < backend/db/seeds/cleanup.sql"

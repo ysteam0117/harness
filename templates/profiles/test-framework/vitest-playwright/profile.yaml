@@ -30,6 +30,26 @@ compatibility_notes:
   - "k6 と OWASP ZAP は npm ではなく、手順書（docs/testing/）に沿って導入する"
 skill_name: test-tools
 files:
-  files/vitest.config.ts: vitest.config.ts
   files/playwright.config.ts: playwright.config.ts
   files/console-guard.ts: e2e/console-guard.ts
+  files/test-setup.ts: frontend/src/test/setup.ts
+  files/test-server.ts: frontend/src/test/server.ts
+# vitest.config.ts は DB の回答で変わる。D1 だけ、マイグレーションを読み込んでテスト用の D1 に適用する
+files_when:
+  - when: { answer: database, equals: d1 }
+    files:
+      files/vitest.d1.config.ts: vitest.config.ts
+      files/apply-migrations.ts: backend/test/apply-migrations.ts
+  - when: { answer: database, equals: postgresql }
+    files:
+      files/vitest.pg.config.ts: vitest.config.ts
+  - when: { answer: database, equals: none }
+    files:
+      files/vitest.config.ts: vitest.config.ts
+package_json:
+  scripts:
+    test: vitest run
+    pretest: npm run types
+  # msw のインストール後の処理（ブラウザ用の部品の配置）は使わない（Node.js のテストだけで使うため）
+  allowScripts:
+    msw: false

@@ -440,7 +440,10 @@ templates/profiles/
       │                         npmで入れない道具（external_tools。例：k6。バージョンの調査の対象にしない）、
       │                         検証済みのバージョンのないパッケージ（unverified。最新の安定版を使い、未検証の警告を出す）、
       │                         引用する共通の部分（includes）、必要なほかのプロファイル（requires）、
-      │                         package.json に加える設定（package_json）、出力するファイルの対応（files）
+      │                         package.json に加える設定（package_json）、出力するファイルの対応（files）、
+      │                         回答に合うときだけ出すファイル（files_when。例：DBの種類で変わるスキーマ・vitest.config.ts）、
+      │                         回答に合うときだけ足す package.json の項目（package_json_when。例：DBのscripts）、
+      │                         wrangler.jsonc に加える設定（wrangler）と、回答に合うときだけ足す設定（wrangler_when。例：D1・Hyperdrive・R2）
       ├─ SKILL.md              そのライブラリ固有のルール
       └─ files/                生成するプロジェクトへ出力する、動作を確かめたコード・設定のひな形
 ```

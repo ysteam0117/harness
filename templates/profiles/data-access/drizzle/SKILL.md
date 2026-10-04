@@ -15,7 +15,7 @@ description: Drizzle ORMでDBにアクセスするときのルール。スキー
 
 ## スキーマの定義
 
-- テーブルの定義は、Drizzleのスキーマのファイル（`backend/src/db/schema/`等）に書く
+- テーブルの定義は、Drizzleのスキーマのファイル（`backend/db/schema.ts`）に書く。DB に触れる処理（Repository）は`backend/src/db/`に置く
 - スキーマの定義を変えたら、`drizzle-kit generate --name <内容をsnake_caseで>`でマイグレーションファイルを作る（例：`--name add_users_email_index` → `0003_add_users_email_index.sql`）。`--name`を付けないと意味のない名前になるため、必ず付ける。作られたSQLの内容を確かめてからコミットする
 - マイグレーションファイルを手で書き換えない。一度適用したものは変えず、新しいファイルを追加する
 

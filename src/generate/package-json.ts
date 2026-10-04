@@ -67,7 +67,7 @@ export function buildPackageJson(input: BuildPackageJsonInput): Record<string, u
     (isDev.get(name) ? devDependencies : dependencies)[name] = version;
   }
 
-  const merged = mergePackageJson(profiles);
+  const merged = mergePackageJson(profiles, answers);
   for (const key of FIXED_KEYS) {
     if (Object.hasOwn(merged, key)) {
       throw new GenerateError(

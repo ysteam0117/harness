@@ -2,9 +2,19 @@ import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { prerelease, satisfies, valid, validRange } from "semver";
 import { parse as parseYaml } from "yaml";
+import { parseWhen, whenMatches, type When } from "./conditions.js";
 import { GenerateError } from "./errors.js";
 
 export type ProfileFile = { source: string; destination: string };
+
+/** 回答に合うときだけ出すファイル（files_when） */
+export type ProfileFilesWhen = { when: When; files: ProfileFile[] };
+
+/** 回答に合うときだけ足す wrangler.jsonc の設定（wrangler_when） */
+export type ProfileWranglerWhen = { when: When; wrangler: Record<string, unknown> };
+
+/** 回答に合うときだけ足す package.json の項目（package_json_when） */
+export type ProfilePackageJsonWhen = { when: When; packageJson: Record<string, unknown> };
 
 /** 回答に合うときだけ足すパッケージ（packages_when） */
 export type PackagesWhen = { when: Record<string, string>; packages: string[] };
@@ -25,7 +35,15 @@ export type Profile = {
   /** 読み込むだけで、依存には加えない */
   optionalPackages: string[];
   files: ProfileFile[];
+  /** 回答に合うときだけ出すファイル（書いてなければ []） */
+  filesWhen: ProfileFilesWhen[];
   packageJson: Record<string, unknown>;
+  /** 回答に合うときだけ足す package.json の項目（書いてなければ []） */
+  packageJsonWhen: ProfilePackageJsonWhen[];
+  /** wrangler.jsonc に足す設定（書いてなければ {}）。値の {{名前}} はまとめた後に差し込む */
+  wrangler: Record<string, unknown>;
+  /** 回答に合うときだけ足す wrangler の設定（書いてなければ []） */
+  wranglerWhen: ProfileWranglerWhen[];
   /** CLI が最新の安定版を調べるパッケージ（書いてなければ []） */
   packages: string[];
   /** 回答に合うときだけ足すパッケージ（書いてなければ []） */
@@ -68,7 +86,11 @@ const KNOWN_FIELDS = new Set([
   "includes",
   "skill_name",
   "files",
+  "files_when",
   "package_json",
+  "package_json_when",
+  "wrangler",
+  "wrangler_when",
   "optional_packages",
 ]);
 
@@ -226,6 +248,71 @@ function checkVersions(p: {
   }
 }
 
+/** files の「元: 出力先」を読む。元のファイルの存在・パスの形・出力先の重なりを確かめる */
+function readFileMap(
+  raw: Record<string, unknown>,
+  at: string,
+  profileKey: string,
+  dir: string,
+): ProfileFile[] {
+  const files: ProfileFile[] = [];
+  const seen = new Set<string>();
+  for (const [source, destination] of Object.entries(raw)) {
+    if (typeof destination !== "string") {
+      throw new GenerateError(`${at}：files の ${source} の出力先は文字列で書いてください`);
+    }
+    checkRelativePath(source, at, "files の元のファイル");
+    checkRelativePath(destination, at, "files の出力先");
+    if (!isFile(path.join(dir, ...source.split("/")))) {
+      throw new GenerateError(
+        `${at}：files の元のファイル profiles/${profileKey}/${source} がありません`,
+      );
+    }
+    if (seen.has(destination)) {
+      throw new GenerateError(`${at}：files の出力先 ${destination} が重なっています`);
+    }
+    seen.add(destination);
+    files.push({ source, destination });
+  }
+  return files;
+}
+
+/** 「- when: ...」と、もう1つの項目（files・wrangler・package_json）の並びを読む共通の部分 */
+function whenItems(
+  data: Record<string, unknown>,
+  field: string,
+  inner: string,
+  where: string,
+): { when: When; value: unknown; at: string }[] {
+  const raw = data[field];
+  if (raw === undefined) return [];
+  const shape = `${field} は「- when: {answer: 質問の id, equals: 回答}、${inner}: ...」の並びで書いてください`;
+  if (!Array.isArray(raw)) throw new GenerateError(`${where}：${shape}`);
+  return raw.map((item, index) => {
+    const at = `${where}：${field} の ${index + 1} 番目`;
+    if (!isPlainObject(item)) throw new GenerateError(`${at}が連想配列ではありません。${shape}`);
+    for (const key of Object.keys(item)) {
+      if (key !== "when" && key !== inner) {
+        throw new GenerateError(`${at}：知らない項目 ${key} があります（書き間違いの可能性）`);
+      }
+    }
+    if (item["when"] === undefined) {
+      throw new GenerateError(`${at}：項目 when（${field} の条件）を書いてください`);
+    }
+    if (item[inner] === undefined) {
+      throw new GenerateError(`${at}：項目 ${inner} を書いてください`);
+    }
+    return { when: parseWhen(item["when"], at), value: item[inner], at };
+  });
+}
+
+function objectOf(value: unknown, at: string, field: string): Record<string, unknown> {
+  if (!isPlainObject(value)) {
+    throw new GenerateError(`${at}：項目 ${field} は「項目: 値」の形で書いてください`);
+  }
+  return structuredClone(value);
+}
+
 /** profile.yaml を読んで検証する。key は "<分類>/<id>"。 */
 export function loadProfile(templatesDir: string, key: string): Profile {
   const keyMatch = KEY_RE.exec(key);
@@ -336,7 +423,7 @@ export function loadProfile(templatesDir: string, key: string): Profile {
     throw new GenerateError(`profiles/${key}/SKILL.md がありません`);
   }
 
-  const files: ProfileFile[] = [];
+  let files: ProfileFile[] = [];
   const rawFiles = data["files"];
   if (rawFiles !== undefined) {
     if (!isPlainObject(rawFiles)) {
@@ -344,34 +431,36 @@ export function loadProfile(templatesDir: string, key: string): Profile {
         `${where}：項目 files は「元のファイル: 出力先」の形で書いてください`,
       );
     }
-    const seen = new Set<string>();
-    for (const [source, destination] of Object.entries(rawFiles)) {
-      if (typeof destination !== "string") {
-        throw new GenerateError(`${where}：files の ${source} の出力先は文字列で書いてください`);
-      }
-      checkRelativePath(source, where, "files の元のファイル");
-      checkRelativePath(destination, where, "files の出力先");
-      if (!isFile(path.join(dir, ...source.split("/")))) {
-        throw new GenerateError(
-          `${where}：files の元のファイル profiles/${key}/${source} がありません`,
-        );
-      }
-      if (seen.has(destination)) {
-        throw new GenerateError(`${where}：files の出力先 ${destination} が重なっています`);
-      }
-      seen.add(destination);
-      files.push({ source, destination });
-    }
+    files = readFileMap(rawFiles, where, key, dir);
   }
+  const filesWhen: ProfileFilesWhen[] = whenItems(data, "files_when", "files", where).map(
+    ({ when, value, at }) => {
+      if (!isPlainObject(value)) {
+        throw new GenerateError(`${at}：項目 files は「元のファイル: 出力先」の形で書いてください`);
+      }
+      return { when, files: readFileMap(value, at, key, dir) };
+    },
+  );
 
   let packageJson: Record<string, unknown> = {};
-  const rawPackageJson = data["package_json"];
-  if (rawPackageJson !== undefined) {
-    if (!isPlainObject(rawPackageJson)) {
-      throw new GenerateError(`${where}：項目 package_json は「項目: 値」の形で書いてください`);
-    }
-    packageJson = structuredClone(rawPackageJson);
+  if (data["package_json"] !== undefined) {
+    packageJson = objectOf(data["package_json"], where, "package_json");
   }
+  const packageJsonWhen: ProfilePackageJsonWhen[] = whenItems(
+    data,
+    "package_json_when",
+    "package_json",
+    where,
+  ).map(({ when, value, at }) => ({ when, packageJson: objectOf(value, at, "package_json") }));
+
+  let wrangler: Record<string, unknown> = {};
+  if (data["wrangler"] !== undefined) wrangler = objectOf(data["wrangler"], where, "wrangler");
+  const wranglerWhen: ProfileWranglerWhen[] = whenItems(
+    data,
+    "wrangler_when",
+    "wrangler",
+    where,
+  ).map(({ when, value, at }) => ({ when, wrangler: objectOf(value, at, "wrangler") }));
 
   return {
     key,
@@ -385,7 +474,11 @@ export function loadProfile(templatesDir: string, key: string): Profile {
     includes,
     optionalPackages,
     files,
+    filesWhen,
     packageJson,
+    packageJsonWhen,
+    wrangler,
+    wranglerWhen,
     packages,
     packagesWhen,
     devPackages,
@@ -449,11 +542,12 @@ function mergeInto(
   target: Record<string, unknown>,
   source: Record<string, unknown>,
   location: string,
+  label: string,
 ): void {
   for (const [field, value] of Object.entries(source)) {
     const here = location === "" ? field : `${location}.${field}`;
     if (field === "__proto__") {
-      throw new GenerateError(`package_json の ${here} は使えない名前です`);
+      throw new GenerateError(`${label} の ${here} は使えない名前です`);
     }
     if (!Object.hasOwn(target, field)) {
       target[field] = structuredClone(value);
@@ -461,18 +555,48 @@ function mergeInto(
     }
     const existing = target[field];
     if (isPlainObject(existing) && isPlainObject(value)) {
-      mergeInto(existing, value, here);
+      mergeInto(existing, value, here, label);
     } else if (JSON.stringify(existing) !== JSON.stringify(value)) {
       throw new GenerateError(
-        `package_json の ${here} が、プロファイル同士で食い違っています（${JSON.stringify(existing)} と ${JSON.stringify(value)}）`,
+        `${label} の ${here} が、プロファイル同士で食い違っています（${JSON.stringify(existing)} と ${JSON.stringify(value)}）`,
       );
     }
   }
 }
 
-/** package_json を深くまとめる。同じ項目に違う値があればエラー。渡した値は書き換えない。 */
-export function mergePackageJson(profiles: Profile[]): Record<string, unknown> {
+/** package_json を深くまとめる。回答に合う package_json_when も足す。同じ項目に違う値があればエラー。渡した値は書き換えない。 */
+export function mergePackageJson(
+  profiles: Profile[],
+  answers: object = {},
+): Record<string, unknown> {
   const merged: Record<string, unknown> = {};
-  for (const profile of profiles) mergeInto(merged, profile.packageJson, "");
+  for (const profile of profiles) {
+    mergeInto(merged, profile.packageJson, "", "package_json");
+    for (const entry of profile.packageJsonWhen) {
+      if (whenMatches(entry.when, answers)) {
+        mergeInto(merged, entry.packageJson, "", "package_json");
+      }
+    }
+  }
   return merged;
+}
+
+/** wrangler の設定を深くまとめる。回答に合う wrangler_when も足す。同じ項目に違う値があればエラー。渡した値は書き換えない。 */
+export function mergeWrangler(profiles: Profile[], answers: object): Record<string, unknown> {
+  const merged: Record<string, unknown> = {};
+  for (const profile of profiles) {
+    mergeInto(merged, profile.wrangler, "", "wrangler");
+    for (const entry of profile.wranglerWhen) {
+      if (whenMatches(entry.when, answers)) mergeInto(merged, entry.wrangler, "", "wrangler");
+    }
+  }
+  return merged;
+}
+
+/** 無条件の files の後ろに、回答に合う files_when を書いた順に並べる */
+export function selectProfileFiles(profile: Profile, answers: object): ProfileFile[] {
+  return [
+    ...profile.files,
+    ...profile.filesWhen.filter((w) => whenMatches(w.when, answers)).flatMap((w) => w.files),
+  ];
 }

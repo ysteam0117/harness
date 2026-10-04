@@ -1,0 +1,22 @@
+# 依存・ビルドの結果
+node_modules
+dist
+
+# wrangler の手元の状態（ローカルの D1・R2 のデータ）と、wrangler types が作る型
+.wrangler
+worker-configuration.d.ts
+
+# 秘密情報の実際の値は Git に入れない（C-05）。項目の一覧は .env.example に書く
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+
+# テスト・品質チェックの結果
+coverage
+playwright-report
+test-results
+reports
+.stryker-tmp
+.eslintcache
