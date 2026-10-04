@@ -23,15 +23,19 @@
 //        // fn の失敗を、どの通り（caseId）・どの段階（stage）で失敗したかを示した SmokeError（cause に元の誤り）にして投げる
 //   export function assertLocalDatabaseUrl(url: string): void;
 //        // 接続先が手元（localhost・127.0.0.1・[::1]）でなければ、日本語の Error（接続先のホスト名を示す。パスワードは示さない）
-import { spawn } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import net from "node:net";
+import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import * as smokeGenerated from "../../scripts/smoke-generated.js";
 import { evaluateRules, loadRules } from "../../src/checks/rules.js";
 import { parseAnswersYaml } from "../../src/questions/answers.js";
 import { questionDefinitions } from "../../src/questions/definitions.js";
 import { runQuestions } from "../../src/questions/flow.js";
 import { FakePrompter } from "../questions/helpers.js";
+import { contentOf, generated, parseEnvExample, type Combo } from "../generate/skeleton-helpers.js";
 import {
   SMOKE_CASES,
   SmokeError,
@@ -45,6 +49,33 @@ import {
 
 const servers: http.Server[] = [];
 const children: { pid?: number; kill: () => boolean }[] = [];
+const envFolders: string[] = [];
+const activeServerFolders = new Set<string>();
+
+function envFolder(): string {
+  // 生成された local-env.ts が repo の TypeScript 依存を解決できる場所に作る。
+  const dir = mkdtempSync(path.join(path.resolve("test"), ".harness-smoke-env51-"));
+  envFolders.push(dir);
+  return dir;
+}
+
+function writeSmokeEnv(
+  dir: string,
+  environment: "development" | "test",
+  values: Record<string, string>,
+): void {
+  const writer = (
+    smokeGenerated as typeof smokeGenerated & {
+      writeEnvFile?: (
+        root: string,
+        selected: "development" | "test",
+        overrides: Record<string, string>,
+      ) => void;
+    }
+  ).writeEnvFile;
+  expect(writer, "smoke の共通 writeEnvFile を export してください").toBeTypeOf("function");
+  writer?.(dir, environment, values);
+}
 
 afterEach(async () => {
   for (const s of servers.splice(0)) await new Promise((r) => s.close(r));
@@ -54,6 +85,13 @@ afterEach(async () => {
     } catch {
       /* 既に終わっている */
     }
+  }
+  const temporaryRoot = path.resolve("test");
+  for (const dir of envFolders.splice(0)) {
+    if (activeServerFolders.has(dir)) continue;
+    if (!path.resolve(dir).startsWith(`${temporaryRoot}${path.sep}`))
+      throw new Error("テスト用一時フォルダの外は削除しません");
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 
@@ -65,6 +103,220 @@ function alive(pid: number): boolean {
     return false;
   }
 }
+
+describe("#51 AC-3: smoke の .env.development/.env.test は認証欄を必要なときだけ補完する", () => {
+  const combos: Combo[] = [
+    { auth: "oidc", database: "d1", upload: false, label: "smoke-env-d1" },
+    { auth: "app", database: "postgresql", upload: false, label: "smoke-env-postgresql" },
+    { auth: "none", database: "none", upload: false, label: "smoke-env-none" },
+  ];
+
+  it.each(combos)(
+    "#51 AC-3: $database の生成例から test 環境を作り、env:check を通す",
+    async (combo) => {
+      const files = await generated(combo);
+      const dir = envFolder();
+      for (const name of [".env.example", "wrangler.jsonc"])
+        writeFileSync(path.join(dir, name), contentOf(files, name));
+      const scriptsDir = path.join(dir, "scripts");
+      mkdirSync(scriptsDir);
+      for (const name of ["env-check.mjs", "local-env.ts"])
+        writeFileSync(path.join(scriptsDir, name), contentOf(files, `scripts/${name}`));
+      const example = parseEnvExample(contentOf(files, ".env.example"));
+      const values: Record<string, string> = {
+        APP_ENV: "test",
+        ALLOWED_ORIGINS: "http://localhost:5173",
+      };
+      for (const name of Object.keys(example)) {
+        if (
+          name in values ||
+          ["SESSION_SECRET", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET"].includes(name)
+        )
+          continue;
+        values[name] =
+          name === "POSTGRES_PORT"
+            ? "5432"
+            : name === "POSTGRES_DB"
+              ? "app_test"
+              : name === "POSTGRES_USER"
+                ? "testuser_001"
+                : name === "POSTGRES_PASSWORD"
+                  ? "dummy_private_51"
+                  : name === "DATABASE_URL" ||
+                      name === "CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE"
+                    ? "postgresql://testuser_001:dummy_private_51@localhost:5432/app_test"
+                    : "dummy_example_51";
+      }
+      writeSmokeEnv(dir, "test", values);
+      const written = parseEnvExample(readFileSync(path.join(dir, ".env.test"), "utf8"));
+      for (const name of ["SESSION_SECRET", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET"]) {
+        if (name in example) expect(written[name], name).toBeTruthy();
+        else expect(written, name).not.toHaveProperty(name);
+      }
+      const result = spawnSync(process.execPath, [path.join(scriptsDir, "env-check.mjs"), "test"], {
+        cwd: dir,
+        encoding: "utf8",
+        windowsHide: true,
+      });
+      expect(result.status, result.stdout + result.stderr).toBe(0);
+    },
+  );
+
+  it("#51 AC-3: 明示値と例の非空値を保持し、Docker相当の再書込でも補完を維持する", () => {
+    const dir = envFolder();
+    writeFileSync(
+      path.join(dir, ".env.example"),
+      "APP_ENV=\nSESSION_SECRET=\nOIDC_CLIENT_ID=client-in-example\nOIDC_CLIENT_SECRET=\n",
+    );
+    writeSmokeEnv(dir, "development", {
+      APP_ENV: "development",
+      SESSION_SECRET: "explicit_dummy_51",
+    });
+    let written = parseEnvExample(readFileSync(path.join(dir, ".env.development"), "utf8"));
+    expect(written.SESSION_SECRET).toBe("explicit_dummy_51");
+    expect(written.OIDC_CLIENT_ID).toBe("client-in-example");
+    expect(written.OIDC_CLIENT_SECRET).toBeTruthy();
+    writeSmokeEnv(dir, "development", {
+      APP_ENV: "development",
+      SESSION_SECRET: "explicit_dummy_51",
+      APP_PORT: "5174",
+    });
+    written = parseEnvExample(readFileSync(path.join(dir, ".env.development"), "utf8"));
+    expect(written).toMatchObject({
+      APP_ENV: "development",
+      SESSION_SECRET: "explicit_dummy_51",
+      OIDC_CLIENT_ID: "client-in-example",
+      APP_PORT: "5174",
+    });
+    expect(written.OIDC_CLIENT_SECRET).toBeTruthy();
+  });
+
+  it("#51 AC-3: 開発とテストは別の架空の認証値を使う", () => {
+    const dir = envFolder();
+    writeFileSync(
+      path.join(dir, ".env.example"),
+      "APP_ENV=\nSESSION_SECRET=\nOIDC_CLIENT_ID=\nOIDC_CLIENT_SECRET=\n",
+    );
+    writeSmokeEnv(dir, "development", { APP_ENV: "development" });
+    writeSmokeEnv(dir, "test", { APP_ENV: "test" });
+    const dev = parseEnvExample(readFileSync(path.join(dir, ".env.development"), "utf8"));
+    const test = parseEnvExample(readFileSync(path.join(dir, ".env.test"), "utf8"));
+    expect(dev.APP_ENV).toBe("development");
+    expect(test.APP_ENV).toBe("test");
+    for (const name of ["SESSION_SECRET", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET"]) {
+      expect(dev[name], name).toBeTruthy();
+      expect(test[name], name).toBeTruthy();
+      expect(dev[name], name).not.toBe(test[name]);
+    }
+  });
+
+  it("#51 AC-3: 認証以外の不足を無条件に埋めず、env:check は不足名で失敗する", () => {
+    const dir = envFolder();
+    writeFileSync(path.join(dir, ".env.example"), "APP_ENV=\nSESSION_SECRET=\nEXTRA_REQUIRED=\n");
+    writeSmokeEnv(dir, "test", { APP_ENV: "test" });
+    const written = parseEnvExample(readFileSync(path.join(dir, ".env.test"), "utf8"));
+    expect(written.SESSION_SECRET).toBeTruthy();
+    expect(written.EXTRA_REQUIRED).toBe("");
+    const result = spawnSync(
+      process.execPath,
+      [path.resolve("templates/scripts/env-check.mjs"), "test"],
+      {
+        cwd: dir,
+        encoding: "utf8",
+        windowsHide: true,
+      },
+    );
+    expect(result.status).toBe(1);
+    expect(result.stdout + result.stderr).toContain("EXTRA_REQUIRED");
+  });
+});
+
+describe("#51 AC-2: smoke の開発サーバーは確保したIPv4アドレスで起動・確認する", () => {
+  it.each(["development", "test"] as const)(
+    "%s の起動引数とprobe URLを127.0.0.1へ揃える",
+    async (environment) => {
+      const dir = envFolder();
+      activeServerFolders.add(dir);
+      let server: { child: ChildProcess; port: number; url: string } | undefined;
+      try {
+        writeFileSync(
+          path.join(dir, "package.json"),
+          JSON.stringify({
+            name: "smoke-test-server",
+            version: "1.0.0",
+            scripts: { dev: "node fake-server.cjs", "dev:test": "node fake-server.cjs" },
+          }),
+        );
+        writeFileSync(
+          path.join(dir, "fake-server.cjs"),
+          `const http = require("node:http");
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+fs.writeFileSync("server-args.json", JSON.stringify(args));
+const port = Number(args[args.indexOf("--port") + 1]);
+const host = args[args.indexOf("--host") + 1];
+const server = http.createServer((_request, response) => {
+  response.statusCode = 200;
+  response.end("ok");
+  response.on("finish", () => server.close());
+});
+server.listen(port, host);`,
+        );
+        const starter = (
+          smokeGenerated as typeof smokeGenerated & {
+            startDevServer?: (
+              root: string,
+              port: number,
+              registry: { trackProcess(child: ChildProcess): void },
+              selected: "development" | "test",
+            ) => {
+              child: ChildProcess;
+              port: number;
+              url: string;
+            };
+          }
+        ).startDevServer;
+        expect(starter, "startDevServer をテストできるよう export してください").toBeTypeOf(
+          "function",
+        );
+        const port = await pickFreePort();
+        server = starter?.(
+          dir,
+          port,
+          {
+            trackProcess(child) {
+              children.push(child);
+            },
+          },
+          environment,
+        );
+        expect(server?.url).toBe(`http://127.0.0.1:${port}`);
+        if (server)
+          await waitForOk(`${server.url}/api/health`, { timeoutMs: 5000, intervalMs: 50 });
+        const args = JSON.parse(
+          readFileSync(path.join(dir, "server-args.json"), "utf8"),
+        ) as string[];
+        expect(args).toContain("--strictPort");
+        expect(args.slice(args.indexOf("--port"), args.indexOf("--port") + 2)).toEqual([
+          "--port",
+          String(port),
+        ]);
+        expect(args.slice(args.indexOf("--host"), args.indexOf("--host") + 2)).toEqual([
+          "--host",
+          "127.0.0.1",
+        ]);
+      } finally {
+        if (server) {
+          await stopProcess(server.child);
+          const index = children.indexOf(server.child);
+          if (index >= 0) children.splice(index, 1);
+        }
+        activeServerFolders.delete(dir);
+      }
+    },
+    25_000,
+  );
+});
 
 describe("#56 AC-1: 回答の YAML の生成（架空の値）", () => {
   it("#56 AC-1: 3 通り（D1・PostgreSQL・DB なし）で、アップロードあり・認証ありを1つは含む", () => {

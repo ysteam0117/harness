@@ -7,11 +7,19 @@
     "jsx": "react-jsx",
     "strict": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
     "types": ["vite/client", "node", "@cloudflare/vitest-pool-workers/types"]
   },
   // worker-configuration.d.ts は、wrangler types（npm run types）が wrangler.jsonc から作る型（Env・実行環境の型）
-  "include": ["worker-configuration.d.ts", "backend", "frontend", "e2e", "*.ts"]
+  "include": [
+    "worker-configuration.d.ts",
+    "backend",
+    "frontend",
+    "e2e",
+    "scripts",
+    "*.ts"
+  ]
 }

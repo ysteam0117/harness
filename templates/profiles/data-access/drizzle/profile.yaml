@@ -78,16 +78,24 @@ package_json_when:
   - when: { answer: database, equals: d1 }
     package_json:
       scripts:
-        db:generate: "drizzle-kit generate"
-        db:migrate:local: "wrangler d1 migrations apply DB --local"
-        db:seed:local: "wrangler d1 execute DB --local --file backend/db/seeds/seed.sql"
-        db:reset:local: "node -e \"require('node:fs').rmSync('.wrangler/state/v3/d1',{recursive:true,force:true})\" && npm run db:migrate:local && npm run db:seed:local"
-        db:cleanup: "wrangler d1 execute DB --local --file backend/db/seeds/cleanup.sql"
+        db:generate: "node scripts/db-local.ts development generate"
+        db:migrate:local: "node scripts/db-local.ts development migrate"
+        db:seed:local: "node scripts/db-local.ts development seed"
+        db:reset:local: "node scripts/db-local.ts development reset"
+        db:cleanup: "node scripts/db-local.ts development cleanup"
+        db:migrate:test: "node scripts/db-local.ts test migrate"
+        db:seed:test: "node scripts/db-local.ts test seed"
+        db:reset:test: "node scripts/db-local.ts test reset"
+        db:cleanup:test: "node scripts/db-local.ts test cleanup"
   - when: { answer: database, equals: postgresql }
     package_json:
       scripts:
-        db:generate: "drizzle-kit generate"
-        db:migrate: "drizzle-kit migrate"
-        db:seed:local: "docker compose exec -T db psql -v ON_ERROR_STOP=1 < backend/db/seeds/seed.sql"
-        db:reset:local: "docker compose exec -T db psql -v ON_ERROR_STOP=1 -c \"DROP SCHEMA IF EXISTS public CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE; CREATE SCHEMA public;\" && npm run db:migrate && npm run db:seed:local"
-        db:cleanup: "docker compose exec -T db psql -v ON_ERROR_STOP=1 < backend/db/seeds/cleanup.sql"
+        db:generate: "node scripts/db-local.ts development generate"
+        db:migrate: "node scripts/db-local.ts development migrate"
+        db:seed:local: "node scripts/db-local.ts development seed"
+        db:reset:local: "node scripts/db-local.ts development reset"
+        db:cleanup: "node scripts/db-local.ts development cleanup"
+        db:migrate:test: "node scripts/db-local.ts test migrate"
+        db:seed:test: "node scripts/db-local.ts test seed"
+        db:reset:test: "node scripts/db-local.ts test reset"
+        db:cleanup:test: "node scripts/db-local.ts test cleanup"

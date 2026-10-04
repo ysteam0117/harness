@@ -50,7 +50,7 @@
 - name: POSTGRES_DB
   purpose: 手元の PostgreSQL のコンテナのデータベース名（docker-compose.yml が読む）
   development: 開発用のデータベース名
-  test: 検証用のデータベース名（開発とは別にする）
+  test: 末尾が _test の検証専用データベース名（開発とは別にする）
   production: 使わない
   example: app_dev
   when: { answer: database, equals: postgresql }
@@ -73,7 +73,7 @@
 
 - name: CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE
   purpose: 手元の開発サーバー（workerd）が、Hyperdrive の代わりにつなぐ PostgreSQL の接続先（Cloudflare が決めた名前。wrangler.jsonc には書かない）
-  development: 手元のDBの接続先（localhost）。Docker の中では docker-compose.yml が db のサービス名に上書きする
+  development: 手元のDBの接続先（localhost）。Docker の中では起動用スクリプトが db のサービス名に置き換える
   test: 開発とは別の、手元の検証用DBの接続先
   production: 使わない（本番は Hyperdrive の設定に従う）
   example: "<postgresql://ユーザー名:パスワード@localhost:5432/データベース名>"

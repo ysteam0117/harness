@@ -27,7 +27,8 @@ compatibility_notes:
   - "npm audit の合否は本番の依存（--omit=dev）で判定する。開発用の道具の脆弱性は記録して更新の判断に使う"
 package_json:
   scripts:
-    check: "npm run lint && npm run typecheck && npm run format:check && npm run deps:check && npm run dup:check && npm test && npm run audit:prod"
+    check: "npm run test:safety && npm run lint && npm run typecheck && npm run format:check && npm run deps:check && npm run dup:check && npm test && npm run audit:prod"
+    test:safety: node scripts/test-safety.mjs
     lint: "eslint ."
     typecheck: "tsc -p ."
     pretypecheck: "npm run types"

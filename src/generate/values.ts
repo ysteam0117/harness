@@ -232,8 +232,8 @@ export function buildValues(input: BuildValuesInput): Record<string, string> {
  */
 export function buildEnvExample(answers: object): string {
   const lines = [
-    "# 環境変数の項目の一覧（C-05）。このファイルを .env にコピーして、値を入れる。",
-    "# .env は Git に入れない。実際の値は、チャットにも書かない。項目の説明は docs/secrets.md にある。",
+    "# 環境変数の項目の一覧（C-05）。開発は .env.development、検証は .env.test にコピーして値を入れる。",
+    "# 実際の値が入ったファイルは Git に入れない。チャットにも書かない。項目の説明は docs/secrets.md にある。",
     "# 足りない項目は、npm run env:check で確かめられる。",
     "",
   ];

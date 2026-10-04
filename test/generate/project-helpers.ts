@@ -132,7 +132,14 @@ export function expectedManaged(p: string): boolean {
     p === ".claude/settings.json" ||
     p === ".codex/rules/default.rules" ||
     p.startsWith(".github/ISSUE_TEMPLATE/") ||
-    p === "scripts/env-check.mjs" ||
+    [
+      "scripts/env-check.mjs",
+      "scripts/local-env.ts",
+      "scripts/run-local.ts",
+      "scripts/test-safety.mjs",
+      "scripts/db-local.ts",
+      "scripts/compose-local.ts",
+    ].includes(p) ||
     p === "docs/secrets.md"
   );
 }

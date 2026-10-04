@@ -49,6 +49,7 @@ function run(command: string, args: string[], cwd: string): string {
     cwd,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "inherit"],
+    windowsHide: true,
   });
 }
 

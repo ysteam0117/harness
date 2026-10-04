@@ -54,6 +54,8 @@ const combos = validCombos();
 const hasDb = (c: Combo) => c.database !== "none";
 const withAuth = (c: Combo) => c.auth !== "none";
 const withOidc = (c: Combo) => c.auth === "oidc" || c.auth === "both";
+const containerName = (role: "backend" | "db") =>
+  `${APP_NAME}-${"${APP_ENV:-development}"}-${role}`;
 
 const COMMON_FILES = [
   "tsconfig.json",
@@ -200,9 +202,9 @@ describe.each(combos)("#56 AC-3: 生成の結果（$label）", (c) => {
     expect(compose.name).toBe(APP_NAME);
     const names = Object.values(compose.services).map((s) => s.container_name);
     if (c.database === "postgresql") {
-      expect(names.sort()).toEqual([`${APP_NAME}-backend`, `${APP_NAME}-db`]);
+      expect(names.sort()).toEqual([containerName("backend"), containerName("db")]);
     } else {
-      expect(names).toEqual([`${APP_NAME}-backend`]);
+      expect(names).toEqual([containerName("backend")]);
     }
   });
 
@@ -293,7 +295,7 @@ describe.each(combos)("#56 AC-3: 生成の結果（$label）", (c) => {
       expect(s[name], name).toBeTypeOf("string");
     }
     expect(s["types"]).toContain("wrangler types");
-    expect(s["test"]).toBe("vitest run");
+    expect(s["test"]).toMatch(/scripts\/run-local\.ts test vitest run/);
     for (const name of ["predev", "pretest", "pretypecheck"]) {
       expect(s[name], name).toContain("npm run types");
     }
@@ -305,13 +307,12 @@ describe.each(combos)("#56 AC-3: 生成の結果（$label）", (c) => {
     for (const name of ["db:generate", "db:seed:local", "db:reset:local", "db:cleanup"]) {
       expect(s[name], name).toBeTypeOf("string");
     }
-    expect(s["db:generate"]).toContain("drizzle-kit generate");
+    expect(s["db:generate"]).toMatch(/scripts\/db-local\.ts development generate/);
     if (c.database === "d1") {
-      expect(s["db:migrate:local"]).toContain("wrangler d1 migrations apply");
-      expect(s["db:migrate:local"]).toContain("--local");
+      expect(s["db:migrate:local"]).toMatch(/scripts\/db-local\.ts development migrate/);
       expect(s).not.toHaveProperty("db:migrate");
     } else {
-      expect(s["db:migrate"]).toContain("drizzle-kit migrate");
+      expect(s["db:migrate"]).toMatch(/scripts\/db-local\.ts development migrate/);
       expect(s).not.toHaveProperty("db:migrate:local");
     }
   });
@@ -416,7 +417,7 @@ describe("#56 AC-3: docker-compose.yml の中身（C-36・R5）", () => {
     const node = contentOf(files, ".node-version").trim();
     const compose = parseCompose(contentOf(files, "docker-compose.yml"));
     const backend = Object.values(compose.services).find(
-      (s) => s.container_name === `${APP_NAME}-backend`,
+      (s) => s.container_name === containerName("backend"),
     );
     expect(backend?.image).toMatch(/^node:/);
     expect(backend?.image).toContain(node);
@@ -429,7 +430,7 @@ describe("#56 AC-3: docker-compose.yml の中身（C-36・R5）", () => {
   it("#56 R5: node_modules はコンテナの中のボリューム、.wrangler/state はボリュームで保つ", async () => {
     const compose = parseCompose(contentOf(await generated(d1 as Combo), "docker-compose.yml"));
     const backend = Object.values(compose.services).find(
-      (s) => s.container_name === `${APP_NAME}-backend`,
+      (s) => s.container_name === containerName("backend"),
     );
     const volumes = (backend?.volumes ?? []).map(String);
     expect(volumes.some((v) => v.includes("node_modules"))).toBe(true);
@@ -444,8 +445,8 @@ describe("#56 AC-3: docker-compose.yml の中身（C-36・R5）", () => {
   it("#56 R5: PostgreSQL のとき、db のイメージは版を固定し、ヘルスチェックを持ち、backend は db が健全になるのを待つ", async () => {
     const compose = parseCompose(contentOf(await generated(pg as Combo), "docker-compose.yml"));
     const entries = Object.entries(compose.services);
-    const db = entries.find(([, s]) => s.container_name === `${APP_NAME}-db`);
-    const backend = entries.find(([, s]) => s.container_name === `${APP_NAME}-backend`);
+    const db = entries.find(([, s]) => s.container_name === containerName("db"));
+    const backend = entries.find(([, s]) => s.container_name === containerName("backend"));
     expect(db?.[1].image).toMatch(/^postgres:\d/);
     expect(db?.[1].image).not.toMatch(/latest/);
     expect(db?.[1].healthcheck).toBeTruthy();
@@ -453,16 +454,18 @@ describe("#56 AC-3: docker-compose.yml の中身（C-36・R5）", () => {
     expect(depends[db?.[0] as string]?.condition).toBe("service_healthy");
   });
 
-  it("#56 R2: PostgreSQL のとき、Docker の中の backend は、db のサービスへの接続先で上書きする（localhost のままにしない）", async () => {
+  it("#51 AC-2: PostgreSQL の Docker backend は選択した環境を受け取り、接続先は検証済み設定から決める", async () => {
     const compose = parseCompose(contentOf(await generated(pg as Combo), "docker-compose.yml"));
     const entries = Object.entries(compose.services);
-    const dbKey = entries.find(([, s]) => s.container_name === `${APP_NAME}-db`)?.[0] as string;
-    const backend = entries.find(([, s]) => s.container_name === `${APP_NAME}-backend`)?.[1];
+    const backend = entries.find(([, s]) => s.container_name === containerName("backend"))?.[1];
     const env = backend?.environment;
     const text = Array.isArray(env) ? env.join("\n") : JSON.stringify(env ?? {});
-    expect(text).toContain("CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE");
-    expect(text).toContain(`@${dbKey}`);
-    expect(text).not.toMatch(/localhost|127\.0\.0\.1/);
+    expect(text).toContain("APP_ENV");
+    expect(text).not.toContain("DATABASE_URL");
+    expect(text).not.toContain("CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE");
+    expect(contentOf(await generated(pg as Combo), "scripts/local-env.ts")).toMatch(
+      /hostname\s*=.*["']db["']/,
+    );
   });
 
   for (const c of combos) {
@@ -527,13 +530,17 @@ describe("#56 AC-3: .env.example は実在しうる値を書かない（C-05・�
 describe("#56 AC-1・AC-2: README の最初の手順と、動かすための設定", () => {
   const c = combos.find((x) => x.database === "d1" && x.auth === "oidc" && !x.upload) as Combo;
 
-  it("#56 AC-1: README に、最初の手順（npm install・.env の用意・npm run dev・docker compose up・npm run check）がある", async () => {
+  it("#56 AC-1・#51 AC-2: README に、開発・テストの環境ファイルと Docker wrapper を使う手順がある", async () => {
     const text = contentOf(await generated(c), "README.md");
     for (const word of [
       "npm install",
-      ".env",
+      ".env.example",
+      ".env.development",
+      "APP_ENV=development",
+      ".env.test",
       "npm run dev",
-      "docker compose up",
+      "npm run docker:up:local",
+      "npm run docker:up:test",
       "npm run check",
     ]) {
       expect(text, word).toContain(word);

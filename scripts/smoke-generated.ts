@@ -12,7 +12,7 @@
 //   SMOKE_CASES=d1,none     実行する通りを絞る（既定はすべて）
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -395,10 +395,26 @@ export type CleanupRegistry = {
 const SNAPSHOT_INTERVAL_MS = 300;
 
 async function defaultComposeDown(projectDir: string): Promise<void> {
-  await runCommand("docker", ["compose", "down", "-v", "--remove-orphans"], {
+  await runCommand("docker", [...composeArgs(projectDir), "down", "-v", "--remove-orphans"], {
     cwd: projectDir,
     timeoutMs: 180_000,
   });
+}
+
+function composeArgs(
+  projectDir: string,
+  environment: "development" | "test" = "development",
+): string[] {
+  const pkg = JSON.parse(readFileSync(path.join(projectDir, "package.json"), "utf8")) as {
+    name: string;
+  };
+  return [
+    "compose",
+    "--env-file",
+    `.env.${environment}`,
+    "-p",
+    environment === "test" ? `${pkg.name}-test` : pkg.name,
+  ];
 }
 
 export function createCleanupRegistry(
@@ -682,8 +698,12 @@ function dockerAvailable(): boolean {
   return r.status === 0;
 }
 
-/** .env.example の項目に、値を重ねて .env を作る（値は、実際のものではなく、この確かめだけのもの） */
-function writeEnvFile(projectDir: string, values: Record<string, string>): void {
+/** .env.example の項目に、値を重ねて環境別の .env を作る（架空の値だけ）。 */
+export function writeEnvFile(
+  projectDir: string,
+  environment: "development" | "test",
+  values: Record<string, string>,
+): void {
   const lines = readFileSync(path.join(projectDir, ".env.example"), "utf8").split("\n");
   const seen = new Set<string>();
   const out = lines.map((line) => {
@@ -691,12 +711,29 @@ function writeEnvFile(projectDir: string, values: Record<string, string>): void 
     if (line.startsWith("#") || eq <= 0) return line;
     const name = line.slice(0, eq);
     seen.add(name);
-    return Object.hasOwn(values, name) ? `${name}=${values[name] as string}` : line;
+    if (Object.hasOwn(values, name)) return `${name}=${values[name] as string}`;
+    if (
+      line.slice(eq + 1) === "" &&
+      ["SESSION_SECRET", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET"].includes(name)
+    ) {
+      return `${name}=dummy_smoke_${environment}_${name.toLowerCase()}`;
+    }
+    return line;
   });
   for (const [name, value] of Object.entries(values)) {
     if (!seen.has(name)) out.push(`${name}=${value}`);
   }
-  writeFileSync(path.join(projectDir, ".env"), `${out.join("\n").trimEnd()}\n`);
+  writeFileSync(path.join(projectDir, `.env.${environment}`), `${out.join("\n").trimEnd()}\n`);
+}
+
+function assertBuildHasNoDummySecret(dir: string): void {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const file = path.join(dir, entry.name);
+    if (entry.isDirectory()) assertBuildHasNoDummySecret(file);
+    else if (entry.isFile() && readFileSync(file).includes("dummy_private_51")) {
+      throw new Error("組み立ての結果に、環境の架空の秘密が混入しました");
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -854,10 +891,25 @@ async function expectSeeded(base: string, database: string, what: string): Promi
 type DevServer = { child: ChildProcess; port: number; url: string; log: () => string };
 
 /** 開発サーバー（npm run dev）を、空いているポートで起動する。止めるのは stopProcess */
-function startDevServer(projectDir: string, port: number, registry: CleanupRegistry): DevServer {
+export function startDevServer(
+  projectDir: string,
+  port: number,
+  registry: CleanupRegistry,
+  environment: "development" | "test" = "development",
+): DevServer {
   const child = spawn(
     process.execPath,
-    [npmCli(), "run", "dev", "--", "--port", String(port), "--strictPort"],
+    [
+      npmCli(),
+      "run",
+      environment === "test" ? "dev:test" : "dev",
+      "--",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(port),
+      "--strictPort",
+    ],
     { cwd: projectDir, stdio: ["ignore", "pipe", "pipe"], windowsHide: true },
   );
   registry.trackProcess(child);
@@ -867,7 +919,7 @@ function startDevServer(projectDir: string, port: number, registry: CleanupRegis
   };
   child.stdout?.on("data", collect);
   child.stderr?.on("data", collect);
-  return { child, port, url: `http://localhost:${String(port)}`, log: () => output };
+  return { child, port, url: `http://127.0.0.1:${String(port)}`, log: () => output };
 }
 
 /** 開発サーバーが 200 を返すまで待つ。起動に失敗して終わったときは、出力を示す */
@@ -892,10 +944,15 @@ async function waitForDevServer(server: DevServer): Promise<void> {
 }
 
 /** 開発サーバーの /api/health・/ を確かめる。DB なしのときは、/api/sample-users が無いことも確かめる */
-async function checkServer(base: string, database: string): Promise<void> {
+async function checkServer(
+  base: string,
+  database: string,
+  environment: "development" | "test" = "development",
+): Promise<void> {
   const health = await getJson(`${base}/api/health`);
   expectEqual(health.status, 200, "/api/health の状態コード");
   expectEqual((health.body as { status?: unknown }).status, "ok", "/api/health の status");
+  expectEqual((health.body as { appEnv?: unknown }).appEnv, environment, "/api/health の APP_ENV");
   const home = await fetch(`${base}/`, { signal: AbortSignal.timeout(15_000) });
   const html = await home.text();
   if (home.status !== 200 || !html.includes('<div id="root">')) {
@@ -911,8 +968,9 @@ async function withDevServer<T>(
   projectDir: string,
   registry: CleanupRegistry,
   fn: (server: DevServer) => Promise<T>,
+  environment: "development" | "test" = "development",
 ): Promise<T> {
-  const server = startDevServer(projectDir, await pickFreePort(), registry);
+  const server = startDevServer(projectDir, await pickFreePort(), registry, environment);
   try {
     await waitForDevServer(server);
     return await fn(server);
@@ -958,6 +1016,64 @@ async function checkDatabaseLifecycle(
   );
 }
 
+/** 検証環境のAPIを動かし、開発環境に書いた記録が残ることを確かめる。 */
+async function checkTestIsolation(
+  c: SmokeCase,
+  projectDir: string,
+  registry: CleanupRegistry,
+): Promise<void> {
+  const npm = makeNpm(registry);
+  if (c.database === "none") {
+    await withDevServer(
+      projectDir,
+      registry,
+      (server) => checkServer(server.url, "none", "test"),
+      "test",
+    );
+    return;
+  }
+  const marker = `testuser_devonly_${randomBytes(4).toString("hex")}`;
+  await withDevServer(projectDir, registry, async (server) => {
+    const posted = await requestJson(`${server.url}/api/sample-users`, {
+      method: "POST",
+      origin: ALLOWED_ORIGIN,
+      body: { username: marker },
+    });
+    expectEqual(posted.status, 201, "開発DBの識別用記録の追加");
+  });
+  if (c.database === "postgresql") {
+    registry.add("検証用 Docker Compose の後始末", () =>
+      runCommand("docker", [...composeArgs(projectDir, "test"), "down", "-v", "--remove-orphans"], {
+        cwd: projectDir,
+        timeoutMs: 180_000,
+      }).then(() => undefined),
+    );
+    await runCommand("docker", [...composeArgs(projectDir, "test"), "up", "-d", "--wait", "db"], {
+      cwd: projectDir,
+      timeoutMs: 300_000,
+      registry,
+    });
+  }
+  await npm(["run", "db:migrate:test"], projectDir);
+  await npm(["run", "db:seed:test"], projectDir);
+  await withDevServer(
+    projectDir,
+    registry,
+    async (server) => {
+      await checkServer(server.url, c.database, "test");
+      await expectSeeded(server.url, c.database, "検証DB");
+      const names = usernamesOf(await getJson(`${server.url}/api/sample-users`), c.database);
+      if (names.includes(marker)) throw new Error("検証DBに開発DBの記録が混入しました");
+    },
+    "test",
+  );
+  await withDevServer(projectDir, registry, async (server) => {
+    await checkServer(server.url, c.database);
+    const names = usernamesOf(await getJson(`${server.url}/api/sample-users`), c.database);
+    if (!names.includes(marker)) throw new Error("検証操作のあと、開発DBの記録が失われました");
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Docker
 // ---------------------------------------------------------------------------
@@ -969,28 +1085,36 @@ async function dockerStage(
   envValues: Record<string, string>,
 ): Promise<void> {
   const docker = (args: string[], timeoutMs: number) =>
-    runCommand("docker", args, { cwd: projectDir, timeoutMs, registry });
+    runCommand("docker", [...composeArgs(projectDir), ...args], {
+      cwd: projectDir,
+      timeoutMs,
+      registry,
+    });
   const npm = makeNpm(registry);
   const appPort = await pickFreePort();
-  writeEnvFile(projectDir, { ...envValues, APP_PORT: String(appPort) });
+  writeEnvFile(projectDir, "development", {
+    ...envValues,
+    APP_ENV: "development",
+    APP_PORT: String(appPort),
+  });
   const base = `http://localhost:${String(appPort)}`;
   await runStage(c.id, "docker compose config", async () => {
-    await docker(["compose", "config", "--quiet"], 120_000);
+    await docker(["config", "--quiet"], 120_000);
   });
   await runStage(c.id, "docker compose up", async () => {
-    await docker(["compose", "up", "-d"], 600_000);
+    await docker(["up", "-d"], 600_000);
     await waitForOk(`${base}/api/health`, { timeoutMs: 300_000, intervalMs: 2000 });
   });
   await runStage(c.id, "Docker：画面（/）と API の応答", async () => {
     await checkServer(base, c.database);
   });
   await runStage(c.id, "Docker：コンテナの中の npm run check", async () => {
-    await docker(["compose", "exec", "-T", "backend", "npm", "run", "check"], 900_000);
+    await docker(["exec", "-T", "backend", "npm", "run", "check"], 900_000);
   });
   if (c.database === "d1") {
     await runStage(c.id, "Docker：D1（コンテナの中のデータ）を API で確かめる", async () => {
       const exec = (script: string) =>
-        docker(["compose", "exec", "-T", "backend", "npm", "run", script], 300_000);
+        docker(["exec", "-T", "backend", "npm", "run", script], 300_000);
       // コンテナの D1 は、手元の D1 とは別のデータ。README の手順と同じ順で用意する
       await exec("db:migrate:local");
       await exec("db:seed:local");
@@ -1004,20 +1128,17 @@ async function dockerStage(
           },
           reset: async () => {
             // 動いているサーバーが開いたままの D1 のファイルを消さないよう、止めてから初期化して、起動し直す
-            await docker(["compose", "stop", "backend"], 180_000);
-            await docker(
-              ["compose", "run", "--rm", "-T", "backend", "npm", "run", "db:reset:local"],
-              300_000,
-            );
-            await docker(["compose", "up", "-d"], 600_000);
+            await docker(["stop", "backend"], 180_000);
+            await docker(["run", "--rm", "-T", "backend", "npm", "run", "db:reset:local"], 300_000);
+            await docker(["up", "-d"], 600_000);
             await waitForOk(`${base}/api/health`, { timeoutMs: 300_000, intervalMs: 2000 });
           },
         }),
       );
       await expectSeeded(base, "d1", "コンテナの D1（初期化の後）");
       // コンテナを作り直しても（down・up）、データ（ボリューム）が残る
-      await docker(["compose", "down"], 180_000);
-      await docker(["compose", "up", "-d"], 600_000);
+      await docker(["down"], 180_000);
+      await docker(["up", "-d"], 600_000);
       await waitForOk(`${base}/api/health`, { timeoutMs: 300_000, intervalMs: 2000 });
       await expectSeeded(base, "d1", "コンテナを作り直した後の D1");
     });
@@ -1076,26 +1197,13 @@ async function runCase(c: SmokeCase, withDocker: boolean, appName: string): Prom
       await runStage(c.id, "npm install", async () => {
         await npm(["install", "--no-audit", "--no-fund"], projectDir);
       });
-      await runStage(c.id, "npm run check", async () => {
-        await npm(["run", "check"], projectDir);
-      });
-      await runStage(c.id, "npm run build", async () => {
-        await npm(["run", "build"], projectDir);
-        if (!existsSync(path.join(projectDir, "dist", "client", "index.html"))) {
-          throw new Error("組み立ての結果（dist/client/index.html）がありません");
-        }
-        // 画面の配信にも、セキュリティヘッダーの設定（_headers）が入る
-        if (!existsSync(path.join(projectDir, "dist", "client", "_headers"))) {
-          throw new Error("組み立ての結果（dist/client/_headers）がありません");
-        }
-      });
-
-      // .env：架空の値だけ（この確かめのためだけに作る。実際の値ではない）
+      // 開発と検証の2つに架空の値を用意し、異なる保存先を使う。
       const envValues: Record<string, string> = {};
+      const testValues: Record<string, string> = {};
       if (c.database === "postgresql") {
         const user = "testuser_smoke";
         const password = randomBytes(12).toString("hex");
-        const database = "testapp_smoke";
+        const database = "testapp_smoke_dev";
         const dbPort = await pickFreePort();
         const url = `postgresql://${user}:${password}@localhost:${String(dbPort)}/${database}`;
         assertLocalDatabaseUrl(url);
@@ -1107,9 +1215,48 @@ async function runCase(c: SmokeCase, withDocker: boolean, appName: string): Prom
           DATABASE_URL: url,
           CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: url,
         });
+        const testDatabase = "testapp_smoke_test";
+        let testDbPort = await pickFreePort();
+        for (let attempt = 0; testDbPort === dbPort && attempt < 10; attempt++) {
+          testDbPort = await pickFreePort();
+        }
+        if (testDbPort === dbPort) {
+          throw new Error("開発用と検証用に異なる PostgreSQL ポートを確保できません");
+        }
+        const testUrl = `postgresql://${user}:${password}@localhost:${String(testDbPort)}/${testDatabase}`;
+        Object.assign(testValues, {
+          POSTGRES_USER: user,
+          POSTGRES_PASSWORD: password,
+          POSTGRES_DB: testDatabase,
+          POSTGRES_PORT: String(testDbPort),
+          DATABASE_URL: testUrl,
+          CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: testUrl,
+        });
       }
-      writeEnvFile(projectDir, envValues);
-      // .env ができた後は、Docker の資源（コンテナ・ボリューム）を作りうるため、片付けに登録する（.env の前は compose の変数が揃わず、down できない）
+      writeEnvFile(projectDir, "development", {
+        ...envValues,
+        APP_ENV: "development",
+        VITE_SECRET: "dummy_private_51",
+      });
+      writeEnvFile(projectDir, "test", {
+        ...testValues,
+        APP_ENV: "test",
+        VITE_SECRET: "dummy_private_51",
+      });
+      await runStage(c.id, "npm run check", async () => {
+        await npm(["run", "check"], projectDir);
+      });
+      await runStage(c.id, "npm run build", async () => {
+        await npm(["run", "build"], projectDir, { VITE_SECRET: "dummy_private_51" });
+        if (!existsSync(path.join(projectDir, "dist", "client", "index.html"))) {
+          throw new Error("組み立ての結果（dist/client/index.html）がありません");
+        }
+        if (!existsSync(path.join(projectDir, "dist", "client", "_headers"))) {
+          throw new Error("組み立ての結果（dist/client/_headers）がありません");
+        }
+        assertBuildHasNoDummySecret(path.join(projectDir, "dist"));
+      });
+      // 環境ファイルの後でのみ Docker の資源を登録する。
       if (withDocker) registry.trackCompose(projectDir);
 
       if (c.id === "d1") {
@@ -1119,7 +1266,7 @@ async function runCase(c: SmokeCase, withDocker: boolean, appName: string): Prom
         });
       } else if (c.id === "postgresql") {
         await runStage(c.id, "PostgreSQL のコンテナの起動", async () => {
-          await runCommand("docker", ["compose", "up", "-d", "--wait", "db"], {
+          await runCommand("docker", [...composeArgs(projectDir), "up", "-d", "--wait", "db"], {
             cwd: projectDir,
             timeoutMs: 300_000,
             registry,
@@ -1136,6 +1283,10 @@ async function runCase(c: SmokeCase, withDocker: boolean, appName: string): Prom
           withDevServer(projectDir, registry, (server) => checkServer(server.url, c.database)),
         );
       }
+
+      await runStage(c.id, "検証サーバーと開発データの隔離", () =>
+        checkTestIsolation(c, projectDir, registry),
+      );
 
       if (withDocker) {
         await dockerStage(c, projectDir, registry, envValues);

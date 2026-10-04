@@ -52,6 +52,11 @@ const TEMPLATE_FILES: { source: string; destination: string; when?: When }[] = [
   { source: "docs/project-rules.md", destination: "docs/project-rules.md" },
   { source: "docs/pentest-plan.md", destination: "docs/testing/pentest-plan.md" },
   { source: "scripts/env-check.mjs", destination: "scripts/env-check.mjs" },
+  { source: "scripts/local-env.ts", destination: "scripts/local-env.ts" },
+  { source: "scripts/run-local.ts", destination: "scripts/run-local.ts" },
+  { source: "scripts/test-safety.mjs", destination: "scripts/test-safety.mjs" },
+  { source: "scripts/db-local.ts", destination: "scripts/db-local.ts" },
+  { source: "scripts/compose-local.ts", destination: "scripts/compose-local.ts" },
   {
     source: ".github/ISSUE_TEMPLATE/harness-feedback.md",
     destination: ".github/ISSUE_TEMPLATE/harness-feedback.md",
@@ -103,7 +108,14 @@ export function isManagedPath(p: string): boolean {
     p === ".claude/settings.json" ||
     p === ".codex/rules/default.rules" ||
     p.startsWith(".github/ISSUE_TEMPLATE/") ||
-    p === "scripts/env-check.mjs" ||
+    [
+      "env-check.mjs",
+      "local-env.ts",
+      "run-local.ts",
+      "test-safety.mjs",
+      "db-local.ts",
+      "compose-local.ts",
+    ].some((name) => p === `scripts/${name}`) ||
     p === "docs/secrets.md"
   );
 }

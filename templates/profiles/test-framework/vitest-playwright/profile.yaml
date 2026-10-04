@@ -48,8 +48,8 @@ files_when:
       files/vitest.config.ts: vitest.config.ts
 package_json:
   scripts:
-    test: vitest run
-    pretest: npm run types
+    test: node scripts/run-local.ts test vitest run
+    pretest: npm run env:check -- test && npm run types:test
   # msw のインストール後の処理（ブラウザ用の部品の配置）は使わない（Node.js のテストだけで使うため）
   allowScripts:
     msw: false

@@ -26,7 +26,7 @@ mutation_targets: backend/src/services/**/*.ts
 
 dev_env_notes:
   - when: { answer: database, equals: postgresql }
-    value: PostgreSQLのコンテナを`docker-compose.yml`に含める。接続先は`.env`から読み込み、開発用と検証用でDBを分ける
+    value: PostgreSQLのコンテナを`docker-compose.yml`に含める。開発は`.env.development`、検証は`.env.test`から読み込み、検証用DB名は`_test`で終わらせる
   - when: { answer: database, equals: d1 }
     value: D1は手元ではwranglerのローカルのD1（`--persist-to`で保存先を指定）で動かし、DB用のコンテナは作らない
   - value: DBは使わないため、DB用のコンテナは作らない
@@ -83,10 +83,10 @@ data_access_guide:
 readme_db_setup:
   - when: { answer: database, equals: d1 }
     value: |-
-      1. DB（手元の D1）を用意する：`npm run db:migrate:local` でテーブルを作り、`npm run db:seed:local` で開発用の架空のデータを入れる
+      1. DB（手元の D1）を用意する：`.env.example`を`.env.development`へコピーして`APP_ENV=development`を設定し、`npm run db:migrate:local`でテーブルを作り、`npm run db:seed:local`で開発用の架空のデータを入れる
   - when: { answer: database, equals: postgresql }
     value: |-
-      1. DB（PostgreSQL）を用意する：`.env` の `POSTGRES_*`・`DATABASE_URL`・`CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` に手元の接続先を書き（パスワードには、URL で使える文字だけを使う）、`docker compose up -d db` で DB を起動して、`npm run db:migrate` でテーブルを作り、`npm run db:seed:local` で開発用の架空のデータを入れる
+      1. DB（PostgreSQL）を用意する：`.env.example`を`.env.development`へコピーし、`APP_ENV=development`と手元の`POSTGRES_*`・`DATABASE_URL`・`CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE`を設定する（接続先・ポート・資格情報を整合させる）。`npm run docker:up:local`でDBを起動し、`npm run db:migrate`でテーブルを作り、`npm run db:seed:local`で開発用の架空のデータを入れる
   - value: |-
       1. DB：使いません（足すときは、利用者と相談して技術を選び、理由を ADR に記録します）
 
@@ -95,6 +95,7 @@ readme_db_commands:
   - when: { answer: database, equals: d1 }
     value: |-
       | `npm run db:generate -- --name <内容>` | スキーマ（`backend/db/schema.ts`）の変更から、マイグレーションを作る |
+      | `npm run db:migrate:test`・`npm run db:seed:test`・`npm run db:reset:test` | 検証用D1（環境別保存先）にマイグレーション・シード・再作成を行う |
       | `npm run db:migrate:local` | 手元の D1 に、マイグレーションを適用する |
       | `npm run db:seed:local` | 開発用の架空のデータを入れる |
       | `npm run db:reset:local` | 手元の D1 を作り直す（マイグレーションとシードを、もう一度適用する） |
@@ -102,6 +103,7 @@ readme_db_commands:
   - when: { answer: database, equals: postgresql }
     value: |-
       | `npm run db:generate -- --name <内容>` | スキーマ（`backend/db/schema.ts`）の変更から、マイグレーションを作る |
+      | `npm run db:migrate:test`・`npm run db:seed:test`・`npm run db:reset:test` | 検証用PostgreSQL（DB名末尾`_test`）にマイグレーション・シード・再作成を行う |
       | `npm run db:migrate` | 手元の DB に、マイグレーションを適用する（`DATABASE_URL` の接続先） |
       | `npm run db:seed:local` | 開発用の架空のデータを入れる（手元の DB のコンテナに、`docker compose exec` で流す） |
       | `npm run db:reset:local` | 手元の DB を作り直す（マイグレーションとシードを、もう一度適用する） |
@@ -112,10 +114,8 @@ readme_db_commands:
 readme_docker_db:
   - when: { answer: database, equals: d1 }
     value: |-
-      - Docker で使う D1 は、手元（`npm run dev`）の D1 とは別のデータです。コンテナの中の D1 は、初回に次の順で用意します（`docker compose up` の後。手元の D1 のデータは使われません）
-        1. `docker compose exec -T backend npm run db:migrate:local`（テーブルを作る）
-        2. `docker compose exec -T backend npm run db:seed:local`（開発用の架空のデータを入れる）
+      - Dockerで使うD1は、手元のD1と別のデータです。`npm run docker:up:local`で起動し、コンテナの初回は`docker compose exec -T backend npm run db:migrate:local`、続けて`docker compose exec -T backend npm run db:seed:local`を実行します
   - when: { answer: database, equals: postgresql }
     value: |-
-      - PostgreSQL のデータは、`db` のコンテナのボリュームに残ります。テーブルは `npm run db:migrate`、開発用の架空のデータは `npm run db:seed:local` で入れます（手元の DB と同じものです）
+      - 開発PostgreSQLのデータは開発用ComposeプロジェクトのDBボリュームに残ります。テーブルは`npm run db:migrate`、開発用の架空のデータは`npm run db:seed:local`で入れます。検証は`npm run docker:up:test`で別プロジェクト・別DBを起動します
   - value: ""

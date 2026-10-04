@@ -1,10 +1,10 @@
 # 開発用の Docker Compose（C-36）。バックエンドを、本番と同じ実行エンジン（workerd）で動かし、PostgreSQL のコンテナにつなぐ。
-# 認証情報などは、このファイルに直接書かず、.env から読む（C-05）。
+# 認証情報などは、このファイルに直接書かず、選択した .env.development / .env.test から読む（C-05）。
 name: {{app_name}}
 
 services:
   db:
-    container_name: {{app_name}}-db
+    container_name: {{app_name}}-${APP_ENV:-development}-db
     image: postgres:{{postgres_image_tag}}
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?.env に POSTGRES_USER を書いてください}
@@ -25,19 +25,17 @@ services:
       retries: 20
 
   backend:
-    container_name: {{app_name}}-backend
+    container_name: {{app_name}}-${APP_ENV:-development}-backend
     image: node:{{node_version}}
     working_dir: /app
-    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    command: sh -c "npm install && if [ \"$$APP_ENV\" = test ]; then npm run dev:test -- --host 0.0.0.0; else npm run dev -- --host 0.0.0.0; fi"
     depends_on:
       db:
         condition: service_healthy
     ports:
       - "${APP_PORT:-5173}:5173"
     environment:
-      # コンテナの中からは、db のサービス名でつなぐ（.env の localhost の接続先を上書きする）
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      APP_ENV: ${APP_ENV:?APP_ENV を設定してください}
     volumes:
       - .:/app
       # Windows・macOS の手元の node_modules とは分け、コンテナの中のものを使う

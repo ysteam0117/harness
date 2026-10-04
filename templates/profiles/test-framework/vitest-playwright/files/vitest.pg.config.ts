@@ -1,20 +1,26 @@
-import { randomUUID } from "node:crypto";
 import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
+import {
+  applyLocalEnvironment,
+  loadLocalEnvironment,
+} from "./scripts/local-env.ts";
 
-// バックエンドのテストは DB につながない（pg は Workers のテストの道具の中では動かないため、DB の処理は差し替える）。
-// Hyperdrive の手元の接続先は、起動のために形だけ必要（ユーザー名とパスワードも要る）。つながないので、
-// パスワードは毎回作る使い捨ての値にして、ファイルには書かない。環境変数で渡されていれば、そちらを使う。
-process.env.CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE ??= `postgresql://testuser_000:${randomUUID()}@localhost:5432/not_connected_in_tests`;
+// pg は Workers のテスト内で読み込めない。DB 自体の確認はテスト用起動への API テストで行う。
+const values = loadLocalEnvironment("test");
+applyLocalEnvironment(values);
 
 // バックエンドは本番と同じ実行エンジン（workerd）で、フロントエンドは jsdom で動かす
 export default defineConfig({
+  envDir: "./node_modules/.harness-env-disabled",
   test: {
     projects: [
       {
         plugins: [
-          cloudflareTest({ wrangler: { configPath: "./wrangler.jsonc" } }),
+          cloudflareTest({
+            wrangler: { configPath: "./wrangler.jsonc" },
+            miniflare: { bindings: values },
+          }),
         ],
         test: {
           name: "backend",

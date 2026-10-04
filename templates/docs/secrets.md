@@ -8,33 +8,36 @@
 
 - 値をチャットに貼らない。スクリーンショットにも写さない
 - 値を入力するコマンドは、AIに実行させず、自分でターミナルで実行する
-- `.env`などの実際の値が入ったファイルはコミットしない（`.gitignore`で除外済み）
+- `.env.development`・`.env.test`など実際の値が入ったファイルはコミットしない（`.gitignore`で除外済み）
 
 ## 開発・検証（手元のPC）
 
 開発と検証は、環境変数のファイルを分けて使う。テストは検証のファイル（`.env.test`）だけを読み込む。
 
-1. 見本をコピーして、実際の値を書くファイルを作る
+1. 見本をコピーして、開発用と検証用のファイルを作る
 
    ```bash
-   cp .env.example .env.development
-   cp .env.example .env.test
+   Copy-Item .env.example .env.development
+   Copy-Item .env.example .env.test
    ```
 
-2. それぞれのファイルをエディタで開き、各項目に値を書いて保存する。`APP_ENV`は、`.env.development`では`development`、`.env.test`では`test`にする。DBの接続先は、開発と検証で別のものにする
+   macOS/Linux では `cp .env.example .env.development` と `cp .env.example .env.test` を使います。
+2. それぞれをエディタで開き、各項目に値を書いて保存する。`APP_ENV`は`.env.development`で`development`、`.env.test`で`test`にする。テスト用PostgreSQLのDB名は `_test` で終わらせ、開発と別のDB・ポート・資格情報を使う。D1とR2のローカル保存先も分かれる
 3. 足りない項目がないかを確かめる（項目の名前と今の環境の名前だけが表示され、値は表示されない）
 
    ```bash
    npm run env:check
+   npm run env:check -- test
    ```
 
-4. 開発用のコンテナを起動し直して、新しい値を読み込ませる
+4. 開発用コンテナに新しい値を反映するときは、環境を選ぶラッパーで再作成する
 
    ```bash
-   docker compose up -d --force-recreate
+   npm run docker:down:local
+   npm run docker:up:local
    ```
 
-AIに「設定で足りないものは？」と聞くと、AIは`npm run env:check`を実行して、足りない項目の名前を答える。
+テストは `npm run test`、テスト用DB操作は `npm run db:migrate:test` などのコマンド、テスト用Dockerは `npm run docker:up:test`・`npm run docker:down:test` を使う。`npm run db:generate -- --name <名前>` は引き続きマイグレーション生成に使えます。開発・テスト用のコマンドは親プロセスの接続設定を引き継がず、設定値も診断に表示しません。テスト用のローカルDB設定であり、任意の外部DBへの接続を安全と保証するものではありません。
 
 **本番の値（秘密情報・本番のDBの接続先）は、手元の平文のファイルに書かない**（プロジェクトの外のファイルも含む）。
 

@@ -22,7 +22,7 @@ describe("GET /api/health", () => {
     const res = await app.request(
       "/api/health",
       { method: "POST", headers: { Origin: "https://attacker.example.com" } },
-      { ALLOWED_ORIGINS: "http://localhost:5173" },
+      { APP_ENV: "test", ALLOWED_ORIGINS: "http://localhost:5173" },
     );
     expect(res.status).toBe(403);
     expect(await res.json()).toMatchObject({ code: "FORBIDDEN_ORIGIN" });

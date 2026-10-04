@@ -22,11 +22,12 @@ description: Drizzle ORMでDBにアクセスするときのルール。スキー
 ## マイグレーションの適用
 
 - Cloudflare D1：`drizzle-kit generate`で作ったファイルを、wranglerのマイグレーション機能で適用する。適用の記録はD1の`d1_migrations`テーブルに残る
-  - ローカル：`wrangler d1 migrations apply <DB名> --local`
+  - 開発：`npm run db:migrate:local`。検証：`npm run db:migrate:test`（環境別の一時保存先）
   - 検証・本番：`--remote`を付ける。利用者の承認を得て行い、AIは実行しない
   - `wrangler.jsonc`の`d1_databases`に`migrations_dir`（マイグレーションファイルの置き場所）を書く
-- テストでは、`@cloudflare/vitest-pool-workers`の`readD1Migrations`で読み込み、`applyD1Migrations`でテスト用のD1に適用する
+- Vitestでは、`@cloudflare/vitest-pool-workers`の`readD1Migrations`で読み込み、`applyD1Migrations`でVitest専用の一時D1に適用する。この一時DBを外部の開発・検証DBと共有しない
 - PostgreSQL：{{postgres_migration_notes}}
+- 開発操作は`.env.development`、検証操作は`.env.test`を使う。PostgreSQLの検証DB名は`_test`で終わる必要がある。`npm run db:generate -- --name <名前>`は接続先を使わずマイグレーションを生成する
 
 ## CRUDの書き方（Repository）
 

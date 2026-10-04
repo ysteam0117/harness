@@ -644,7 +644,7 @@ CLIは、生成するプロジェクトに次を出力する。
 
 | 種類 | 例 | 更新の扱い |
 | --- | --- | --- |
-| ハーネスが管理するもの | `AGENTS.md`・`CLAUDE.md`・Skill・エージェントの定義・AIの権限の設定・PR／Issueのテンプレート・`scripts/env-check.mjs`・`docs/secrets.md` | 新しいハーネスの内容で更新する |
+| ハーネスが管理するもの | `AGENTS.md`・`CLAUDE.md`・Skill・エージェントの定義・AIの権限の設定・PR／Issueのテンプレート・`scripts/env-check.mjs`・環境別実行／DB／Compose／テスト安全性のhelper・`docs/secrets.md` | 新しいハーネスの内容で更新する |
 | プロジェクトのもの | アプリのコード・`docs/requirements.md`・`docs/project-rules.md`・`docs/tech-stack.md`・`docs/adr/`・`docs/testing/`・`prototype/` | 更新しない（ハーネスは触らない） |
 
 - プロジェクト固有のルールは`docs/project-rules.md`に書き、ハーネスが管理するファイルに書き足さない（[C-80](common/workflow.md#c-80)）

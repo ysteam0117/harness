@@ -1,5 +1,5 @@
 // 設定の読み込みは、このファイルの1か所にまとめる（C-40）。ほかのファイルは process.env・env を直接読まない。
-// 環境ごとの切り替え（APP_ENV・.env.test・テストが本番の設定を使わないための確認）は、このファイルに足していく。
+// 起動経路で選んだ APP_ENV を必須にし、欠落を既定値で隠さない。
 export type AppConfig = {
   /** 環境の名前（development・test・production） */
   appEnv: string;
@@ -17,8 +17,12 @@ function text(env: RawEnv, name: string): string {
 /** Workers の環境（c.env）から、アプリの設定を作る */
 export function loadConfig(env: unknown): AppConfig {
   const raw = (typeof env === "object" && env !== null ? env : {}) as RawEnv;
+  const appEnv = text(raw, "APP_ENV");
+  if (!["development", "test", "production"].includes(appEnv)) {
+    throw new Error("APP_ENV を設定してください（値は表示しません）。");
+  }
   return {
-    appEnv: text(raw, "APP_ENV") || "development",
+    appEnv,
     allowedOrigins: text(raw, "ALLOWED_ORIGINS")
       .split(",")
       .map((origin) => origin.trim())

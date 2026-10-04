@@ -42,12 +42,20 @@ wrangler:
     not_found_handling: single-page-application
     run_worker_first: ["/api/*"]
   vars:
+    APP_ENV: production
     # 状態を変える要求を許可する送信元（環境ごとに設定する）
     ALLOWED_ORIGINS: "{{allowed_origins}}"
 package_json:
   scripts:
-    dev: vite
-    build: vite build
-    preview: vite preview
-    types: wrangler types
-    predev: npm run types
+    dev: node scripts/run-local.ts development vite
+    dev:test: node scripts/run-local.ts test vite
+    build: node scripts/run-local.ts build vite build
+    preview: node scripts/run-local.ts development vite preview
+    types: node scripts/run-local.ts development wrangler types
+    types:test: node scripts/run-local.ts test wrangler types
+    predev: npm run env:check -- development && npm run types
+    predev:test: npm run env:check -- test && npm run types:test
+    docker:up:local: node scripts/compose-local.ts development up -d
+    docker:up:test: node scripts/compose-local.ts test up -d
+    docker:down:local: node scripts/compose-local.ts development down
+    docker:down:test: node scripts/compose-local.ts test down

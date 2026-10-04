@@ -1,14 +1,16 @@
 # 開発用の Docker Compose（C-36）。バックエンドを、本番と同じ実行エンジン（workerd）で動かす。
 # D1 は wrangler が手元の SQLite として再現するため、DB 用のコンテナは作らない。
-# 認証情報などは、このファイルに直接書かず、.env から読む（C-05）。
+# 認証情報などは、このファイルに直接書かず、選択した .env.development / .env.test から読む（C-05）。
 name: {{app_name}}
 
 services:
   backend:
-    container_name: {{app_name}}-backend
+    container_name: {{app_name}}-${APP_ENV:-development}-backend
     image: node:{{node_version}}
     working_dir: /app
-    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    command: sh -c "npm install && if [ \"$$APP_ENV\" = test ]; then npm run dev:test -- --host 0.0.0.0; else npm run dev -- --host 0.0.0.0; fi"
+    environment:
+      APP_ENV: ${APP_ENV:?APP_ENV を設定してください}
     ports:
       - "${APP_PORT:-5173}:5173"
     volumes:

@@ -1,11 +1,6 @@
 import { defineConfig } from "drizzle-kit";
 
-// .env があれば読む（なければ、環境変数をそのまま使う）。drizzle-kit は .env を自動では読まないため
-try {
-  process.loadEnvFile(".env");
-} catch (error) {
-  if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-}
+// DB 操作の入口（scripts/db-local.ts）が検証した接続先だけを渡す。
 
 const url = process.env.DATABASE_URL;
 
