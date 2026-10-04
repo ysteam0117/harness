@@ -8,6 +8,7 @@ import { renderTechStack } from "../versions/tech-stack.js";
 import type { Ai } from "./adapter.js";
 import { stripHarnessComments, stripMarkerComments } from "./comments.js";
 import { buildConfigText, CONFIG_PATH, localDay } from "./config.js";
+import { whenMatches, type When } from "./conditions.js";
 import { GenerateError } from "./errors.js";
 import { judge } from "./judgment.js";
 import { selectKnowledge } from "./knowledge.js";
@@ -17,7 +18,8 @@ import { checkOutputPaths } from "./paths.js";
 import { resolveProfiles } from "./profile.js";
 import { rolesFor } from "./roles.js";
 import { normalizeNewlines, renderTemplate } from "./template.js";
-import { buildValues } from "./values.js";
+import { buildEnvExample, buildValues } from "./values.js";
+import { buildWranglerJsonc } from "./wrangler.js";
 import { findTemplatesDir } from "./templates-dir.js";
 
 export type ProjectFile = {
@@ -45,7 +47,7 @@ export interface BuildProjectInput {
 }
 
 /** ひな形から出力する文書・スクリプト・Issue のテンプレート（ひな形 → 出力先） */
-const TEMPLATE_FILES: { source: string; destination: string }[] = [
+const TEMPLATE_FILES: { source: string; destination: string; when?: When }[] = [
   { source: "docs/secrets.md", destination: "docs/secrets.md" },
   { source: "docs/project-rules.md", destination: "docs/project-rules.md" },
   { source: "docs/pentest-plan.md", destination: "docs/testing/pentest-plan.md" },
@@ -53,6 +55,37 @@ const TEMPLATE_FILES: { source: string; destination: string }[] = [
   {
     source: ".github/ISSUE_TEMPLATE/harness-feedback.md",
     destination: ".github/ISSUE_TEMPLATE/harness-feedback.md",
+  },
+  // 動くアプリの土台（#56）。.gitignore は、ひな形のフォルダの設定に影響しないよう、名前を変えて置く
+  { source: "project/gitignore", destination: ".gitignore" },
+  { source: "project/prettierignore", destination: ".prettierignore" },
+  // API の最初のひな形：Controller（routes）→ Service（services）の層（C-03）。DB ありの入口（index.ts）は data-access/drizzle が出す
+  { source: "project/backend/app.ts", destination: "backend/src/app.ts" },
+  { source: "project/backend/config.ts", destination: "backend/src/config.ts" },
+  { source: "project/backend/health.route.ts", destination: "backend/src/routes/health.ts" },
+  {
+    source: "project/backend/health.route.test.ts",
+    destination: "backend/src/routes/health.test.ts",
+  },
+  {
+    source: "project/backend/health.service.ts",
+    destination: "backend/src/services/health.service.ts",
+  },
+  {
+    source: "project/backend/index.none.ts",
+    destination: "backend/src/index.ts",
+    when: { answer: "database", equals: "none" },
+  },
+  { source: "project/README.md", destination: "README.md" },
+  {
+    source: "project/docker-compose.yml",
+    destination: "docker-compose.yml",
+    when: { answer: "database", notEquals: "postgresql" },
+  },
+  {
+    source: "project/docker-compose.postgres.yml",
+    destination: "docker-compose.yml",
+    when: { answer: "database", equals: "postgresql" },
   },
 ];
 
@@ -147,14 +180,19 @@ export function buildProject(input: BuildProjectInput): { files: ProjectFile[] }
   const knowledge = selectKnowledge(answers, {
     ...(input.knowledgeDir !== undefined ? { knowledgeDir: input.knowledgeDir } : {}),
   });
-  const values = buildValues({ answers, judgment, knowledge });
+  const nodeEntry = versions.entries.find((e) => e.name === "node");
+  if (nodeEntry === undefined) {
+    throw new GenerateError(".node-version に使う Node.js の版が、選んだ版にありません");
+  }
+  const values = buildValues({ answers, judgment, knowledge, nodeVersion: nodeEntry.version });
 
   // AI向けの出力・プロファイルの files
-  const built = buildOutputs({ templatesDir, ais, profiles: profileKeys, values });
+  const built = buildOutputs({ templatesDir, ais, profiles: profileKeys, values, answers });
   const outputs: { path: string; content: string }[] = [...built.files];
 
   // 文書・スクリプト・Issue のテンプレート
   for (const file of TEMPLATE_FILES) {
+    if (!whenMatches(file.when, answers)) continue;
     const text = stripMarkerComments(
       stripHarnessComments(readTemplate(templatesDir, file.source), file.source),
     );
@@ -163,6 +201,13 @@ export function buildProject(input: BuildProjectInput): { files: ProjectFile[] }
       content: renderTemplate(text, values, { templatesDir, fileName: file.source }),
     });
   }
+
+  // wrangler.jsonc：選んだプロファイルの設定を、回答に合わせてまとめて作る。.env.example：環境変数の項目の一覧
+  outputs.push({
+    path: "wrangler.jsonc",
+    content: buildWranglerJsonc({ profiles, answers, values }),
+  });
+  outputs.push({ path: ".env.example", content: buildEnvExample(answers) });
 
   outputs.push({ path: "docs/tech-stack.md", content: renderTechStack(versions, profiles) });
   if (acceptedWarnings.length > 0) {
@@ -176,11 +221,7 @@ export function buildProject(input: BuildProjectInput): { files: ProjectFile[] }
     versions,
   });
   outputs.push({ path: "package.json", content: `${JSON.stringify(packageJson, null, 2)}\n` });
-  const node = versions.entries.find((e) => e.name === "node");
-  if (node === undefined) {
-    throw new GenerateError(".node-version に使う Node.js の版が、選んだ版にありません");
-  }
-  outputs.push({ path: ".node-version", content: `${node.version}\n` });
+  outputs.push({ path: ".node-version", content: `${nodeEntry.version}\n` });
 
   // 知見の写し：Skill「知見」の references/（選んだAIごと）
   const skillRoots = [

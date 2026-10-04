@@ -7,7 +7,13 @@ module.exports = {
       from: {},
       to: { circular: true },
     },
-    // フロントエンド：画面・部品からAPI層を直接呼ばない（Hookを通す）
+    // フロントエンド：画面（pages）は部品を組み合わせるだけ。API層（features/*/api）と通信の共通部分（services）を直接呼ばない
+    {
+      name: "no-pages-to-api",
+      severity: "error",
+      from: { path: "^frontend/src/pages" },
+      to: { path: "^frontend/src/features/[^/]+/api" },
+    },
     {
       name: "no-pages-to-services",
       severity: "error",
@@ -26,18 +32,31 @@ module.exports = {
       from: { path: "^frontend/src/features" },
       to: { path: "^frontend/src/pages" },
     },
-    // バックエンド：Controller からデータアクセス層を直接呼ばない（Service を通す）
+    // バックエンド：routes（Controller）から db（Repository）を直接呼ばない（services を通す）
     {
-      name: "no-controller-to-repository",
+      name: "no-routes-to-db",
       severity: "error",
-      from: { path: "^backend/src/controllers" },
-      to: { path: "^backend/src/(repositories|daos)" },
+      from: { path: "^backend/src/routes" },
+      to: { path: "^backend/src/db" },
     },
     {
-      name: "no-repository-to-service",
+      name: "no-db-to-services-or-routes",
       severity: "error",
-      from: { path: "^backend/src/(repositories|daos)" },
-      to: { path: "^backend/src/(services|controllers)" },
+      from: { path: "^backend/src/db" },
+      to: { path: "^backend/src/(services|routes)" },
+    },
+    {
+      name: "no-services-to-routes",
+      severity: "error",
+      from: { path: "^backend/src/services" },
+      to: { path: "^backend/src/routes" },
+    },
+    // services は HTTP（Hono）を知らない
+    {
+      name: "no-services-to-hono",
+      severity: "error",
+      from: { path: "^backend/src/services" },
+      to: { path: "node_modules/hono" },
     },
   ],
   options: {

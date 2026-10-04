@@ -5,14 +5,19 @@ name: Hono
 languages: [typescript]
 runtimes: [cloudflare-workers]
 packages: [hono, "@hono/zod-validator", zod, wrangler]
+# 回答に合うときだけ足すパッケージ（PostgreSQL のドライバ pg の型。Workers のバックエンドで pg を使うとき）
+packages_when:
+  - when: { database: postgresql }
+    packages: ["@types/pg"]
 # 開発・ビルド・デプロイでだけ使うもの（生成する package.json の devDependencies に入れる）。残りは dependencies に入れる
-dev_packages: [wrangler]
+dev_packages: [wrangler, "@types/pg"]
 # ひな形で動作を確かめたバージョン（2026-09-30、Issue #19 の試作で確認）
 verified_versions:
   hono: "4.13.12"
   "@hono/zod-validator": "0.9.1"
   zod: "4.6.5"
   wrangler: "4.144.0"
+  "@types/pg": "8.23.1"   # 2026-10-03、Issue #56 で pg 8.23.0 との組み合わせを確認
 compatibility_notes:
   - "Hono の csrf ミドルウェアはフォームの送信だけを確かめる。状態を変える要求の送信元の確認は files/security.ts の originCheck を使う"
   - "@hono/zod-validator は既定でZodの詳しいエラーを返す。files/validation.ts の validate を通して使う"
@@ -25,3 +30,10 @@ files:
   files/security.ts: backend/src/lib/security.ts
   files/validation.ts: backend/src/lib/validation.ts
   files/security.test.ts: backend/src/lib/security.test.ts
+# 回答に合うときだけ足す wrangler.jsonc の設定（F-20：非公開の保存先は Cloudflare R2）
+wrangler_when:
+  - when: { answer: file_upload, equals: "yes" }
+    wrangler:
+      r2_buckets:
+        - binding: UPLOADS
+          bucket_name: "{{app_name}}-uploads"

@@ -25,3 +25,21 @@ jobs:
       - run: npm run check
       - name: 配布物の確認（組み立て・パック・インストール・起動）
         run: npm run pack:check
+
+  # 生成したプロジェクトが実際に動くことの確認（#56）。時間がかかるため、品質チェックとは別の仕事にして、ubuntu だけで行う。
+  # D1・PostgreSQL・DB なしの3通りを生成し、npm install・npm run check・npm run build・開発サーバー・docker compose を確かめる。
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - name: 生成したプロジェクトの確認（3通りの生成・check・build・開発サーバー・Docker）
+        run: npm run smoke:generated
+        env:
+          # CI では Docker が使えるはず。使えないときは飛ばさずに失敗にする
+          SMOKE_REQUIRE_DOCKER: "1"

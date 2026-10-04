@@ -6,25 +6,25 @@
 
 | コマンド | 役割                                       | 状態                          | 担当の Issue |
 | -------- | ------------------------------------------ | ----------------------------- | ------------ |
-| `create` | 質問に答えて、プロジェクトを生成する | 質問・バージョンの調査・整合性チェック・生成（手元のフォルダまで） | #31〜#34     |
+| `create` | 質問に答えて、プロジェクトを生成する | 質問・バージョンの調査・整合性チェック・生成（手元のフォルダまで。動くアプリの土台を含む） | #31〜#34、#56 |
 | `update` | 生成済みのプロジェクトに、新しいハーネスを反映する | 未実装（同上）                | #35          |
 | `status` | 今のハーネスのバージョン・最新のバージョン・主な変更点を表示する | 未実装（同上）                | #35          |
 
-`create` は、質問（`--answers <file>` で回答のファイルも渡せる）、バージョンの調査と選択、整合性チェックを行い、回答の一覧・採用するバージョン・チェックの結果を見せて確認する（`--yes` で最後の確認を省ける）。確認の後は、`./<アプリ名>` に生成する（一時的な場所に書いてから移す。生成の記録として `.harness/config.yaml` を作る）。Git の初期化・リモートリポジトリの作成（#55）、生成の直後の `npm install` と品質チェック（#57）、アプリのひな形（#56）は、まだない。詳細は [questions.md](questions.md)・[versions.md](versions.md)・[generation.md](generation.md)。
+`create` は、質問（`--answers <file>` で回答のファイルも渡せる）、バージョンの調査と選択、整合性チェックを行い、回答の一覧・採用するバージョン・チェックの結果を見せて確認する（`--yes` で最後の確認を省ける）。確認の後は、`./<アプリ名>` に生成する（一時的な場所に書いてから移す。生成の記録として `.harness/config.yaml` を作る）。Git の初期化・リモートリポジトリの作成（#55）、生成の直後の `npm install` と品質チェック（#57）は、まだない。生成したプロジェクトは、`npm install` の後にそのまま動く（API・画面・DB の最初のファイル、`docker-compose.yml`、`wrangler.jsonc`。#56）。詳細は [questions.md](questions.md)・[versions.md](versions.md)・[generation.md](generation.md)・[skeleton.md](skeleton.md)。
 
 ## ディレクトリと役割
 
 | 場所         | 役割                                                                                                 |
 | ------------ | ---------------------------------------------------------------------------------------------------- |
 | `src/`       | CLI のコード。入口（`cli.ts`）、コマンドの定義（`program.ts`）、各コマンド（`commands/`）            |
-| `src/generate/` | ひな形の差し込み・プロファイルの読み込み・AIごとの出し分け（[generator.md](generator.md)）、テンプレートの値の決定・判定・`package.json`・知見の写し・`.harness/config.yaml`・一時的な場所での生成と移動（[generation.md](generation.md)） |
+| `src/generate/` | ひな形の差し込み・プロファイルの読み込み・AIごとの出し分け（[generator.md](generator.md)）、テンプレートの値の決定・判定・`package.json`・`wrangler.jsonc`・`.env.example`・知見の写し・`.harness/config.yaml`・一時的な場所での生成と移動（[generation.md](generation.md)、[skeleton.md](skeleton.md)） |
 | `src/questions/` | 質問の定義・質問の進め方・`--answers` の読み込みと検証・入力の窓口（[questions.md](questions.md)） |
 | `src/checks/` | 整合性チェック（ルールの読み込みと判定）・事実の収集・手元の道具の確かめ（[questions.md](questions.md)） |
 | `src/versions/` | バージョンの調査と選定：使うプロファイルの決定・調べる対象・npm と Node.js の登録情報の取得・最新の安定版の選び方・利用者の選択・tech-stack.md の中身（[versions.md](versions.md)） |
 | `data/`      | データファイル（整合性チェックのルール `consistency-rules.yaml`、使うプロファイルの対応表 `profile-selection.yaml`、Node.js の検証済みの版と `compatibility_date` を持つ `runtimes.yaml`、テンプレートの値 `template-values.yaml`、役割ごとのモデル `role-models.yaml`、環境変数の項目 `env-items.yaml`、写す知見の条件 `knowledge-selection.yaml`。配布物に含める） |
-| `scripts/`   | 開発とCIで使う確認のスクリプト（共通仕様の対応の確認、配布物の確認）                                 |
+| `scripts/`   | 開発とCIで使う確認のスクリプト（共通仕様の対応の確認、配布物の確認、生成したプロジェクトの動作の確認 `smoke-generated.ts`） |
 | `test/`      | テスト（vitest）                                                                                     |
-| `templates/` | 生成するハーネスのひな形（配布物に含める）                                                           |
+| `templates/` | 生成するハーネスのひな形（配布物に含める）。`profiles/`（技術プロファイル）、`project/`（プロファイルによらないアプリの土台：API の入口・`docker-compose.yml`・`README.md` など） |
 | `docs/`      | 要件定義（`requirements/`）、設計（`design/`）、決定の記録（`adr/`）、技術スタック（`tech-stack.md`） |
 | `knowledge/` | 蓄積した知見（生成するプロジェクトの Skill「知見」に、関係するものだけ写す。配布物に含める）         |
 | `dist/`      | ビルドの出力（Git管理の対象外）                                                                      |
@@ -51,6 +51,7 @@ flowchart LR
 | `npm run check`      | Lint・型チェック・整形の確認・共通仕様の対応の確認・テスト・依存の脆弱性の確認を順に実行する。CI も同じコマンドを使う |
 | `npm run pack:check` | 組み立て・パック・一時フォルダへのインストール・`harness --help` の起動までを確かめる。CI でも実行する                 |
 | `npm run build`      | `src/` を `dist/` に組み立てる                                                                                         |
+| `npm run smoke:generated` | D1・PostgreSQL・DB なしの 3 通りを生成し、`npm install`・`npm run check`・`npm run build`・開発サーバー・Docker を確かめる（時間がかかる。CI では別の仕事 `smoke`）（[skeleton.md](skeleton.md)） |
 
 ## 設計書の一覧
 
@@ -59,4 +60,5 @@ flowchart LR
 - [質問と整合性チェック（Issue #32）](questions.md)
 - [バージョンの調査と選定（Issue #33）](versions.md)
 - [生成の仕組みと記録（Issue #34）](generation.md)
+- [動くアプリの土台（Issue #56）](skeleton.md)
 - 決定の記録：[0001 CIでコンテナを使わない](../adr/0001-ci-without-container.md)

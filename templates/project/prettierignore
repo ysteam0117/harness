@@ -1,0 +1,26 @@
+# 依存・ビルドの結果・自動で作られるファイル
+node_modules
+dist
+.wrangler
+worker-configuration.d.ts
+package-lock.json
+coverage
+playwright-report
+test-results
+reports
+
+# ハーネスが作った文書・AI 向けの設定・記録（書式は、ハーネスが決めたものを保つ）
+.harness
+.claude
+.agents
+.codex
+.github
+AGENTS.md
+CLAUDE.md
+README.md
+docs
+scripts/env-check.mjs
+
+# ハーネスが組み立てた設定・drizzle-kit が作ったファイル
+wrangler.jsonc
+backend/db/migrations

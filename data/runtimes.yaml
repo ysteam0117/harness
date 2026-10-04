@@ -12,3 +12,7 @@ node:
 # 確かめ方：npm view @cloudflare/vitest-pool-workers@<版> dependencies で miniflare の版を見る。版の中の日付（例：5.20260815.0 → 2026-08-15）が上限。
 # 2026-10-03 確認：vitest-pool-workers 0.22.0 → miniflare 5.20260815.0 → 上限 2026-08-15。下の値はこれ以下。
 compatibility_date: "2026-08-04"
+
+# 開発用の PostgreSQL のコンテナの版（docker-compose.yml の image の版）。固定する（C-62）。
+# 2026-09-30 に、Drizzle ORM の試作（Issue #18）で動作を確かめた版。
+postgres_image_tag: "18.6"

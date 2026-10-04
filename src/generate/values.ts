@@ -14,6 +14,8 @@ export interface BuildValuesInput {
   judgment?: Judgment;
   /** 写す知見。既定は selectKnowledge(answers) */
   knowledge?: KnowledgeEntry[];
+  /** 選んだ Node.js の版。docker-compose.yml の image に使う（渡したときだけ値 node_version を作る） */
+  nodeVersion?: string;
 }
 
 type Choice = { when?: When; value: string };
@@ -73,6 +75,8 @@ interface EnvItem {
   development: string;
   test: string;
   production: string;
+  /** .env.example に書く値（空か、changeme・<…> のプレースホルダ） */
+  example: string;
   when?: When;
 }
 
@@ -87,7 +91,7 @@ function loadEnvItems(): EnvItem[] {
   cachedEnvItems = doc.map((item, index): EnvItem => {
     const at = `data/${ENV_FILE} の ${index + 1} 番目`;
     if (!isPlainObject(item)) throw new GenerateError(`${at}：「項目: 値」の形で書いてください`);
-    const known = ["name", "purpose", "development", "test", "production", "when"];
+    const known = ["name", "purpose", "development", "test", "production", "example", "when"];
     for (const key of Object.keys(item)) {
       if (!known.includes(key)) {
         throw new GenerateError(`${at}：知らない項目 ${key} があります（書き間違いの可能性）`);
@@ -102,12 +106,22 @@ function loadEnvItems(): EnvItem[] {
       }
       return v;
     };
+    const example = item["example"];
+    if (
+      example !== undefined &&
+      (typeof example !== "string" || /[\r\n]/.test(example) || example !== example.trim())
+    ) {
+      throw new GenerateError(
+        `${at}：example は、改行と前後の空白を含まない文字列で書いてください`,
+      );
+    }
     const base = {
       name: text("name"),
       purpose: text("purpose"),
       development: text("development"),
       test: text("test"),
       production: text("production"),
+      example: example ?? "",
     };
     return item["when"] === undefined ? base : { ...base, when: parseWhen(item["when"], at) };
   });
@@ -121,6 +135,18 @@ function labelOf(id: string, value: unknown): string {
     throw new GenerateError(`回答 ${id} の値 ${JSON.stringify(value)} の表示の名前がありません`);
   }
   return label;
+}
+
+/** 開発用の PostgreSQL のコンテナの版（data/runtimes.yaml の postgres_image_tag） */
+function postgresImageTag(): string {
+  const doc = readDataYaml("runtimes.yaml");
+  const tag = isPlainObject(doc) ? doc["postgres_image_tag"] : undefined;
+  if (typeof tag !== "string" || !/^\d+(\.\d+)?$/.test(tag)) {
+    throw new GenerateError(
+      "data/runtimes.yaml：postgres_image_tag に、PostgreSQL の版（例：18.6）を書いてください",
+    );
+  }
+  return tag;
 }
 
 /** compatibility_date（data/runtimes.yaml） */
@@ -183,6 +209,8 @@ export function buildValues(input: BuildValuesInput): Record<string, string> {
   values["pentest_requirement"] = pentestRequirement(judgment);
   values["knowledge_index"] = knowledgeIndexRows(knowledge);
   values["compatibility_date"] = compatibilityDate();
+  values["postgres_image_tag"] = postgresImageTag();
+  if (input.nodeVersion !== undefined) values["node_version"] = input.nodeVersion;
   values["secrets_table"] = loadEnvItems()
     .filter((item) => whenMatches(item.when, answers))
     .map(envRow)
@@ -196,4 +224,21 @@ export function buildValues(input: BuildValuesInput): Record<string, string> {
     }
   }
   return values;
+}
+
+/**
+ * .env.example の中身。data/env-items.yaml の項目のうち、回答に合うものを、用途の説明の行と「名前=値」で並べる。
+ * 値は、空か、プレースホルダ（実際の値は書かない）。
+ */
+export function buildEnvExample(answers: object): string {
+  const lines = [
+    "# 環境変数の項目の一覧（C-05）。このファイルを .env にコピーして、値を入れる。",
+    "# .env は Git に入れない。実際の値は、チャットにも書かない。項目の説明は docs/secrets.md にある。",
+    "# 足りない項目は、npm run env:check で確かめられる。",
+    "",
+  ];
+  for (const item of loadEnvItems().filter((i) => whenMatches(i.when, answers))) {
+    lines.push(`# ${item.purpose}`, `${item.name}=${item.example}`, "");
+  }
+  return `${lines.join("\n").trimEnd()}\n`;
 }

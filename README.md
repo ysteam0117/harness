@@ -53,7 +53,7 @@ harness --help
 
 | コマンド          | 内容                                     | 状態   |
 | ----------------- | ---------------------------------------- | ------ |
-| `harness create`  | 質問に答えて、プロジェクトを生成する| 質問・バージョンの調査・整合性チェック・生成（手元のフォルダまで） |
+| `harness create`  | 質問に答えて、プロジェクトを生成する| 質問・バージョンの調査・整合性チェック・生成（手元のフォルダまで。動くアプリの土台を含む） |
 | `harness update`  | 生成済みのプロジェクトに、新しいハーネスを反映する | 未実装 |
 | `harness status`  | 今のハーネスのバージョン・最新のバージョン・主な変更点を表示する | 未実装 |
 
@@ -164,12 +164,15 @@ harness create --answers answers.yaml --yes
 | ---- | ---- |
 | AI 向けの指示 | `AGENTS.md`・`CLAUDE.md`、Skill、エージェントの定義、AI の権限の設定（選んだAIの分だけ） |
 | 技術プロファイルのコード・設定 | 選んだ技術のひな形（コード・テスト・Lint などの設定） |
+| 動くアプリの土台 | API（`backend/src/`：`routes` → `services` → `db` の層）、画面（`frontend/src/`：`pages`・`features`・`services`）、`wrangler.jsonc`、`tsconfig.json`・`vite.config.ts`・`vitest.config.ts`、`index.html`、`public/_headers`、`docker-compose.yml`、`.env.example`、`.gitignore`、`README.md`。DB ありのときは、スキーマ・マイグレーション・シード・後始末の SQL と、例の機能（`/api/sample-users`）も出ます |
 | `package.json`・`.node-version` | 依存するパッケージを、選んだ版（`^` なしの正確な版）で書きます。開発でだけ使うものは `devDependencies` に入ります |
 | 文書 | `docs/tech-stack.md`、`docs/secrets.md`、`docs/project-rules.md`、`docs/testing/pentest-plan.md`。警告を承知した場合は `docs/adr/0001-accepted-warnings.md` |
 | スクリプト・Issue のテンプレート | `scripts/env-check.mjs`、`.github/ISSUE_TEMPLATE/` |
 | 知見 | 選んだ技術に関係する知見を、Skill「知見」に写します（DB を使わない場合は DB の知見は写しません） |
 | 生成の記録 | `.harness/config.yaml`：回答・承知した警告・判定の結果（ASVS のレベルなど）・採用した版・役割とモデル・ハーネスのバージョン・ハーネスが管理するファイルの指紋 |
 
+- 生成の内容は、DB・認証・アップロードの回答で変わります（D1 は `d1_databases`、PostgreSQL は Hyperdrive と `db` のコンテナ、アップロードは R2 の設定、DB なしは DB のファイルなし）。仕組みと違いの表は[動くアプリの土台](docs/design/skeleton.md)を参照してください
+- `/api/health` と `/api/sample-users` は、機能の足し方の見本です。実際のアプリでは、消すか置き換えてください
 - 実際の秘密の値（パスワード・API キーなど）は、どのファイルにも書きません。`docs/secrets.md` には、環境変数の名前と、各環境で何を入れるかの説明だけを書きます
 - 同じ回答で生成すると、同じ内容になります（`.harness/config.yaml` の生成した日を除く）
 - 生成先に中身のあるフォルダやファイルが同じ名前である場合は、何も書かずにエラーで終わります（空のフォルダなら生成できます）
@@ -179,7 +182,7 @@ harness create --answers answers.yaml --yes
 
 次のものは、別の Issue で対応します。
 
-- アプリのひな形（画面・API などのコード）、`.env.example`、要件定義書のひな形（#56）
+- 認証・アップロードの処理とテスト（#65・#66）、E2E と IaC（#64）、要件定義書のひな形・PR や Issue のテンプレート・CI（#63）、環境変数の切り替えの仕組み（#51）
 - 生成の直後の `npm install` と品質チェックによる確認（#57）
 - Git の初期化・リモートリポジトリの作成・GitHub を使わない場合への対応（#55）
 
@@ -191,7 +194,7 @@ npm install
 ```
 
 1. 生成した場所に移動して、`AGENTS.md`（Claude Code なら `CLAUDE.md`）と `docs/` を読みます
-2. `npm install` で、依存するパッケージを入れます
+2. `npm install` で、依存するパッケージを入れます（生成したプロジェクトの `README.md` に、最初の手順があります。開発サーバーは `npm run dev`、Docker は `docker compose up`、品質チェックは `npm run check`）
 3. `docs/secrets.md` を見て、環境変数の値を `.env`（Git に入れないファイル）に自分で用意します。値をチャットやコミットに書かないでください
 4. Git の初期化・リモートリポジトリの作成は、まだ自動では行いません。必要なら手で行ってください
 
@@ -202,6 +205,9 @@ npm ci               # ライブラリのインストール（lock ファイル�
 npm run check        # Lint・型チェック・整形の確認・共通仕様の対応の確認・テスト・脆弱性の確認
 npm run pack:check   # 配布物の確認（組み立て・パック・インストール・起動）
 npm run build        # src/ を dist/ に組み立てる
+npm run smoke:generated  # 生成したプロジェクトの動作の確認（D1・PostgreSQL・DB なしの 3 通りを生成し、npm install・npm run check・npm run build・開発サーバー・Docker を確かめる。時間がかかり、Docker が必要）
 ```
 
-CI（GitHub Actions）は、Windows・macOS・Linux で `npm run check` と `npm run pack:check` を実行します。
+CI（GitHub Actions）は、Windows・macOS・Linux で `npm run check` と `npm run pack:check` を実行します。さらに、別の仕事（`smoke`）で、Linux だけ `npm run smoke:generated` を実行します（Docker が使えないときは失敗にします）。
+
+`npm run smoke:generated` は、環境変数 `SMOKE_CASES=d1,none` で通りを絞れます。Docker が使えない手元では、PostgreSQL の通りと Docker の確かめを飛ばします（`SMOKE_REQUIRE_DOCKER=1` で失敗にできます）。途中で中断（Ctrl+C）しても、起動したプロセス・Docker のコンテナとボリューム・一時的なフォルダを片付けます。詳細は[動くアプリの土台](docs/design/skeleton.md)を参照してください。

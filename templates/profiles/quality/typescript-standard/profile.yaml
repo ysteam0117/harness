@@ -3,9 +3,9 @@ id: typescript-standard
 category: quality
 name: ESLint・Prettier・tsc・Stryker・dependency-cruiser・jscpd
 languages: [typescript]
-packages: [eslint, typescript, typescript-eslint, eslint-plugin-react-hooks, prettier, "@stryker-mutator/core", "@stryker-mutator/vitest-runner", dependency-cruiser, jscpd]
+packages: [eslint, typescript, typescript-eslint, eslint-plugin-react-hooks, prettier, "@stryker-mutator/core", "@stryker-mutator/vitest-runner", dependency-cruiser, jscpd, "@types/node"]
 # 品質チェックの道具は、すべて開発でだけ使う（生成する package.json の devDependencies に入れる）
-dev_packages: [eslint, typescript, typescript-eslint, eslint-plugin-react-hooks, prettier, "@stryker-mutator/core", "@stryker-mutator/vitest-runner", dependency-cruiser, jscpd]
+dev_packages: [eslint, typescript, typescript-eslint, eslint-plugin-react-hooks, prettier, "@stryker-mutator/core", "@stryker-mutator/vitest-runner", dependency-cruiser, jscpd, "@types/node"]
 # ひな形で動作を確かめたバージョン（2026-09-30、Issue #19 の試作で確認）
 verified_versions:
   eslint: "10.11.0"
@@ -17,6 +17,7 @@ verified_versions:
   "@stryker-mutator/vitest-runner": "10.0.0"
   dependency-cruiser: "18.4.0"
   jscpd: "5.3.3"
+  "@types/node": "24.19.0"   # 設定ファイル（vite.config.ts・drizzle.config.ts など）の Node.js の型
 # 組み合わせの条件のうち、版の範囲で表せるもの（文章の説明は compatibility_notes に残す）
 version_ranges:
   typescript: ">=6.0.0 <6.1.0"   # typescript-eslint が TypeScript 6.1 未満にだけ対応する
@@ -29,6 +30,7 @@ package_json:
     check: "npm run lint && npm run typecheck && npm run format:check && npm run deps:check && npm run dup:check && npm test && npm run audit:prod"
     lint: "eslint ."
     typecheck: "tsc -p ."
+    pretypecheck: "npm run types"
     format:check: "prettier --check ."
     deps:check: "depcruise frontend/src backend/src --config .dependency-cruiser.cjs"
     dup:check: "jscpd frontend/src backend/src"
@@ -40,6 +42,7 @@ package_json:
     workerd: true
 skill_name: quality-tools
 files:
+  files/tsconfig.json: tsconfig.json
   files/eslint.config.mjs: eslint.config.mjs
   files/dependency-cruiser.cjs: .dependency-cruiser.cjs
   files/stryker.config.json: stryker.config.json

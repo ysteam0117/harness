@@ -4,7 +4,8 @@ import { buildAiOutputs, type Ai, type OutputFile } from "./adapter.js";
 import { stripHarnessComments } from "./comments.js";
 import { GenerateError } from "./errors.js";
 import { checkOutputPaths } from "./paths.js";
-import { mergePackageJson, resolveProfiles } from "./profile.js";
+import type { Answers } from "../questions/answers.js";
+import { mergePackageJson, resolveProfiles, selectProfileFiles } from "./profile.js";
 import { normalizeNewlines, renderTemplate } from "./template.js";
 
 export type BuildOutputsInput = {
@@ -14,6 +15,8 @@ export type BuildOutputsInput = {
   profiles: string[];
   /** 名前 → 値 */
   values: Record<string, string>;
+  /** files_when・package_json_when の条件に使う回答（既定は {}。何も合わない） */
+  answers?: Partial<Answers>;
 };
 
 export type BuildOutputsResult = {
@@ -31,6 +34,7 @@ function compare(a: string, b: string): number {
  */
 export function buildOutputs(input: BuildOutputsInput): BuildOutputsResult {
   const { templatesDir, values } = input;
+  const answers = input.answers ?? {};
   const profiles = resolveProfiles(templatesDir, input.profiles);
   const sortedProfiles = [...profiles].sort((a, b) => compare(a.key, b.key));
 
@@ -41,7 +45,7 @@ export function buildOutputs(input: BuildOutputsInput): BuildOutputsResult {
     values,
   });
   for (const profile of sortedProfiles) {
-    for (const file of profile.files) {
+    for (const file of selectProfileFiles(profile, answers)) {
       const rel = `profiles/${profile.key}/${file.source}`;
       let text: string;
       try {
@@ -60,5 +64,5 @@ export function buildOutputs(input: BuildOutputsInput): BuildOutputsResult {
   checkOutputPaths(outputs.map((f) => f.path));
 
   const files = outputs.sort((a, b) => compare(a.path, b.path));
-  return { files, packageJson: mergePackageJson(sortedProfiles) };
+  return { files, packageJson: mergePackageJson(sortedProfiles, answers) };
 }

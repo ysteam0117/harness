@@ -24,6 +24,7 @@
     "test": "vitest run",
     "spec:check": "node scripts/check-spec-coverage.ts",
     "pack:check": "node scripts/pack-check.ts",
+    "smoke:generated": "node scripts/smoke-generated.ts",
     "audit:prod": "npm audit --omit=dev --audit-level=high",
     "check": "npm run lint && npm run typecheck && npm run format:check && npm run spec:check && npm run test && npm run audit:prod"
   },
