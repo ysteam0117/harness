@@ -74,14 +74,7 @@
 
 Cloudflare上に検証の環境を足した場合は、それぞれのコマンドに`--env <環境>`を付ける。
 
-## CI（GitHub Actions）
-
-- GitHubのリポジトリの Settings → Secrets and variables → Actions で登録する
-- または、次を実行して、聞かれた値を入力する
-
-  ```bash
-  gh secret set <項目名>
-  ```
+{{secrets_ci_setup}}
 
 ## Terraform
 

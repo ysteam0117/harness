@@ -16,6 +16,10 @@
 1. 開発サーバーを起動する：`npm run dev`（画面は http://localhost:5173/ 、API は http://localhost:5173/api/health ）
 1. 品質チェックとテストを実行する：`npm run check`
 
+## リポジトリの用意
+
+{{readme_repository_setup}}
+
 ## Docker で動かす
 
 バックエンド（と、PostgreSQL のときは DB）を、Docker のコンテナで動かせます。コンテナ名は `{{app_name}}-<役割>` です。
@@ -42,6 +46,7 @@ npm run docker:up:local
 | `npm run test` | `.env.test` を使ってテストする |
 | `npm run dev:test` | `.env.test` を使って開発サーバーを起動する |
 | `npm run docker:up:test`・`npm run docker:down:test` | テスト用の Docker 環境を起動・停止する |
+{{readme_merge_command_row}}
 {{readme_db_commands}}
 
 ## ディレクトリ
@@ -68,20 +73,10 @@ npm run docker:up:local
 
 `public/` のアイコン・ファビコン（`favicon.ico`・`favicon.svg`・`apple-touch-icon.png`・`icons/icon-192.png`・`icons/icon-512.png`）は、頭文字と枠だけの**仮の画像**です。本番へ公開する前に、同じファイル名・同じ大きさの正式な画像に差し替えてください。
 
-差し替えの作業は、Issue のテンプレート「仮のアイコンの差し替え」（`.github/ISSUE_TEMPLATE/replace-icons.md`）で Issue にして管理します。リポジトリを GitHub に作ったら、最初に次のどちらかで Issue を作ってください。
-
-- GitHub の画面：「Issues」→「New issue」→「仮のアイコンの差し替え」
-- コマンド：`gh issue create --template "仮のアイコンの差し替え"`
+{{readme_icons_issue}}
 
 差し替えたら、この章を消します。
 
 ## `main` ブランチの保護
 
-`main` への直接の push と強制 push（force push）を禁止します。リポジトリを GitHub に作ったら、次の設定をしてください。
-
-1. GitHub のリポジトリの「Settings」→「Rules」→「Rulesets」→「New ruleset」→「New branch ruleset」を開く
-1. 「Ruleset Name」に `main の保護` と入れ、「Enforcement status」を「Active」にする
-1. 「Target branches」で「Add target」→「Include default branch」を選ぶ
-1. 「Restrict deletions」「Require a pull request before merging」「Block force pushes」に印を付ける
-1. 品質チェックを GitHub Actions で実行する場合は、「Require status checks to pass」に印を付け、`check` を追加する
-1. 「Create」で保存する
+{{readme_branch_protection}}

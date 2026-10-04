@@ -44,6 +44,7 @@ export function buildAnswersYaml(over: Record<string, unknown> = {}): string {
   const base: Record<string, unknown> = {
     app_name: APP_NAME,
     ais: ["claude"],
+    repository: "github",
     visibility: "private",
     team_size: "solo",
     database: "d1",
@@ -90,6 +91,21 @@ export const SMOKE_CASES: readonly SmokeCase[] = [
   smokeCase("postgresql", { postgres_provider: "neon", auth: "app" }, "app", false),
   smokeCase("none", { auth: "none", idp: undefined }, "none", false),
 ];
+
+/** GitHub を使わない（手元の Git だけ）通りの名前（#61）。SMOKE_CASES=local で選ぶ */
+export const LOCAL_GIT_CASE_ID = "local";
+
+/** GitHub を使わない通りの回答（DB なし・認証なし。公開範囲と品質チェックの実行場所は、local に決まる値） */
+export function buildLocalGitAnswersYaml(): string {
+  return buildAnswersYaml({
+    repository: "local",
+    visibility: "private",
+    check_location: "local",
+    database: "none",
+    auth: "none",
+    idp: undefined,
+  });
+}
 
 /** 実行ごとに一意な、架空のアプリ名（smoke-<乱数>）。英小文字・数字・ハイフンだけ */
 export function createSmokeAppName(): string {
@@ -1300,10 +1316,159 @@ async function runCase(c: SmokeCase, withDocker: boolean, appName: string): Prom
   }
 }
 
+/** 失敗するはずのコマンド。成功したら誤り。失敗の出力（理由）を返す */
+async function expectFailure(run: () => Promise<unknown>, what: string): Promise<string> {
+  try {
+    await run();
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
+  throw new Error(`${what} が成功しました（失敗するはずです）`);
+}
+
+/**
+ * GitHub を使わない通り（C-83、#61）。生成して npm install し、README の手順と同じ並びで
+ * git init → フック → 最初のコミット → 作業のブランチ → npm run merge:check を行う。
+ * フックの整形・Lint・main の保護は、本物の Prettier・ESLint で確かめる。
+ * Git の設定は一時フォルダの中だけ（利用者の設定を使わない）。メールアドレスは架空。
+ */
+async function runLocalGitCase(appName: string): Promise<void> {
+  const id = LOCAL_GIT_CASE_ID;
+  const registry = createCleanupRegistry();
+  const uninstall = installInterruptHandlers(registry);
+  try {
+    await runWithCleanup(id, registry, async () => {
+      const npm = makeNpm(registry);
+      const workDir = mkdtempSync(path.join(os.tmpdir(), `harness-smoke-${id}-`));
+      registry.add(`${id}：一時的なフォルダの削除`, () =>
+        rmSync(workDir, { recursive: true, force: true }),
+      );
+      const projectDir = path.join(workDir, appName);
+      const emptyConfig = path.join(workDir, "empty-gitconfig");
+      writeFileSync(emptyConfig, "");
+      const gitEnv = {
+        GIT_CONFIG_GLOBAL: emptyConfig,
+        GIT_CONFIG_NOSYSTEM: "1",
+        GIT_TERMINAL_PROMPT: "0",
+      };
+      const git = (args: string[]) =>
+        runCommand("git", args, { cwd: projectDir, env: gitEnv, registry });
+      const write = (file: string, content: string) =>
+        writeFileSync(path.join(projectDir, file), content);
+
+      await runStage(id, "生成（harness create）", async () => {
+        const answers = parseYaml(buildLocalGitAnswersYaml()) as Record<string, unknown>;
+        answers["app_name"] = appName;
+        writeFileSync(path.join(workDir, "answers.yaml"), stringifyYaml(answers));
+        await runCommand(
+          process.execPath,
+          [path.join(rootDir, "dist", "cli.js"), "create", "--answers", "answers.yaml", "--yes"],
+          { cwd: workDir, registry },
+        );
+      });
+      await runStage(id, "npm install", async () => {
+        await npm(["install", "--no-audit", "--no-fund"], projectDir);
+      });
+      writeEnvFile(projectDir, "development", {
+        APP_ENV: "development",
+        VITE_SECRET: "dummy_private_51",
+      });
+      writeEnvFile(projectDir, "test", { APP_ENV: "test", VITE_SECRET: "dummy_private_51" });
+      await runStage(id, "npm run check（生成した状態）", async () => {
+        await npm(["run", "check"], projectDir);
+      });
+
+      // README の手順と同じ並び
+      await runStage(
+        id,
+        "git init・フック・最初のコミット（HEAD がないので main でも通る）",
+        async () => {
+          await git(["init", "-b", "main"]);
+          await git(["config", "user.email", "test@example.invalid"]);
+          await git(["config", "user.name", "E2EUser A"]);
+          await git(["config", "commit.gpgsign", "false"]);
+          await git(["config", "core.hooksPath", ".githooks"]);
+          await git(["add", "-A"]);
+          await git(["commit", "-m", "chore: 生成した初期状態"]);
+        },
+      );
+      await runStage(id, "main の上のコミットは、フックが止める", async () => {
+        write("notes.txt", "メモ\n");
+        await git(["add", "notes.txt"]);
+        const message = await expectFailure(
+          () => git(["commit", "-m", "docs: メモ"]),
+          "main へのコミット",
+        );
+        if (!message.includes("main の上では直接コミットできません")) {
+          throw new Error(`フックの拒否の理由が示されていません：${message}`);
+        }
+        await git(["reset", "-q"]);
+      });
+      await git(["switch", "-c", "feature/1-replace-icons"]);
+      await runStage(
+        id,
+        "本物の Prettier・ESLint が、違反のあるファイルのコミットを止める",
+        async () => {
+          write("bad-format.json", '{"a":1,   "b":2}\n');
+          await git(["add", "bad-format.json"]);
+          await expectFailure(
+            () => git(["commit", "-m", "chore: 整形の違反"]),
+            "整形の違反のコミット",
+          );
+          await git(["reset", "-q"]);
+          rmSync(path.join(projectDir, "bad-format.json"));
+          write("bad-lint.ts", "const unused = 1;\n");
+          await git(["add", "bad-lint.ts"]);
+          await expectFailure(
+            () => git(["commit", "-m", "chore: Lint の違反"]),
+            "Lint の違反のコミット",
+          );
+          await git(["reset", "-q"]);
+          rmSync(path.join(projectDir, "bad-lint.ts"));
+        },
+      );
+      await runStage(id, "作業のブランチのコミットは通る", async () => {
+        await git(["add", "notes.txt"]);
+        await git(["commit", "-m", "docs: メモ"]);
+      });
+      await runStage(
+        id,
+        "npm run merge:check（本物の npm run check を通して、main に取り込む）",
+        async () => {
+          await npm(["run", "merge:check"], projectDir);
+          const subject = (await git(["log", "-1", "--format=%s", "main"])).trim();
+          if (subject !== "feat: replace icons (#1)") {
+            throw new Error(`取り込みのコミットの題名が違います：${subject}`);
+          }
+          const issue = await git(["show", "main:docs/issues/0001-replace-icons.md"]);
+          if (!/^- 状態：完了$/m.test(issue)) {
+            throw new Error("Issue の状態が「完了」になっていません");
+          }
+          if ((await git(["status", "--porcelain"])).trim() !== "") {
+            throw new Error("取り込みの後、作業ツリーがきれいではありません");
+          }
+        },
+      );
+      await runStage(id, "取り込みの後、main の手のコミットは止まる", async () => {
+        write("hand.txt", "手のコミット\n");
+        await git(["add", "hand.txt"]);
+        await expectFailure(
+          () => git(["commit", "-m", "docs: 手のコミット"]),
+          "main への手のコミット",
+        );
+      });
+      console.log(`[${id}] 成功しました`);
+    });
+  } finally {
+    uninstall();
+  }
+}
+
 async function main(): Promise<void> {
   const only = process.env["SMOKE_CASES"]?.split(",").map((s) => s.trim());
   const cases = SMOKE_CASES.filter((c) => only === undefined || only.includes(c.id));
-  if (cases.length === 0) throw new Error("SMOKE_CASES に合う通りがありません");
+  const runLocal = only === undefined || only.includes(LOCAL_GIT_CASE_ID);
+  if (cases.length === 0 && !runLocal) throw new Error("SMOKE_CASES に合う通りがありません");
 
   const docker = dockerAvailable();
   const requireDocker = process.env["SMOKE_REQUIRE_DOCKER"] === "1";
@@ -1333,6 +1498,16 @@ async function main(): Promise<void> {
     try {
       // アプリ名は通りごとに一意（同時に実行しても、Docker の資源が混ざらない）
       await runCase(c, docker, createSmokeAppName());
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.error(message);
+      failures.push(message);
+    }
+  }
+  if (runLocal) {
+    console.log(`[${LOCAL_GIT_CASE_ID}] 確かめを始めます…`);
+    try {
+      await runLocalGitCase(createSmokeAppName());
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       console.error(message);

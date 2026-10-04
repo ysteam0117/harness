@@ -1,0 +1,78 @@
+# もとになった共通仕様：C-42・C-82・C-83
+#!/bin/sh
+# コミットの前の確認（GitHub を使わないプロジェクト、C-83）。
+# 1. main の上での直接のコミットを止める（取り込みのコマンド npm run merge:check だけが許される）
+# 2. 秘密情報の混入を、gitleaks があれば確かめる
+# 3. ステージしたファイルだけを、整形（Prettier）と Lint（ESLint）で確かめる
+# 全部の確認（npm run check）は、取り込みのコマンドで行う。このフックを外して確認を飛ばさない。
+
+stop() {
+  echo "pre-commit：$1" >&2
+  exit 1
+}
+
+# 取り込みのコマンドが書く印の場所（作業ツリーが複数あっても、Git の置き場所に1つ）
+mark_file=$(git rev-parse --git-path harness-merge-check)
+
+# 1. main の保護。まだコミットがない（最初のコミット）ときは、main でも許す
+if git rev-parse --verify --quiet HEAD >/dev/null 2>&1; then
+  branch=$(git symbolic-ref --short -q HEAD || true)
+  if [ "$branch" = "main" ]; then
+    tree=$(git write-tree)
+    if [ -f "$mark_file" ] && [ "$(cat "$mark_file")" = "$tree" ]; then
+      # 取り込みのコマンドが、この内容のために書いた印。1回だけ許す
+      rm -f "$mark_file"
+    else
+      stop "main の上では直接コミットできません。作業のブランチ（例：feature/1-内容）で作業し、npm run merge:check で取り込んでください"
+    fi
+  fi
+fi
+
+# ステージしたファイル（追加・コピー・変更・名前の変更）
+staged=$(git -c core.quotepath=off diff --cached --name-only --diff-filter=ACMR)
+if [ -z "$staged" ]; then
+  exit 0
+fi
+
+# 作業ファイルとステージの内容が違うと、検査した内容とコミットする内容がずれる。ずれるファイルがあれば止める
+unstaged=$(git -c core.quotepath=off diff --name-only)
+if [ -n "$unstaged" ]; then
+  partial=$(printf '%s\n' "$staged" | while IFS= read -r file; do
+    if printf '%s\n' "$unstaged" | grep -Fxq -- "$file"; then
+      printf '%s\n' "$file"
+    fi
+  done)
+  if [ -n "$partial" ]; then
+    echo "$partial" >&2
+    stop "上のファイルは、作業ファイルとステージの内容が違うため検査できません。git add するか、git stash push --keep-index で分けてください"
+  fi
+fi
+
+# 2. 秘密情報の混入（gitleaks）。入っていなければ警告して続ける（README に導入の案内がある）
+if command -v gitleaks >/dev/null 2>&1; then
+  if gitleaks git --help 2>&1 | grep -q -- '--staged'; then
+    gitleaks git --pre-commit --staged --redact --no-banner || stop "秘密情報らしいものが見つかりました。コミットを止めました（値は表示していません）"
+  else
+    gitleaks protect --staged --redact --no-banner || stop "秘密情報らしいものが見つかりました。コミットを止めました（値は表示していません）"
+  fi
+else
+  echo "pre-commit：警告：gitleaks が入っていないため、秘密情報の確認を飛ばしました（導入の手順は README）" >&2
+fi
+
+# 3. 整形と Lint（ステージしたファイルだけ）
+to_check() {
+  printf '%s\n' "$staged" | grep -E "$1" || true
+}
+format_files=$(to_check '\.(ts|tsx|js|jsx|mjs|cjs|mts|cts|json|jsonc|css|html|md|yml|yaml)$')
+lint_files=$(to_check '\.(ts|tsx|js|jsx|mjs|cjs|mts|cts)$')
+
+if [ -n "$format_files" ]; then
+  [ -x node_modules/.bin/prettier ] || [ -f node_modules/.bin/prettier ] || stop "prettier が見つかりません。npm install してください"
+  printf '%s\n' "$format_files" | tr '\n' '\0' | xargs -0 node_modules/.bin/prettier --check || stop "整形が合っていないファイルがあります。npx prettier --write で直してから、もう一度 git add してください"
+fi
+if [ -n "$lint_files" ]; then
+  [ -x node_modules/.bin/eslint ] || [ -f node_modules/.bin/eslint ] || stop "eslint が見つかりません。npm install してください"
+  printf '%s\n' "$lint_files" | tr '\n' '\0' | xargs -0 node_modules/.bin/eslint --no-warn-ignored || stop "Lint の違反があります。直してから、もう一度 git add してください"
+fi
+
+exit 0

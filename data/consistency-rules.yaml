@@ -41,6 +41,7 @@
   when:
     all:
       - { answer: team_size, equals: team }
+      - { answer: repository, equals: github }
       - { answer: check_location, equals: local }
   message: 開発人数が「複数人」で、品質チェックの実行場所が「ローカルのみ」です
   reason: マージの前に、他の人の変更も含めた品質チェックが自動で行われません
@@ -51,10 +52,21 @@
   when:
     all:
       - { answer: visibility, equals: public }
+      - { answer: repository, equals: github }
       - { answer: check_location, equals: local }
   message: リポジトリが「公開」で、品質チェックの実行場所が「ローカルのみ」です
   reason: 外部からのPRを自動でチェックできません
   fix: [visibility, check_location]
+
+- id: team-without-remote
+  level: warning
+  when:
+    all:
+      - { answer: team_size, equals: team }
+      - { answer: repository, equals: local }
+  message: 開発人数が「複数人」で、リポジトリの置き場所が「使わない（手元のGitだけ）」です
+  reason: 共有のリモートがなく、ほかの人の変更を取り込む仕組みがありません
+  fix: [team_size, repository]
 
 - id: postgresql-needs-service
   level: info

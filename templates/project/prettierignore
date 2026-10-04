@@ -22,6 +22,8 @@ docs
 prototype
 LICENSE
 scripts/env-check.mjs
+scripts/merge-check.mjs
+.githooks
 
 # ハーネスが組み立てた設定・drizzle-kit が作ったファイル
 wrangler.jsonc

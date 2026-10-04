@@ -141,6 +141,11 @@ export function expectedManaged(p: string): boolean {
       "scripts/db-local.ts",
       "scripts/compose-local.ts",
     ].includes(p) ||
-    p === "docs/secrets.md"
+    p === "docs/secrets.md" ||
+    // GitHub を使わない場合（#61）
+    p === ".githooks/pre-commit" ||
+    p === "scripts/merge-check.mjs" ||
+    p === "docs/issues/_template.md" ||
+    p === "docs/harness-feedback/README.md"
   );
 }

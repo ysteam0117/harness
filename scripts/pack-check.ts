@@ -69,6 +69,7 @@ function npm(args: string[], cwd: string): string {
 const SAMPLE_APP_NAME = "testapp-001";
 const SAMPLE_ANSWERS = `app_name: ${SAMPLE_APP_NAME}
 ais: [claude]
+repository: github
 visibility: private
 team_size: solo
 database: d1

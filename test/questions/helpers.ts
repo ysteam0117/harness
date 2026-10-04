@@ -18,7 +18,7 @@
 //
 //   // src/questions/answers.ts
 //   export interface Answers { app_name: string; ais: ("claude"|"codex")[]; project_type: "web"; layers: "frontend_backend";
-//     visibility: "public"|"private"; team_size: "solo"|"team"; frontend: "react"; backend: "hono"; infra: "cloudflare";
+//     repository: "github"|"local"; visibility: "public"|"private"; team_size: "solo"|"team"; frontend: "react"; backend: "hono"; infra: "cloudflare";
 //     database: "d1"|"postgresql"|"none"; postgres_provider?: ...; data_access?: "drizzle"; auth: "none"|"app"|"oidc"|"both";
 //     idp?: ...; personal_data: ...; admin: ...; critical_ops: ...; critical_ops_kinds?: ...[]; collaborative: ...;
 //     org_separation: ...; realtime: ...; availability: ...; file_upload: "no"|"yes"; file_kinds?: ...[];
@@ -110,6 +110,7 @@ export function baseAnswers(over: Record<string, unknown> = {}): Partial<Answers
   return {
     app_name: "testapp-001",
     ais: ["claude"],
+    repository: "github",
     visibility: "private",
     team_size: "solo",
     database: "d1",

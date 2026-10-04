@@ -44,5 +44,5 @@
 
 ## 設定ファイルの扱い
 
-- `.claude/skills/`と`.claude/agents/`はプロジェクトのルールとしてコミットする。変更は必ずIssue・PRで行う
+- `.claude/skills/`と`.claude/agents/`はプロジェクトのルールとしてコミットする。変更は必ず{{issue_and_pr}}で行う
 - 個人の設定（`.claude/settings.local.json`）と、各自が個人で使うSkill・エージェント（`~/.claude/`に置いたもの）はコミットしない

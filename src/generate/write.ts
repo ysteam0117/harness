@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { Stats } from "node:fs";
-import { lstat, mkdir, readdir, rename, rm, rmdir, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, readdir, rename, rm, rmdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { GenerateError } from "./errors.js";
 
@@ -9,6 +9,8 @@ export interface FsOps {
   mkdir(dir: string, opts?: { recursive: boolean }): Promise<unknown>;
   /** 文字列は UTF-8 で、バイト列はそのまま書く */
   writeFile(file: string, content: string | Uint8Array): Promise<void>;
+  /** 実行の権限を付ける（Windows では実質何も変わらない） */
+  chmod(file: string, mode: number): Promise<void>;
   /** リンクをたどらない。なければ code: "ENOENT" で失敗する */
   lstat(p: string): Promise<Stats>;
   readdir(p: string): Promise<string[]>;
@@ -26,7 +28,7 @@ export interface WriteProjectInput {
   cwd: string;
   appName: string;
   /** "/" 区切りの相対パス */
-  files: { path: string; content: string; encoding?: "base64" }[];
+  files: { path: string; content: string; encoding?: "base64"; executable?: true }[];
   /** 差し替え（既定は本物） */
   fs?: Partial<FsOps>;
   /** 中断の要求（SIGINT を受けたら create が abort する） */
@@ -45,6 +47,7 @@ const realFs: FsOps = {
   mkdir: (dir, opts) => mkdir(dir, opts),
   writeFile: (file, content) =>
     typeof content === "string" ? writeFile(file, content, "utf8") : writeFile(file, content),
+  chmod: (file, mode) => chmod(file, mode),
   lstat: (p) => lstat(p),
   readdir: (p) => readdir(p),
   rmdir: (p) => rmdir(p),
@@ -175,6 +178,7 @@ export async function writeProject(
         full,
         file.encoding === "base64" ? Buffer.from(file.content, "base64") : file.content,
       );
+      if (file.executable) await fs.chmod(full, 0o755);
     }
     stopIfAborted();
 

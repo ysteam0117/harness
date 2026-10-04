@@ -242,6 +242,7 @@ describe("#32 AC-1: 確認（--yes と対話）", () => {
       {
         app_name: ["testapp-001"],
         ais: [["claude"]],
+        repository: ["github"],
         visibility: ["private"],
         team_size: ["solo"],
         database: ["d1"],
@@ -439,15 +440,20 @@ describe("#32 AC-5: 質問の途中でやめる（Ctrl+C）", () => {
     expect(listing(s.tmp.cwd)).toEqual([]); // 生成先（一時フォルダ）が空のまま
   });
 
-  it("#32 AC-5: 質問の途中（3問目）で中断しても、同じ結果になり、それ以降の質問は聞かれない", async () => {
+  it("#32 AC-5: 質問の途中（4問目）で中断しても、同じ結果になり、それ以降の質問は聞かれない", async () => {
     const s = setup(
-      { app_name: ["testapp-001"], ais: [["claude"]], visibility: [new CancelledError()] },
+      {
+        app_name: ["testapp-001"],
+        ais: [["claude"]],
+        repository: ["github"],
+        visibility: [new CancelledError()],
+      },
       { interactive: true },
     );
     const out = await runCreate({}, s.deps);
     expect(out.exitCode).toBe(130);
     expect(s.err()).toContain(CANCEL_MESSAGE);
-    expect(s.prompter.askedIds).toEqual(["app_name", "ais", "visibility"]);
+    expect(s.prompter.askedIds).toEqual(["app_name", "ais", "repository", "visibility"]);
     expect(listing(s.tmp.cwd)).toEqual([]);
   });
 

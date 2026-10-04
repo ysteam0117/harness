@@ -26,7 +26,7 @@
 | `src/checks/target-dir.ts` | `isNonEmptyDir`：生成先に中身があるかの判定。生成（#34）と同じ判定を使うためここに置く |
 | `src/checks/review.ts` | `reviewAnswers`：チェック → 警告の承知 → エラーの聞き直し。`dependentsOf`（依存する質問を定義から求める）・`AcceptedWarning` |
 | `src/commands/create.ts` | `runCreate`・`createCommand`：質問 → チェック → 表示 → 確認。終了コードを決める |
-| `data/consistency-rules.yaml` | F-08 の初回のルール10件（配布物に含める。場所は `templates/` と同じく、ファイルの位置から相対で探す） |
+| `data/consistency-rules.yaml` | F-08 のルール（初回の10件と、#61 の `team-without-remote`）（配布物に含める。場所は `templates/` と同じく、ファイルの位置から相対で探す） |
 | `test/questions/*`・`test/checks/*`・`test/commands/create.test.ts` | テスト |
 
 ## 処理の流れ
@@ -81,6 +81,14 @@ flowchart TD
 | `idp` | `auth` が `oidc` か `both` |
 | `critical_ops_kinds` | `critical_ops` が `yes`（聞かない質問のため、`--answers` に書いたときだけ） |
 | `file_kinds` | `file_upload` が `yes` |
+
+### リポジトリの置き場所（`repository`、C-83・Issue #61）
+
+`layers` の後・`visibility` の前に、質問 `repository`（GitHub／使わない（手元のGitだけ）。初期値は GitHub）を置く。
+
+- `local`（使わない）を選ぶと、`visibility` は聞かずに `private`、`check_location` は聞かずに `local` に決まる（`forced`。対話では自動で決定と表示し、`--answers` で別の値を書くとエラー）
+- `--answers` で `repository` を省いた場合は、以前の回答ファイルとの互換のため `github` とみなす（`parseAnswersYaml`）
+- 整合性チェック（`data/consistency-rules.yaml`）：`team-needs-ci`・`public-needs-ci` は `repository` が `github` のときだけ。新しい警告 `team-without-remote`（複数人で、リポジトリが `local`。「共有のリモートがなく、ほかの人の変更を取り込む仕組みがありません」。直す質問は `team_size`・`repository`）
 
 条件に合わない質問は飛ばし、回答に入れない。条件の対象の回答がまだないときは、合わないものとして扱う。
 

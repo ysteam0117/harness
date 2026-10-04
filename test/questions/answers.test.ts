@@ -39,7 +39,12 @@ describe("#32 AC-4: --answers の読み込み", () => {
 
   it("#32 AC-4: 足りない回答があっても読める（足りない分は対話で聞く）", () => {
     const parsed = parseAnswersYaml(yaml({ app_name: "testapp-001", ais: ["claude"] }));
-    expect(parsed.answers).toEqual({ app_name: "testapp-001", ais: ["claude"] });
+    // repository は、省くと GitHub とみなす（以前の回答ファイルとの互換。#61）
+    expect(parsed.answers).toEqual({
+      app_name: "testapp-001",
+      ais: ["claude"],
+      repository: "github",
+    });
   });
 
   it("#32 AC-4: 自動で決まる質問は省略してよい。書いた値が決まる値と同じなら読める", () => {

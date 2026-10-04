@@ -78,10 +78,18 @@ export const questionDefinitions: readonly QuestionDefinition[] = [
     options: opts(["frontend_backend", "両方あり"]),
   },
   {
+    id: "repository",
+    title: "リポジトリの置き場所",
+    kind: "select",
+    options: opts(["github", "GitHubを使う"], ["local", "使わない（手元のGitだけ）"]),
+    initialValue: "github",
+  },
+  {
     id: "visibility",
     title: "リポジトリの公開範囲",
     kind: "select",
     options: opts(["public", "公開"], ["private", "非公開"]),
+    forced: { when: { id: "repository", equals: "local" }, value: "private" },
   },
   {
     id: "team_size",
@@ -263,6 +271,7 @@ export const questionDefinitions: readonly QuestionDefinition[] = [
       ["github_actions", "GitHub Actionsのみ"],
       ["both", "両方"],
     ),
+    forced: { when: { id: "repository", equals: "local" }, value: "local" },
   },
   {
     id: "version_policy",

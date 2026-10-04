@@ -14,6 +14,7 @@ export interface Answers {
   ais: ("claude" | "codex")[];
   project_type: "web";
   layers: "frontend_backend";
+  repository: "github" | "local";
   visibility: "public" | "private";
   team_size: "solo" | "team";
   frontend: "react";
@@ -63,6 +64,8 @@ export type VersionChoice = "verified" | "latest";
 const ACCEPTED_WARNINGS_KEY = "accepted_warnings";
 const VERSIONS_KEY = "versions";
 const VERSIONS_OFFLINE_KEY = "versions_offline";
+const REPOSITORY_ID = "repository";
+const DEFAULT_REPOSITORY = "github";
 const EXTRA_KEYS: readonly string[] = [ACCEPTED_WARNINGS_KEY, VERSIONS_KEY, VERSIONS_OFFLINE_KEY];
 
 /**
@@ -143,6 +146,11 @@ export function parseAnswersYaml(
     const message = validateValue(def, raw[def.id]);
     if (message) errors.push(`${def.id}：${message}`);
     else valid[def.id] = raw[def.id];
+  }
+
+  // repository は、以前の回答ファイルとの互換のため、書かれていなければ GitHub とみなす（質問の定義にあるときだけ）
+  if (!(REPOSITORY_ID in raw) && definitions.some((d) => d.id === REPOSITORY_ID)) {
+    valid[REPOSITORY_ID] = DEFAULT_REPOSITORY;
   }
 
   // 対話しない質問（質問A〜G）は、書かれていなければ既定値として条件を確かめる

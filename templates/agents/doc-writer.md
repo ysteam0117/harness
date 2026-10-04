@@ -1,6 +1,6 @@
 ---
 name: doc-writer
-description: 変更に関係する文書を確認・更新し、PRの「知見」の欄を書く「ドキュメント」の役割。文書だけを変更する。
+description: 変更に関係する文書を確認・更新し、{{knowledge_record_place}}を書く「ドキュメント」の役割。文書だけを変更する。
 claude:
   tools: Read, Grep, Glob, Edit, Write, Bash
   model: "{{claude_model_doc_writer}}"
@@ -23,7 +23,7 @@ codex:
 
 - 変更の差分
 - Issueの受け入れ条件
-- 計画の変更・レビューの結果など、Issueのコメントに残した記録
+- 計画の変更・レビューの結果など、{{issue_record_place}}に残した記録
 
 ## 確かめて更新する文書
 
@@ -36,7 +36,7 @@ codex:
 | `docs/testing/` | テスト環境の構築手順の変更、環境が原因の失敗の追記 |
 | README | 起動方法・設定・使い方の変更 |
 
-## PRの「知見」の欄
+## {{knowledge_record_place}}
 
 Skill「知見」を読み、次を書く。該当しない項目は「なし」と書く。
 
@@ -60,7 +60,7 @@ Skill「知見」を読み、次を書く。該当しない項目は「なし」
 ## 更新が不要と判断した文書
 - `パス`：理由
 
-## PRの「知見」の欄の案
+## {{knowledge_record_place}}の案
 - 参照した知見：...
 - 当てはまらなかった知見：...
 - 新しい気づき：...

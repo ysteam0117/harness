@@ -2,6 +2,7 @@ import { major, valid } from "semver";
 import type { Answers } from "../questions/answers.js";
 import type { VersionResult } from "../versions/choose.js";
 import { wantedPackages } from "../versions/targets.js";
+import { isPlainObject } from "./data.js";
 import { GenerateError } from "./errors.js";
 import { mergePackageJson, type Profile } from "./profile.js";
 
@@ -25,6 +26,16 @@ const FIXED_KEYS = [
   "dependencies",
   "devDependencies",
 ];
+
+/** GitHub を使わない（手元の Git だけ）場合に、取り込みのコマンドを scripts に足す（C-83） */
+function withLocalGitScripts(
+  merged: Record<string, unknown>,
+  answers: Answers,
+): Record<string, unknown> {
+  if (answers.repository !== "local") return merged;
+  const scripts = isPlainObject(merged["scripts"]) ? merged["scripts"] : {};
+  return { ...merged, scripts: { ...scripts, "merge:check": "node scripts/merge-check.mjs" } };
+}
 
 function compare(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
@@ -67,7 +78,7 @@ export function buildPackageJson(input: BuildPackageJsonInput): Record<string, u
     (isDev.get(name) ? devDependencies : dependencies)[name] = version;
   }
 
-  const merged = mergePackageJson(profiles, answers);
+  const merged = withLocalGitScripts(mergePackageJson(profiles, answers), answers);
   for (const key of FIXED_KEYS) {
     if (Object.hasOwn(merged, key)) {
       throw new GenerateError(

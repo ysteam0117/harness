@@ -27,6 +27,7 @@ describe("#32 AC-1: 質問の定義（データ）", () => {
       "ais",
       "project_type",
       "layers",
+      "repository",
       "visibility",
       "team_size",
       "frontend",

@@ -4,8 +4,8 @@
 
 生成するプロジェクトに、要件定義書・ADR・テストの手順書・PR／Issue のテンプレート・CI・LICENSE・プロトタイプ・仮のアイコンを出す。
 
-- 作らないもの：GitHub を使わない場合の出し分け（#61）、E2E のシナリオと IaC（#64）
-- #61 までは、リポジトリの置き場所の質問がないため、`.github/`（ワークフローを除く）は常に出す
+- 作らないもの：E2E のシナリオと IaC（#64）
+- `.github/`（ワークフローを除く）は、リポジトリの置き場所（`repository`）が `github` のときだけ出す。`local`（手元のGitだけ）のときの出し分けは [local-git.md](local-git.md)（#61）
 
 | 番号 | 内容 |
 | --- | --- |
@@ -20,8 +20,8 @@
 | `docs/requirements.md` | `templates/docs/requirements.md` | 常に | プロジェクトのもの |
 | `docs/adr/README.md`・`0000-template.md` | `templates/docs/adr/` | 常に | プロジェクトのもの |
 | `docs/testing/README.md`・`quality`・`unit`・`integration`・`e2e`・`mutation`（`.md`） | `templates/docs/testing/` | 常に | プロジェクトのもの |
-| `.github/pull_request_template.md` | `templates/.github/` | 常に | 管理する |
-| `.github/ISSUE_TEMPLATE/parent.md`・`child.md`・`replace-icons.md` | `templates/.github/ISSUE_TEMPLATE/` | 常に | 管理する |
+| `.github/pull_request_template.md` | `templates/.github/` | `repository` が `github` | 管理する |
+| `.github/ISSUE_TEMPLATE/parent.md`・`child.md`・`replace-icons.md`・`harness-feedback.md` | `templates/.github/ISSUE_TEMPLATE/` | `repository` が `github` | 管理する |
 | `.github/workflows/check.yml` | `templates/.github/workflows/check.yml` | `check_location` が `github_actions`・`both` | プロジェクトのもの |
 | `LICENSE`（MIT） | `templates/project/LICENSE` | `visibility` が `public` | プロジェクトのもの |
 | `prototype/README.md`・`index.html`・`style.css`・`app.js` | `templates/project/prototype/` | 常に | プロジェクトのもの |

@@ -149,3 +149,219 @@ integration_cleanup:
   - when: { answer: database, equals: d1 }
     value: "- テスト用の D1 は、テストの終わりに消える。開発用の D1（`npm run dev`）には触れない"
   - value: "- DBは使わないため、DB の後始末はない。起動したものがあれば止める"
+
+# ---- リポジトリの置き場所（質問 repository、C-83）----
+# GitHub を使う場合は PR・Issue・GitHub のコマンドの手順、使わない（手元の Git だけ）場合は docs/issues/ のファイル・
+# フック・取り込みのコマンド（npm run merge:check）の手順にする。ひな形には分岐を入れず、ここで入れ替える（F-28）。
+
+# 「Issue・PR」と書く場所
+issue_and_pr:
+  - when: { answer: repository, equals: local }
+    value: Issueのファイル（`docs/issues/`）
+  - value: Issue・PR
+
+issue_or_pr_record:
+  - when: { answer: repository, equals: local }
+    value: Issueのファイル
+  - value: IssueまたはPR
+
+# 「PR」だけで書く場所（記録・リンク・理由を書く先）
+pr_equivalent:
+  - when: { answer: repository, equals: local }
+    value: Issueのファイル
+  - value: PR
+
+# 計画・レビュー結果などを残す場所
+issue_record_place:
+  - when: { answer: repository, equals: local }
+    value: Issueのファイル
+  - value: Issueのコメント
+
+knowledge_record_place:
+  - when: { answer: repository, equals: local }
+    value: Issueのファイルの「知見」の欄
+  - value: PRの「知見」の欄
+
+test_list_place:
+  - when: { answer: repository, equals: local }
+    value: Issueのファイルの「レビューの記録」
+  - value: PR本文
+
+change_review_place:
+  - when: { answer: repository, equals: local }
+    value: Issueのファイルに記録して、
+  - value: PRで
+
+merged_unit:
+  - when: { answer: repository, equals: local }
+    value: Issue
+  - value: PR
+
+implement_deliverable:
+  - when: { answer: repository, equals: local }
+    value: 取り込み
+  - value: PR
+
+harness_proposal_way:
+  - when: { answer: repository, equals: local }
+    value: 提案する（利用者に伝える。`docs/harness-feedback/`に下書きを置く）
+  - value: PRで提案する
+
+feedback_proposal_ref:
+  - when: { answer: repository, equals: local }
+    value: "`docs/harness-feedback/`の下書き"
+  - value: Issueテンプレート「ハーネスの改善の提案」
+
+secret_write_places:
+  - when: { answer: repository, equals: local }
+    value: チャット・コミットメッセージ・Issueのファイル
+  - value: チャット・コミットメッセージ・PR・Issue
+
+secret_put_commands:
+  - when: { answer: repository, equals: local }
+    value: "`wrangler secret put`等"
+  - value: "`wrangler secret put`・`gh secret set`等"
+
+remote_ops_caution:
+  - when: { answer: repository, equals: local }
+    value: 記録を失う操作：Issueのファイル（`docs/issues/`）の削除、ブランチの削除、`main`の履歴を書き換える操作
+  - value: GitHub等、ほかの人から見える場所への操作：PRのクローズ、Issueの削除、ブランチの削除
+
+done_link_check:
+  - when: { answer: repository, equals: local }
+    value: Issueのファイルの状態・レビューの記録・「知見」の欄を更新している
+  - value: PRにIssueを紐付けている
+
+feedback_instruction:
+  - when: { answer: repository, equals: local }
+    value: "`docs/harness-feedback/README.md`の書き方で、`docs/harness-feedback/`に改善の提案の下書きを置く。ハーネスのリポジトリに伝えるのは利用者が行う"
+  - value: "`.harness/config.yaml`の`feedback_target`で決めた場所に、`harness-feedback`のラベルを付けたIssueを、Issueテンプレート「ハーネスの改善の提案」で作る。`harness`（ハーネスのリポジトリ）の場合は、作る前に利用者の承認を得る"
+
+# AGENTS.md「作業の流れ」の手順1と、手順5〜7、その下の箇条書き
+workflow_issue_step:
+  - when: { answer: repository, equals: local }
+    value: "1. **Issueを作る**：Issueなしで作業を始めない。`docs/issues/_template.md`を写して、`docs/issues/<番号4桁>-<内容>.md`を作る（番号は1ずつ増やす。例：`0012-login.md`）。機能は親Issue、作業領域（DB・バックエンド・フロントエンド・その他）ごとに子Issueに分け、子のファイルの「親」に親の番号を書く"
+  - value: "1. **Issueを作る**：Issueなしで作業を始めない。機能は親Issue、作業領域（DB・バックエンド・フロントエンド・その他）ごとに子Issueに分ける"
+
+workflow_review_steps:
+  - when: { answer: repository, equals: local }
+    value: |-
+      5. **記録を書く**：レビューの結果（レビューしたAI・指摘・採用したか・採用しなかった理由）と、受け入れ条件ごとの確認の結果を、Issueのファイルに追記する。着手したら状態を「作業中」にする。「知見」の欄は必ず埋める
+      6. **取り込む**：作業のブランチでコミットしたあと、`npm run merge:check`を実行する。品質チェックとテストのすべて（`npm run check`）が通った場合だけ、`main`にSquashで取り込まれる。失敗したときは`main`に何も残らないので、直してもう一度実行する
+      7. **Issueの状態を確かめる**：取り込みのコマンドが、Issueのファイルの状態を「完了」にしたことを確かめる
+  - value: |-
+      5. **PRを作る**：本文に `Closes #<子Issue番号>`、親Issueは `Refs #<親Issue番号>` を書く。PRテンプレートの「知見」の欄は必ず埋める
+      6. **マージする**：テストと品質チェックが通っていることを確かめ、**Squash**でマージする
+      7. **Issueのクローズを確かめる**：`Closes`で指定したIssueが自動でクローズされたかを確かめる。されていなければ、PRの番号を書いたコメントを付けて手動でクローズする
+
+workflow_main_rules:
+  - when: { answer: repository, equals: local }
+    value: |-
+      - **`main`の上で直接コミットしない**。フック（`.githooks/pre-commit`）が止める。変更はすべて作業のブランチから、`npm run merge:check`で取り込む
+      - フックを外して、確認を飛ばさない。コミットの前の確認（秘密情報・整形・Lint）で止まったら、原因を直す
+  - value: |-
+      - **`main`へ直接pushしない**。変更はすべてPR経由で取り込む
+      - 複数人で開発している場合は、作業開始前・push前・マージ前に、リモートの最新状態と比べてコンフリクトがないかを確認する
+
+# Skill「実装の進め方」
+commit_merge_step:
+  - when: { answer: repository, equals: local }
+    value: "**コミット・取り込み**：`AGENTS.md`の「作業の流れ」に従う。取り込みの後、Issueのファイルの状態が「完了」になったかを確かめる"
+  - value: "**コミット・PR・マージ**：`AGENTS.md`の「作業の流れ」に従う。マージの後、`Closes`で指定したIssueがクローズされたかを確かめ、されていなければPRの番号を書いたコメントを付けて手動でクローズする"
+
+prev_merged_check:
+  - when: { answer: repository, equals: local }
+    value: 直前のIssueが、`npm run merge:check`で`main`に取り込み済みである
+  - value: 直前のIssueのPRがマージ済みである
+
+# Skill「テスト」の、道具の一覧の1行
+dependency_update_row:
+  - when: { answer: repository, equals: local }
+    value: "| 依存関係の更新の確認 | `npm outdated` | 定期的に | 更新は、バージョンを確かめてから、Issueにして取り込む |"
+  - value: "| 依存関係の更新の通知 | Dependabot | 常時 | 更新のPRは、バージョンを確かめてから取り込む |"
+
+# GitHub に作るリポジトリの公開範囲（gh repo create の引数）
+repo_visibility_flag:
+  - when: { answer: visibility, equals: public }
+    value: "--public"
+  - value: "--private"
+
+# README.md
+readme_repository_setup:
+  - when: { answer: repository, equals: local }
+    value: |-
+      GitHub は使わず、手元の Git だけで管理します。`main` の保護と品質チェックは、Git のフック（`.githooks/pre-commit`）と、取り込みのコマンド（`npm run merge:check`）で行います。
+
+      1. Git を用意する：`git init -b main`
+      1. フックを有効にする：`git config core.hooksPath .githooks`（`main` の上での直接のコミットなどを止めます。外さないでください）
+      1. 依存を入れる：`npm install`（コミットの前の確認に、Prettier と ESLint を使います）
+      1. 秘密情報の確認の道具を入れる（任意）：gitleaks を入れると、コミットの前に秘密情報の混入を確かめます（例：`brew install gitleaks`・`winget install gitleaks`）。入っていないときは、警告を表示して続けます
+      1. 最初のコミットをする：`git add -A` のあと `git commit -m "chore: 生成した初期状態"`（まだコミットがないので、`main` の上でもフックが許します）
+      1. 作業のブランチを作る：`git switch -c feature/1-replace-icons`（`<種類>/<Issue番号>-<内容>`。番号は `docs/issues/` の Issue の番号に合わせます）
+      1. 作業して、ブランチにコミットする。Issue の記録（レビューの結果・受け入れ条件の確認・知見）は `docs/issues/` のファイルに書きます
+      1. 取り込む：`npm run merge:check`（別のブランチを取り込むときは `npm run merge:check -- <ブランチ名>`）
+
+      `npm run merge:check` は、作業ツリーがきれいで、ブランチ名が `<種類>/<番号>-<内容>` であることを確かめ、`main` に変更を足した状態で `npm run check` を実行します。通った場合だけ、`main` に Squash でコミットし、Issue のファイルの状態を「完了」にします。失敗したときは、`main` に何も残さず、元のブランチに戻って理由を表示します（直してから、もう一度実行してください）。
+  - value: |-
+      GitHub のアカウントとの紐付け（`gh auth login`）は、利用者が自分で行います。
+
+      1. GitHub にログインする：`gh auth login`
+      1. Git を用意して、最初のコミットをする：`git init -b main` のあと `git add -A`、`git commit -m "chore: 生成した初期状態"`
+      1. リポジトリを作って push する：`gh repo create {{app_name}} {{repo_visibility_flag}} --source=. --push`
+      {{readme_env_test_step}}
+      1. `main` を保護する：下の「`main` ブランチの保護」の手順で設定する
+      1. 仮のアイコンの Issue を作る：下の「仮のアイコン」の手順で作る
+
+readme_env_test_step:
+  - when: { answer: check_location, in: [github_actions, both] }
+    value: "1. 品質チェックの検証用の環境変数を登録する：GitHub のリポジトリの Secrets に `ENV_TEST`（`.env.test` の中身）を登録する。手順は `docs/secrets.md` の CI の章。`gh secret set` は値を入力するコマンドのため、利用者が自分で実行します（AI には実行させません）"
+  - value: "1. 品質チェックは手元で実行するため、Secrets の登録は要りません"
+
+readme_icons_issue:
+  - when: { answer: repository, equals: local }
+    value: 差し替えの作業は、Issue のファイル `docs/issues/0001-replace-icons.md` で管理します。作業のブランチ（`feature/1-replace-icons`）を作って差し替え、`npm run merge:check` で取り込んでください。
+  - value: |-
+      差し替えの作業は、Issue のテンプレート「仮のアイコンの差し替え」（`.github/ISSUE_TEMPLATE/replace-icons.md`）で Issue にして管理します。リポジトリを GitHub に作ったら、最初に次のどちらかで Issue を作ってください。
+
+      - GitHub の画面：「Issues」→「New issue」→「仮のアイコンの差し替え」
+      - コマンド：`gh issue create --template "仮のアイコンの差し替え"`
+
+readme_branch_protection:
+  - when: { answer: repository, equals: local }
+    value: |-
+      `main` の上での直接のコミットは、フック（`.githooks/pre-commit`）が止めます。`main` に取り込めるのは、`npm run merge:check` が、品質チェックを通した変更をコミットするときだけです。
+
+      - フックは、`git config core.hooksPath .githooks` を実行したリポジトリで有効になります。clone し直したときは、もう一度実行してください
+      - フックを外して、確認を飛ばさないでください
+  - value: |-
+      `main` への直接の push と強制 push（force push）を禁止します。リポジトリを GitHub に作ったら、次の設定をしてください。
+
+      1. GitHub のリポジトリの「Settings」→「Rules」→「Rulesets」→「New ruleset」→「New branch ruleset」を開く
+      1. 「Ruleset Name」に `main の保護` と入れ、「Enforcement status」を「Active」にする
+      1. 「Target branches」で「Add target」→「Include default branch」を選ぶ
+      1. 「Restrict deletions」「Require a pull request before merging」「Block force pushes」に印を付ける
+      1. 品質チェックを GitHub Actions で実行する場合は、「Require status checks to pass」に印を付け、`check` を追加する
+      1. 「Create」で保存する
+
+readme_merge_command_row:
+  - when: { answer: repository, equals: local }
+    value: |-
+      | `git switch -c <種類>/<番号>-<内容>` | 作業のブランチを作る（`AGENTS.md` の「作業の流れ」） |
+      | `npm run merge:check` | 今のブランチを、品質チェックが通ったときだけ `main` に Squash で取り込む（`-- <ブランチ名>` で指定もできる） |
+  - value: "| `git switch -c <種類>/<番号>-<内容>` | 作業のブランチを作る（`AGENTS.md` の「作業の流れ」） |"
+
+secrets_ci_setup:
+  - when: { answer: repository, equals: local }
+    value: |-
+      ## 品質チェック（手元のPC）
+
+      品質チェックは手元で `npm run check` を実行する。検証用の値は `.env.test` に設定する（上の「開発・検証」の手順）。
+  - value: |-
+      ## CI（GitHub Actions）
+
+      - GitHubのリポジトリの Settings → Secrets and variables → Actions で登録する
+      - または、次を実行して、聞かれた値を入力する
+
+        ```bash
+        gh secret set <項目名>
+        ```

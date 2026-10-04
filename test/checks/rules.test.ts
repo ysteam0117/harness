@@ -41,13 +41,14 @@ const hitIds = (answers: Record<string, unknown>, facts: Facts = NO_FACTS) => {
 };
 
 describe("#32 AC-3: ルールのデータ（data/consistency-rules.yaml）", () => {
-  it("#32 AC-3: F-08 の初回のルール10件が、表の順に読み込める", () => {
+  it("#32 AC-3: F-08 のルールが、表の順に読み込める", () => {
     expect(rules.map((r) => r.id)).toEqual([
       "auth-needs-db",
       "upload-needs-db",
       "upload-without-auth",
       "team-needs-ci",
       "public-needs-ci",
+      "team-without-remote",
       "postgresql-needs-service",
       "version-newer-than-verified",
       "missing-tools",

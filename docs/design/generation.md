@@ -41,7 +41,7 @@
 | `src/generate/profile.ts` | `dev_packages` の読み込みと検証（`Profile.devPackages`）を追加。#56 で `files_when`・`wrangler`・`wrangler_when`・`package_json_when` の読み込みと、まとめ方（`selectProfileFiles`・`mergeWrangler`・`mergePackageJson`）を追加（[skeleton.md](skeleton.md)） |
 | `src/generate/wrangler.ts` | `buildWranglerJsonc`：`wrangler.jsonc` の組み立て（#56。[skeleton.md](skeleton.md)） |
 | `src/commands/create.ts` | 確認の後の生成（`generate`）：`buildProject` → `writeProject`、SIGINT の登録、終了コード、次の手順の表示 |
-| `data/template-values.yaml` | 回答の条件で決まるテンプレートの値 |
+| `data/template-values.yaml` | 回答の条件で決まるテンプレートの値。リポジトリの置き場所（`repository`）で変わる手順の文も、ここで入れ替える（[local-git.md](local-git.md)）。値の中の `{{名前}}` は、ほかの値で1段だけ展開する（`expandReferences`） |
 | `data/role-models.yaml` | 役割ごとのモデルの初期値（C-66 の表） |
 | `data/env-items.yaml` | 環境変数の項目の一覧（`docs/secrets.md` の表。`.env.example` も同じ一覧から `buildEnvExample`（`values.ts`）が作る。項目ごとの `example` が `.env.example` の値） |
 | `data/knowledge-selection.yaml` | 知見のファイルと、写す条件の対応 |
@@ -195,7 +195,7 @@ F-18 により、知見は選んだ技術に**関係するものだけ**を写�
 
 | 区分 | ファイル |
 | --- | --- |
-| ハーネスが管理する | `AGENTS.md`・`CLAUDE.md`、Skill（`.claude/skills/`・`.agents/skills/`。知見の写しを含む）、エージェントの定義（`.claude/agents/`・`.codex/agents/`）、AI の権限の設定（`.claude/settings.json`・`.codex/rules/default.rules`）、`.github/ISSUE_TEMPLATE/`・`.github/pull_request_template.md`、`scripts/env-check.mjs`、`docs/secrets.md` |
+| ハーネスが管理する | `AGENTS.md`・`CLAUDE.md`、Skill（`.claude/skills/`・`.agents/skills/`。知見の写しを含む）、エージェントの定義（`.claude/agents/`・`.codex/agents/`）、AI の権限の設定（`.claude/settings.json`・`.codex/rules/default.rules`）、`.github/ISSUE_TEMPLATE/`・`.github/pull_request_template.md`、`scripts/env-check.mjs`、`docs/secrets.md`、GitHub を使わない場合の `.githooks/pre-commit`・`scripts/merge-check.mjs`・`docs/issues/_template.md`・`docs/harness-feedback/README.md`（[local-git.md](local-git.md)） |
 | プロジェクトのもの | プロファイルの `files`（アプリのコード・`wrangler.jsonc`・`vite.config.ts`・`vitest.config.ts`・`playwright.config.ts`・`eslint.config.mjs` など）、`package.json`、`.node-version`、`docs/tech-stack.md`、`docs/project-rules.md`、`docs/requirements.md`、`docs/adr/`、`docs/testing/`、`.github/workflows/`、`LICENSE`、`prototype/`、`public/` の仮のアイコン、`.harness/config.yaml` |
 
 プロジェクトのものは、利用者が育てる前提のため、指紋を取らない。#56 で PR のテンプレートなどを足すときは、管理するファイルの側に加える。

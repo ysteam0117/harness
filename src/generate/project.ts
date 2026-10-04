@@ -32,6 +32,8 @@ export type ProjectFile = {
   managed: boolean;
   /** 画像など、content を base64 で持つファイル */
   encoding?: "base64";
+  /** 実行できるファイル（Git のフック）。書いたあとに実行の権限を付ける */
+  executable?: true;
 };
 
 export interface BuildProjectInput {
@@ -49,8 +51,16 @@ export interface BuildProjectInput {
   knowledgeDir?: string;
 }
 
+const GITHUB_REPOSITORY: When = { answer: "repository", equals: "github" };
+const LOCAL_REPOSITORY: When = { answer: "repository", equals: "local" };
+
 /** ひな形から出力する文書・スクリプト・Issue のテンプレート（ひな形 → 出力先） */
-const TEMPLATE_FILES: { source: string; destination: string; when?: When }[] = [
+const TEMPLATE_FILES: {
+  source: string;
+  destination: string;
+  when?: When;
+  executable?: true;
+}[] = [
   { source: "docs/secrets.md", destination: "docs/secrets.md" },
   { source: "docs/project-rules.md", destination: "docs/project-rules.md" },
   { source: "docs/pentest-plan.md", destination: "docs/testing/pentest-plan.md" },
@@ -68,12 +78,39 @@ const TEMPLATE_FILES: { source: string; destination: string; when?: When }[] = [
     source: `docs/testing/${name}.md`,
     destination: `docs/testing/${name}.md`,
   })),
-  // GitHub のファイル（PR・Issue のテンプレート・品質チェックのワークフロー）
+  // GitHub のファイル（PR・Issue のテンプレート・品質チェックのワークフロー）。リポジトリの置き場所が GitHub のときだけ（C-83）
   ...["harness-feedback", "parent", "child", "replace-icons"].map((name) => ({
     source: `.github/ISSUE_TEMPLATE/${name}.md`,
     destination: `.github/ISSUE_TEMPLATE/${name}.md`,
+    when: GITHUB_REPOSITORY,
   })),
-  { source: ".github/pull_request_template.md", destination: ".github/pull_request_template.md" },
+  {
+    source: ".github/pull_request_template.md",
+    destination: ".github/pull_request_template.md",
+    when: GITHUB_REPOSITORY,
+  },
+  // GitHub を使わない（手元の Git だけ）場合の、Issue・フック・取り込みのコマンド・改善の提案の下書き（C-83）
+  ...["README.md", "_template.md", "0001-replace-icons.md"].map((name) => ({
+    source: `local-git/docs/issues/${name}`,
+    destination: `docs/issues/${name}`,
+    when: LOCAL_REPOSITORY,
+  })),
+  {
+    source: "local-git/docs/harness-feedback/README.md",
+    destination: "docs/harness-feedback/README.md",
+    when: LOCAL_REPOSITORY,
+  },
+  {
+    source: "local-git/githooks/pre-commit",
+    destination: ".githooks/pre-commit",
+    when: LOCAL_REPOSITORY,
+    executable: true,
+  },
+  {
+    source: "local-git/scripts/merge-check.mjs",
+    destination: "scripts/merge-check.mjs",
+    when: LOCAL_REPOSITORY,
+  },
   {
     source: ".github/workflows/check.yml",
     destination: ".github/workflows/check.yml",
@@ -145,7 +182,12 @@ export function isManagedPath(p: string): boolean {
       "db-local.ts",
       "compose-local.ts",
     ].some((name) => p === `scripts/${name}`) ||
-    p === "docs/secrets.md"
+    p === "docs/secrets.md" ||
+    // GitHub を使わない場合（C-83）。docs/issues/README.md と各 Issue のファイルはプロジェクトのもの
+    p === ".githooks/pre-commit" ||
+    p === "scripts/merge-check.mjs" ||
+    p === "docs/issues/_template.md" ||
+    p === "docs/harness-feedback/README.md"
   );
 }
 
@@ -230,7 +272,12 @@ export function buildProject(input: BuildProjectInput): { files: ProjectFile[] }
 
   // AI向けの出力・プロファイルの files
   const built = buildOutputs({ templatesDir, ais, profiles: profileKeys, values, answers });
-  const outputs: { path: string; content: string; encoding?: "base64" }[] = [...built.files];
+  const outputs: {
+    path: string;
+    content: string;
+    encoding?: "base64";
+    executable?: true;
+  }[] = [...built.files];
 
   // 文書・スクリプト・Issue のテンプレート
   for (const file of TEMPLATE_FILES) {
@@ -241,6 +288,7 @@ export function buildProject(input: BuildProjectInput): { files: ProjectFile[] }
     outputs.push({
       path: file.destination,
       content: renderTemplate(text, values, { templatesDir, fileName: file.source }),
+      ...(file.executable ? { executable: true as const } : {}),
     });
   }
 

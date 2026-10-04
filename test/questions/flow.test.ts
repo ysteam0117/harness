@@ -42,6 +42,7 @@ const ASVS_IDS = [
 const fullScript = (): Record<string, unknown[]> => ({
   app_name: ["testapp-001"],
   ais: [["claude", "codex"]],
+  repository: ["github"],
   visibility: ["public"],
   team_size: ["team"],
   database: ["postgresql"],
@@ -65,6 +66,7 @@ describe("#32 AC-1: 質問の順番と回答", () => {
     expect(p.askedIds).toEqual([
       "app_name",
       "ais",
+      "repository",
       "visibility",
       "team_size",
       "database",
@@ -83,6 +85,7 @@ describe("#32 AC-1: 質問の順番と回答", () => {
     expect(answers).toEqual({
       app_name: "testapp-001",
       ais: ["claude", "codex"],
+      repository: "github",
       visibility: "public",
       team_size: "team",
       database: "postgresql",
@@ -376,10 +379,11 @@ describe("#32 AC-5: 中断", () => {
     const p = new FakePrompter({
       app_name: ["testapp-001"],
       ais: [["claude"]],
+      repository: ["github"],
       visibility: [new CancelledError()],
     });
     await expect(runQuestions(defs, p, {})).rejects.toBeInstanceOf(CancelledError);
-    expect(p.askedIds).toEqual(["app_name", "ais", "visibility"]);
+    expect(p.askedIds).toEqual(["app_name", "ais", "repository", "visibility"]);
   });
 });
 

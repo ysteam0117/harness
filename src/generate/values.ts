@@ -207,6 +207,23 @@ function envRow(item: EnvItem): string {
   return `| ${name} | ${item.purpose} | ${item.development} | ${item.test} | ${item.production} |`;
 }
 
+const REFERENCE_RE = /{{([a-z][a-z0-9_]*)}}/g;
+
+/**
+ * data/template-values.yaml の値の中の {{名前}} を、ほかの値で置き換える（1段だけ。置き換えた先の中の {{名前}} は展開しない）。
+ * 値を持たない名前は、そのまま残す（ひな形に差し込んだあと、値が決まっていない名前として誤りになる）。
+ */
+function expandReferences(values: Record<string, string>, names: string[]): void {
+  const before = { ...values };
+  for (const name of names) {
+    const text = before[name];
+    if (text === undefined) continue;
+    values[name] = text.replace(REFERENCE_RE, (all, ref: string) =>
+      ref !== name && before[ref] !== undefined ? before[ref] : all,
+    );
+  }
+}
+
 /**
  * ひな形（templates/）の {{名前}} に入れる値を決める。名前 → 値。
  * 回答の条件で決まるものは data/template-values.yaml・env-items.yaml・role-models.yaml・runtimes.yaml に置き、
@@ -250,6 +267,8 @@ export function buildValues(input: BuildValuesInput): Record<string, string> {
     .filter((item) => whenMatches(item.when, answers))
     .map(envRow)
     .join("\n");
+
+  expandReferences(values, Object.keys(loadDefinitions()));
 
   for (const [role, model] of Object.entries(rolesFor(answers.ais))) {
     if (model.claude) values[`claude_model_${role}`] = model.claude.model;
