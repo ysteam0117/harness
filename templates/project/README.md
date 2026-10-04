@@ -53,3 +53,35 @@ npm run docker:up:local
 | `frontend/src/` | 画面（React）。`pages/`（部品を組み合わせる）・`features/`（機能ごとの部品と API 層） |
 | `wrangler.jsonc` | Cloudflare Workers の設定（ハーネスが、選んだ技術に合わせて作ったもの） |
 | `docs/` | 設計・ルール・記録（`docs/project-rules.md` を最初に読む） |
+| `public/` | そのまま配信するファイル（アイコン・ファビコン・`manifest.webmanifest`） |
+| `prototype/` | 画面の動きを確かめるプロトタイプ（HTML・CSS・JavaScript だけ。本番のコードに流用しない） |
+
+## 文書
+
+| 文書 | 内容 |
+| --- | --- |
+| `docs/requirements.md` | 要件定義書。生成したときの判定の結果（ASVS のレベル・ペネトレーションテストの要否・未定の項目）が入っています |
+| `docs/adr/` | 設計判断の記録。`0000-template.md` を写して書きます |
+| `docs/testing/` | テストの種類ごとの環境構築の手順書 |
+
+## 仮のアイコン
+
+`public/` のアイコン・ファビコン（`favicon.ico`・`favicon.svg`・`apple-touch-icon.png`・`icons/icon-192.png`・`icons/icon-512.png`）は、頭文字と枠だけの**仮の画像**です。本番へ公開する前に、同じファイル名・同じ大きさの正式な画像に差し替えてください。
+
+差し替えの作業は、Issue のテンプレート「仮のアイコンの差し替え」（`.github/ISSUE_TEMPLATE/replace-icons.md`）で Issue にして管理します。リポジトリを GitHub に作ったら、最初に次のどちらかで Issue を作ってください。
+
+- GitHub の画面：「Issues」→「New issue」→「仮のアイコンの差し替え」
+- コマンド：`gh issue create --template "仮のアイコンの差し替え"`
+
+差し替えたら、この章を消します。
+
+## `main` ブランチの保護
+
+`main` への直接の push と強制 push（force push）を禁止します。リポジトリを GitHub に作ったら、次の設定をしてください。
+
+1. GitHub のリポジトリの「Settings」→「Rules」→「Rulesets」→「New ruleset」→「New branch ruleset」を開く
+1. 「Ruleset Name」に `main の保護` と入れ、「Enforcement status」を「Active」にする
+1. 「Target branches」で「Add target」→「Include default branch」を選ぶ
+1. 「Restrict deletions」「Require a pull request before merging」「Block force pushes」に印を付ける
+1. 品質チェックを GitHub Actions で実行する場合は、「Require status checks to pass」に印を付け、`check` を追加する
+1. 「Create」で保存する

@@ -146,7 +146,7 @@ Codex のモデル名は、設定（`model = "..."`）にそのまま書ける�
 - **「未定」（回答がない場合も同じ）は、安全側（扱う・ある・する）として判定する**。未定の質問の id は `undecided` に入れる。未定の項目は、要件定義で決める項目として `.harness/config.yaml` に残す。未定のために必須とした理由には「未定のため、安全側として扱う」を付ける。A〜G がすべて未定なら、レベル2・必須になる
 - 認証が「なし」のときの B・D は、自動で「ない」に決まるため、未定に入らない
 - 「3を検討」は、ASVS レベル3を採るかを検討する意味で、検討の結果はADRに記録する。ADR への記録は利用者の作業であり、ハーネスが自動で作るものではない
-- 要件定義書のひな形への判定の結果の記録は、#56（要件定義書のひな形）で行う。#34 では `.harness/config.yaml` に記録する
+- 判定の結果は `.harness/config.yaml` に記録し、要件定義書のひな形（`docs/requirements.md`）にも書き込む（#63。[documents.md](documents.md)）
 
 ## `package.json` の組み立て
 
@@ -195,8 +195,8 @@ F-18 により、知見は選んだ技術に**関係するものだけ**を写�
 
 | 区分 | ファイル |
 | --- | --- |
-| ハーネスが管理する | `AGENTS.md`・`CLAUDE.md`、Skill（`.claude/skills/`・`.agents/skills/`。知見の写しを含む）、エージェントの定義（`.claude/agents/`・`.codex/agents/`）、AI の権限の設定（`.claude/settings.json`・`.codex/rules/default.rules`）、`.github/ISSUE_TEMPLATE/`、`scripts/env-check.mjs`、`docs/secrets.md` |
-| プロジェクトのもの | プロファイルの `files`（アプリのコード・`wrangler.jsonc`・`vite.config.ts`・`vitest.config.ts`・`playwright.config.ts`・`eslint.config.mjs` など）、`package.json`、`.node-version`、`docs/tech-stack.md`、`docs/project-rules.md`、`docs/adr/`、`docs/testing/`、`.harness/config.yaml` |
+| ハーネスが管理する | `AGENTS.md`・`CLAUDE.md`、Skill（`.claude/skills/`・`.agents/skills/`。知見の写しを含む）、エージェントの定義（`.claude/agents/`・`.codex/agents/`）、AI の権限の設定（`.claude/settings.json`・`.codex/rules/default.rules`）、`.github/ISSUE_TEMPLATE/`・`.github/pull_request_template.md`、`scripts/env-check.mjs`、`docs/secrets.md` |
+| プロジェクトのもの | プロファイルの `files`（アプリのコード・`wrangler.jsonc`・`vite.config.ts`・`vitest.config.ts`・`playwright.config.ts`・`eslint.config.mjs` など）、`package.json`、`.node-version`、`docs/tech-stack.md`、`docs/project-rules.md`、`docs/requirements.md`、`docs/adr/`、`docs/testing/`、`.github/workflows/`、`LICENSE`、`prototype/`、`public/` の仮のアイコン、`.harness/config.yaml` |
 
 プロジェクトのものは、利用者が育てる前提のため、指紋を取らない。#56 で PR のテンプレートなどを足すときは、管理するファイルの側に加える。
 

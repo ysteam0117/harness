@@ -8,7 +8,8 @@
 # 条件の書き方は consistency-rules.yaml の answer 条件と同じ。
 #
 # ここに書かない値は、回答から計算する（src/generate/values.ts）：
-#   app_name・auth_method・database・asvs_level・pentest_requirement・knowledge_index・secrets_table・
+#   app_name・auth_method・database・asvs_level・pentest_requirement・judgment_table・enabled_rules・undecided_items・
+#   knowledge_index・secrets_table・license_year（生成した年。project.ts）・
 #   compatibility_date（runtimes.yaml）・役割とモデル（role-models.yaml）
 
 check_command: npm run check
@@ -119,3 +120,32 @@ readme_docker_db:
     value: |-
       - 開発PostgreSQLのデータは開発用ComposeプロジェクトのDBボリュームに残ります。テーブルは`npm run db:migrate`、開発用の架空のデータは`npm run db:seed:local`で入れます。検証は`npm run docker:up:test`で別プロジェクト・別DBを起動します
   - value: ""
+
+# 結合テストの手順書（docs/testing/integration.md、C-69）。DB の回答で変わる
+integration_tools:
+  - when: { answer: database, equals: postgresql }
+    value: "| Docker（検証用の PostgreSQL のコンテナ） | `docker-compose.yml` の版 | PC に Docker を入れる |"
+  - when: { answer: database, equals: d1 }
+    value: "| ローカルの D1 | wrangler に含まれる | `npm install`（コンテナは使わない） |"
+  - value: "| DB | DBは使わないため、対象外 | — |"
+
+integration_setup:
+  - when: { answer: database, equals: postgresql }
+    value: "1. 検証用の DB のコンテナを起動する：`npm run docker:up:test`（DB 名は `_test` で終わる）\n1. マイグレーションを適用する：`npm run db:migrate:test`"
+  - when: { answer: database, equals: d1 }
+    value: "1. テスト用の D1 は、`npm test` のときに一時的に作られ、マイグレーションが適用される（準備は不要）"
+  - value: "1. DBは使わないため、DB の準備はない"
+
+integration_verify:
+  - when: { answer: database, equals: postgresql }
+    value: "- `docker compose ps` で、検証用の DB のコンテナが動いている"
+  - when: { answer: database, equals: d1 }
+    value: "- `npm test` の最初に、マイグレーションの適用が失敗していない"
+  - value: "- DBは使わないため、DB の確認はない"
+
+integration_cleanup:
+  - when: { answer: database, equals: postgresql }
+    value: "- テストデータを消す：`npm run db:cleanup:test`（`testuser_` で始まる行だけを消す）\n- コンテナを止める：`npm run docker:down:test`。ポートが解放されたことを確かめる"
+  - when: { answer: database, equals: d1 }
+    value: "- テスト用の D1 は、テストの終わりに消える。開発用の D1（`npm run dev`）には触れない"
+  - value: "- DBは使わないため、DB の後始末はない。起動したものがあれば止める"

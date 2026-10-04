@@ -1,0 +1,29 @@
+# もとになった共通仕様：C-61
+# 品質チェック（F-16）。手元と同じ npm run check を実行する。
+# 検証用の環境変数は、リポジトリの Secrets の ENV_TEST に、.env.test の中身を登録して渡す（値はこのファイルに書かない。docs/secrets.md）
+name: 品質チェック
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - name: 検証用の環境変数のファイルを作る
+        env:
+          ENV_TEST: ${{ secrets.ENV_TEST }}
+        run: printf '%s\n' "$ENV_TEST" > .env.test
+      - run: npm run check

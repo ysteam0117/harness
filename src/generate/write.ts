@@ -7,8 +7,8 @@ import { GenerateError } from "./errors.js";
 /** ファイル操作の窓口。テストでは一部だけを差し替える（本物は node:fs/promises と setTimeout） */
 export interface FsOps {
   mkdir(dir: string, opts?: { recursive: boolean }): Promise<unknown>;
-  /** 文字列は UTF-8 で、そのまま書く */
-  writeFile(file: string, content: string): Promise<void>;
+  /** 文字列は UTF-8 で、バイト列はそのまま書く */
+  writeFile(file: string, content: string | Uint8Array): Promise<void>;
   /** リンクをたどらない。なければ code: "ENOENT" で失敗する */
   lstat(p: string): Promise<Stats>;
   readdir(p: string): Promise<string[]>;
@@ -26,7 +26,7 @@ export interface WriteProjectInput {
   cwd: string;
   appName: string;
   /** "/" 区切りの相対パス */
-  files: { path: string; content: string }[];
+  files: { path: string; content: string; encoding?: "base64" }[];
   /** 差し替え（既定は本物） */
   fs?: Partial<FsOps>;
   /** 中断の要求（SIGINT を受けたら create が abort する） */
@@ -43,7 +43,8 @@ export class GenerationInterrupted extends Error {
 
 const realFs: FsOps = {
   mkdir: (dir, opts) => mkdir(dir, opts),
-  writeFile: (file, content) => writeFile(file, content, "utf8"),
+  writeFile: (file, content) =>
+    typeof content === "string" ? writeFile(file, content, "utf8") : writeFile(file, content),
   lstat: (p) => lstat(p),
   readdir: (p) => readdir(p),
   rmdir: (p) => rmdir(p),
@@ -170,7 +171,10 @@ export async function writeProject(
       stopIfAborted();
       const full = path.join(tmp, ...file.path.split("/"));
       await fs.mkdir(path.dirname(full), { recursive: true });
-      await fs.writeFile(full, file.content);
+      await fs.writeFile(
+        full,
+        file.encoding === "base64" ? Buffer.from(file.content, "base64") : file.content,
+      );
     }
     stopIfAborted();
 

@@ -832,7 +832,9 @@ describe("#34 AC-3: 生成する（harness create の最後）", () => {
   it("#34 AC-3: 承知した警告がなければ、ADR は作られない", async () => {
     const s = setup();
     await runCreate({ answers: s.writeAnswers(answersYaml()), yes: true }, s.deps);
-    expect(existsSync(path.join(s.tmp.cwd, APP, "docs", "adr"))).toBe(false);
+    expect(existsSync(path.join(s.tmp.cwd, APP, "docs", "adr", "0001-accepted-warnings.md"))).toBe(
+      false,
+    );
   });
 
   it("#34 AC-3: Git の初期化はしない（#55 で決める）", async () => {

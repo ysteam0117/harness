@@ -401,7 +401,8 @@ describe.each(combos)("#56 AC-3: 生成の結果（$label）", (c) => {
   it("#56 AC-3: 生成したコードに {{名前}} の残りと「もとになった共通仕様」の印がない", async () => {
     for (const f of await generated(c)) {
       expect(f.content, f.path).not.toMatch(LEFTOVER_NAME);
-      expect(f.content, f.path).not.toContain("{{");
+      // GitHub Actions の式（${{ ... }}）は、ハーネスの差し込みの残りではないため除く（#63）
+      expect(f.content.replace(/\$\{\{ [^}]+ \}\}/g, ""), f.path).not.toContain("{{");
       expect(f.content, f.path).not.toContain("もとになった共通仕様");
       expect(f.content, f.path).not.toContain("\r");
     }

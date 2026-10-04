@@ -1,0 +1,14 @@
+body {
+  font-family: sans-serif;
+  margin: 0 auto;
+  max-width: 48rem;
+  padding: 1rem;
+}
+
+nav button {
+  margin-right: 0.5rem;
+}
+
+.error {
+  color: #b91c1c;
+}

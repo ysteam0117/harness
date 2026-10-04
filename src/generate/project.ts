@@ -13,6 +13,7 @@ import { GenerateError } from "./errors.js";
 import { judge } from "./judgment.js";
 import { selectKnowledge } from "./knowledge.js";
 import { buildOutputs } from "./plan.js";
+import { buildIcons } from "./icons.js";
 import { buildPackageJson } from "./package-json.js";
 import { checkOutputPaths } from "./paths.js";
 import { resolveProfiles } from "./profile.js";
@@ -29,6 +30,8 @@ export type ProjectFile = {
   content: string;
   /** ハーネスが管理するファイル（F-27）か。false はプロジェクトのもの */
   managed: boolean;
+  /** 画像など、content を base64 で持つファイル */
+  encoding?: "base64";
 };
 
 export interface BuildProjectInput {
@@ -57,10 +60,35 @@ const TEMPLATE_FILES: { source: string; destination: string; when?: When }[] = [
   { source: "scripts/test-safety.mjs", destination: "scripts/test-safety.mjs" },
   { source: "scripts/db-local.ts", destination: "scripts/db-local.ts" },
   { source: "scripts/compose-local.ts", destination: "scripts/compose-local.ts" },
+  // 文書のひな形（#63）。要件定義書には F-26 の判定の結果を書き込む
+  { source: "docs/requirements.md", destination: "docs/requirements.md" },
+  { source: "docs/adr/README.md", destination: "docs/adr/README.md" },
+  { source: "docs/adr/0000-template.md", destination: "docs/adr/0000-template.md" },
+  ...["README", "quality", "unit", "integration", "e2e", "mutation"].map((name) => ({
+    source: `docs/testing/${name}.md`,
+    destination: `docs/testing/${name}.md`,
+  })),
+  // GitHub のファイル（PR・Issue のテンプレート・品質チェックのワークフロー）
+  ...["harness-feedback", "parent", "child", "replace-icons"].map((name) => ({
+    source: `.github/ISSUE_TEMPLATE/${name}.md`,
+    destination: `.github/ISSUE_TEMPLATE/${name}.md`,
+  })),
+  { source: ".github/pull_request_template.md", destination: ".github/pull_request_template.md" },
   {
-    source: ".github/ISSUE_TEMPLATE/harness-feedback.md",
-    destination: ".github/ISSUE_TEMPLATE/harness-feedback.md",
+    source: ".github/workflows/check.yml",
+    destination: ".github/workflows/check.yml",
+    when: { answer: "check_location", in: ["github_actions", "both"] },
   },
+  {
+    source: "project/LICENSE",
+    destination: "LICENSE",
+    when: { answer: "visibility", equals: "public" },
+  },
+  // プロトタイプ（C-76）
+  ...["README.md", "index.html", "style.css", "app.js"].map((name) => ({
+    source: `project/prototype/${name}`,
+    destination: `prototype/${name}`,
+  })),
   // 動くアプリの土台（#56）。.gitignore は、ひな形のフォルダの設定に影響しないよう、名前を変えて置く
   { source: "project/gitignore", destination: ".gitignore" },
   { source: "project/prettierignore", destination: ".prettierignore" },
@@ -108,6 +136,7 @@ export function isManagedPath(p: string): boolean {
     p === ".claude/settings.json" ||
     p === ".codex/rules/default.rules" ||
     p.startsWith(".github/ISSUE_TEMPLATE/") ||
+    p === ".github/pull_request_template.md" ||
     [
       "env-check.mjs",
       "local-env.ts",
@@ -197,10 +226,11 @@ export function buildProject(input: BuildProjectInput): { files: ProjectFile[] }
     throw new GenerateError(".node-version に使う Node.js の版が、選んだ版にありません");
   }
   const values = buildValues({ answers, judgment, knowledge, nodeVersion: nodeEntry.version });
+  values["license_year"] = String(now.getFullYear());
 
   // AI向けの出力・プロファイルの files
   const built = buildOutputs({ templatesDir, ais, profiles: profileKeys, values, answers });
-  const outputs: { path: string; content: string }[] = [...built.files];
+  const outputs: { path: string; content: string; encoding?: "base64" }[] = [...built.files];
 
   // 文書・スクリプト・Issue のテンプレート
   for (const file of TEMPLATE_FILES) {
@@ -234,6 +264,8 @@ export function buildProject(input: BuildProjectInput): { files: ProjectFile[] }
   });
   outputs.push({ path: "package.json", content: `${JSON.stringify(packageJson, null, 2)}\n` });
   outputs.push({ path: ".node-version", content: `${nodeEntry.version}\n` });
+  // 仮のアイコン（C-55）
+  outputs.push(...buildIcons(answers.app_name));
 
   // 知見の写し：Skill「知見」の references/（選んだAIごと）
   const skillRoots = [

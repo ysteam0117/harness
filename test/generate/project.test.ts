@@ -398,7 +398,11 @@ describe("#34 R8: 承知した警告の ADR（C-35）", () => {
   it("#34 R8: 承知した警告がないときは、ADR を出さない", async () => {
     const { files } = buildProject(await projectInput());
     expect(pathsOf(files)).not.toContain(ADR);
-    expect(pathsOf(files).filter((p) => p.startsWith("docs/adr/"))).toEqual([]);
+    // ADR の README とひな形（#63）だけがあり、承知した警告の ADR はない
+    expect(pathsOf(files).filter((p) => p.startsWith("docs/adr/"))).toEqual([
+      "docs/adr/0000-template.md",
+      "docs/adr/README.md",
+    ]);
   });
 
   it("#34 R8: 承知した警告があるときは出る。背景・選択肢・決定・理由・影響の項目と、警告の id・内容・理由・承知した日が記録される", async () => {

@@ -171,6 +171,37 @@ function asvsLevel(judgment: Judgment): string {
   return judgment.asvsLevel === 3 ? "3を検討（結果をADRに記録する）" : String(judgment.asvsLevel);
 }
 
+/** 要件定義書の判定の結果の表（質問A〜G。F-26） */
+const JUDGMENT_QUESTIONS = [
+  ["A", "personal_data"],
+  ["B", "admin"],
+  ["C", "critical_ops"],
+  ["D", "collaborative"],
+  ["E", "org_separation"],
+  ["F", "realtime"],
+  ["G", "availability"],
+] as const;
+
+function titleOf(id: string): string {
+  const title = questionDefinitions.find((d) => d.id === id)?.title;
+  if (title === undefined) throw new GenerateError(`質問 ${id} の定義がありません`);
+  return title;
+}
+
+function judgmentTable(answers: Answers): string {
+  const raw = answers as unknown as Record<string, unknown>;
+  return JUDGMENT_QUESTIONS.map(
+    ([mark, id]) => `| ${mark} | ${titleOf(id)} | ${labelOf(id, raw[id] ?? "undecided")} |`,
+  ).join("\n");
+}
+
+function undecidedItems(judgment: Judgment): string {
+  const lines = JUDGMENT_QUESTIONS.filter(([, id]) => judgment.undecided.includes(id)).map(
+    ([mark, id]) => `- ${mark}：${titleOf(id)}（\`${id}\`）`,
+  );
+  return lines.length > 0 ? lines.join("\n") : "なし";
+}
+
 function envRow(item: EnvItem): string {
   const name = "`" + item.name + "`";
   return `| ${name} | ${item.purpose} | ${item.development} | ${item.test} | ${item.production} |`;
@@ -207,6 +238,10 @@ export function buildValues(input: BuildValuesInput): Record<string, string> {
   values["database"] = labelOf("database", answers.database);
   values["asvs_level"] = asvsLevel(judgment);
   values["pentest_requirement"] = pentestRequirement(judgment);
+  values["judgment_table"] = judgmentTable(answers);
+  values["enabled_rules"] =
+    judgment.enabledRules.length > 0 ? judgment.enabledRules.join("、") : "なし";
+  values["undecided_items"] = undecidedItems(judgment);
   values["knowledge_index"] = knowledgeIndexRows(knowledge);
   values["compatibility_date"] = compatibilityDate();
   values["postgres_image_tag"] = postgresImageTag();

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{app_name}}（プロトタイプ）</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>{{app_name}}（プロトタイプ）</h1>
+      <nav aria-label="表示の切り替え">
+        <button type="button" data-state="loading">読み込み中</button>
+        <button type="button" data-state="data">データあり</button>
+        <button type="button" data-state="empty">データなし</button>
+        <button type="button" data-state="error">エラー</button>
+      </nav>
+    </header>
+    <main id="screen"></main>
+    <script src="app.js"></script>
+  </body>
+</html>
