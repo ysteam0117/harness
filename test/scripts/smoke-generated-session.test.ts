@@ -110,10 +110,10 @@ describe("#73 R2: 件数の SQL と、出力の読み取り", () => {
 });
 
 describe("#73 R2: 認証ありの通り", () => {
-  it("d1（oidc）・postgresql（app）が認証あり、none は認証なし（実 DB のセッションの確認は、認証ありの2通りだけ）", () => {
-    const authenticated = SMOKE_CASES.filter((c) => c.auth !== "none").map(
-      (c) => `${c.id}:${c.auth}`,
-    );
+  it("d1（oidc）・postgresql（app）が認証あり、none・undecided（#79：既定の未定）は認証なし（実 DB のセッションの確認は、認証ありの2通りだけ）", () => {
+    const authenticated = SMOKE_CASES.filter(
+      (c) => c.auth !== "none" && c.auth !== "undecided",
+    ).map((c) => `${c.id}:${c.auth}`);
     expect(authenticated).toEqual(["d1:oidc", "postgresql:app"]);
   });
 });

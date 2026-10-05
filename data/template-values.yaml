@@ -9,7 +9,7 @@
 #   when: { all: [{ answer: ... }, { answer: ... }] } と書く（#72）。
 #
 # ここに書かない値は、回答から計算する（src/generate/values.ts）：
-#   app_name・auth_method・database・asvs_level・pentest_requirement・judgment_table・enabled_rules・undecided_items・
+#   app_name・auth_method・database・asvs_level・pentest_requirement・judgment_table・enabled_rules・undecided_items・requirements_feature_items・
 #   knowledge_index・secrets_table・license_year（生成した年。project.ts）・
 #   compatibility_date（runtimes.yaml）・役割とモデル（role-models.yaml）
 

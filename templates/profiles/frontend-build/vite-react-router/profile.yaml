@@ -31,9 +31,9 @@ files:
   files/health-api.ts: frontend/src/features/health/api/health.ts
   files/HealthStatus.tsx: frontend/src/features/health/HealthStatus.tsx
   files/HealthStatus.test.tsx: frontend/src/features/health/HealthStatus.test.tsx
-# 認証なしのときだけ出す App.tsx（認証ありのときは、auth/session の App.tsx を同じ出力先に出す）
+# 認証なし・未定のときだけ出す App.tsx（認証ありのときは、auth/session の App.tsx を同じ出力先に出す）
 files_when:
-  - when: { answer: auth, equals: none }
+  - when: { answer: auth, in: [none, undecided] }
     files:
       files/App.tsx: frontend/src/App.tsx
 # wrangler.jsonc に足す設定。ハーネスが、選んだプロファイルの設定をまとめて JSON にする（値の {{名前}} はまとめた後に差し込む）

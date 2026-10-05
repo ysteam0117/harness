@@ -220,6 +220,37 @@ function undecidedItems(judgment: Judgment): string {
   return lines.length > 0 ? lines.join("\n") : "なし";
 }
 
+const FEATURE_UNDECIDED = "未定（要件定義で決める）";
+
+/**
+ * 要件定義書の「要件定義で決める機能の項目」の表の行（#79）。認証方式・IdP・アップロードの有無・ファイルの種類の、
+ * 今の回答（未定なら「未定（要件定義で決める）」）と、決めるときに従う共通仕様を並べる。
+ */
+function requirementsFeatureItems(answers: Answers): string {
+  const raw = answers as unknown as Record<string, unknown>;
+  const auth = raw["auth"] ?? "undecided";
+  const upload = raw["file_upload"] ?? "undecided";
+  const shown = (id: string, value: unknown): string =>
+    value === "undecided" ? FEATURE_UNDECIDED : labelOf(id, value);
+  const kinds = Array.isArray(raw["file_kinds"])
+    ? raw["file_kinds"].map((k) => labelOf("file_kinds", k)).join("・")
+    : undefined;
+  const idpValue =
+    typeof raw["idp"] === "string"
+      ? labelOf("idp", raw["idp"])
+      : auth === "oidc" || auth === "both" || auth === "undecided"
+        ? FEATURE_UNDECIDED
+        : "該当しない";
+  const kindsValue =
+    kinds ?? (upload === "yes" || upload === "undecided" ? FEATURE_UNDECIDED : "該当しない");
+  return [
+    `| 認証方式（なし・アプリ独自・OIDC・併用） | ${shown("auth", auth)} | C-12〜C-20（認証方式・セッション・MFA など）、F-26（ASVSのレベルの判定） |`,
+    `| 外部IdP（OIDC・併用のとき） | ${idpValue} | C-12〜C-20 |`,
+    `| ファイルのアップロード（使う・使わない） | ${shown("file_upload", upload)} | C-63（ファイルのアップロード） |`,
+    `| 扱うファイルの種類（アップロードを使うとき） | ${kindsValue} | C-63 |`,
+  ].join("\n");
+}
+
 function envRow(item: EnvItem): string {
   const name = "`" + item.name + "`";
   return `| ${name} | ${item.purpose} | ${item.development} | ${item.test} | ${item.production} |`;
@@ -277,6 +308,7 @@ export function buildValues(input: BuildValuesInput): Record<string, string> {
   values["enabled_rules"] =
     judgment.enabledRules.length > 0 ? judgment.enabledRules.join("、") : "なし";
   values["undecided_items"] = undecidedItems(judgment);
+  values["requirements_feature_items"] = requirementsFeatureItems(answers);
   values["knowledge_index"] = knowledgeIndexRows(knowledge);
   values["compatibility_date"] = compatibilityDate();
   values["postgres_image_tag"] = postgresImageTag();

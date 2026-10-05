@@ -162,7 +162,8 @@ describe("#56 R(レビュー1)-3: 実行ごとに一意な架空のアプリ名"
       expect(run.projectDirName, c.id).toBe(appName);
       expect(run.composeProjectName, c.id).toBe(appName);
       expect(answers.database, c.id).toBe(c.database);
-      expect(answers.auth, c.id).toBe(c.auth);
+      // 未定の通りは auth を書かない（#79）
+      expect(answers.auth, c.id).toBe(c.auth === "undecided" ? undefined : c.auth);
       expect(run.answersYaml, c.id).not.toContain("testapp-001");
     }
   });

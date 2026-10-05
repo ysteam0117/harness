@@ -16,7 +16,7 @@
 | `playwright.config.ts` | 常に | `webServer` で `npm run dev:test`（検証用の開発サーバー）を必ず起動する。`reuseExistingServer` は `false` で、接続先の切り替え（`E2E_BASE_URL`）は作らない（`local-env.ts` が親の環境変数を消す方針に合わせ、検証を別のサーバーに向けないため） |
 | `e2e/health.spec.ts` | 常に | 画面を開いて「サーバーの状態：ok」「環境：test」が見え、`/api/health` が 200 を返す。コンソールのエラーは `console-guard` が失敗にする |
 | `e2e/sample-users.spec.ts` | DB あり | シードした `e2euser_health_001` を `/api/sample-users` から読める。シードの保存先と、検証用サーバーの読み先が同じことの確認を兼ねる |
-| `e2e/auth-session.spec.ts` | 認証あり（#73） | 未認証の `/api/auth/me` が 401（`Cache-Control: no-store`）で、保護された画面（`/account`）を開くとログインの案内（`/login`）に移る。ブラウザが出す 401 のコンソールの出力は、理由を付けて許可する |
+| `e2e/auth-session.spec.ts` | 認証あり（#73。`--answers` で認証を明示したときだけ。既定の未定では出ない。#79） | 未認証の `/api/auth/me` が 401（`Cache-Control: no-store`）で、保護された画面（`/account`）を開くとログインの案内（`/login`）に移る。ブラウザが出す 401 のコンソールの出力は、理由を付けて許可する |
 | `e2e/seeds/health.sql` | DB あり | 架空のシード（`e2euser_` で始まる。`ON CONFLICT DO NOTHING` で何回流しても同じ） |
 
 - 検証用 DB の初期化は、`globalSetup` ではなく、npm の前処理 `pretest:e2e` で行う。Playwright は `webServer` を起動した**あとに** `globalSetup` を実行するため、サーバーが DB を開いたあとに DB を消してしまう（D1 のファイルを消す）から
@@ -35,7 +35,7 @@
 | `infra/variables.tf` | 常に | `account_id`（`sensitive`・既定なし）・`app_name`・`environment`（既定 `production`、validation で `production` だけ） |
 | `infra/outputs.tf` | 常に | `environment` の出力 |
 | `infra/d1.tf` | `database` が `d1` | `cloudflare_d1_database`（`<app_name>-db`）と、`wrangler.jsonc` に書く id の出力 |
-| `infra/r2.tf` | `file_upload` が `yes` | `cloudflare_r2_bucket`（`<app_name>-uploads`。wrangler の `bucket_name` と同じ） |
+| `infra/r2.tf` | `file_upload` が `yes`（`--answers` で明示したときだけ。既定の未定では出ない。#79） | `cloudflare_r2_bucket`（`<app_name>-uploads`。wrangler の `bucket_name` と同じ） |
 | `infra/hyperdrive.tf` | `database` が `postgresql` | `cloudflare_hyperdrive_config`。接続情報は `sensitive` の変数（`TF_VAR_` で渡す） |
 | `infra/README.md` | 常に | 手順・役割の分け方・状態ファイル・lock ファイルの作り方 |
 

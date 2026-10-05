@@ -92,7 +92,7 @@ describe("#32 AC-1: 質問の定義（データ）", () => {
     expect(values("database")).toEqual(["d1", "postgresql", "none"]);
     expect(values("postgres_provider")).toEqual(["neon", "supabase", "other"]);
     expect(values("data_access")).toEqual(["drizzle"]);
-    expect(values("auth")).toEqual(["none", "app", "oidc", "both"]);
+    expect(values("auth")).toEqual(["none", "app", "oidc", "both", "undecided"]);
     expect(values("idp")).toEqual(["google", "microsoft", "other"]);
     expect(values("personal_data")).toEqual(["none", "basic", "sensitive", "undecided"]);
     for (const id of ["admin", "critical_ops", "collaborative", "org_separation", "realtime"]) {
@@ -100,7 +100,7 @@ describe("#32 AC-1: 質問の定義（データ）", () => {
     }
     expect(values("critical_ops_kinds")).toEqual(["payment", "publish", "delete", "permission"]);
     expect(values("availability")).toEqual(["tolerant", "critical", "undecided"]);
-    expect(values("file_upload")).toEqual(["no", "yes"]);
+    expect(values("file_upload")).toEqual(["no", "yes", "undecided"]);
     expect(values("file_kinds")).toEqual(["image", "video", "document"]);
     expect(values("check_location")).toEqual(["local", "github_actions", "both"]);
     expect(values("version_policy")).toEqual(["verified", "latest"]);
@@ -138,8 +138,15 @@ describe("#32 AC-1: 質問の定義（データ）", () => {
     }
   });
 
-  it("#32 AC-1: auth の初期値（推奨）は oidc", () => {
-    expect(byId("auth")?.initialValue).toBe("oidc");
+  it("#79 AC-1: auth・idp・file_upload・file_kinds は対話で聞かない。auth・file_upload の既定は「未定」", () => {
+    for (const id of ["auth", "idp", "file_upload", "file_kinds"]) {
+      expect(byId(id)?.interactive, id).toBe(false);
+    }
+    expect(byId("auth")?.defaultValue).toBe("undecided");
+    expect(byId("file_upload")?.defaultValue).toBe("undecided");
+    expect(byId("idp")?.defaultValue).toBeUndefined();
+    expect(byId("file_kinds")?.defaultValue).toBeUndefined();
+    expect(byId("auth")?.initialValue).toBeUndefined();
   });
 
   it("#32 AC-1: app_name の入力の確かめは validateAppName と同じ判定", () => {
@@ -169,8 +176,9 @@ describe("#32 AC-1: 質問の定義（データ）", () => {
         expect(byId(id)?.defaultValue).toBe("undecided");
       }
     }
-    // A〜G 以外は対話で聞く（interactive が false でない）
-    for (const d of defs.filter((d) => !asvs.includes(d.id))) {
+    // A〜G と、auth・idp・file_upload・file_kinds（#79）以外は対話で聞く（interactive が false でない）
+    const notAsked = [...asvs, "auth", "idp", "file_upload", "file_kinds"];
+    for (const d of defs.filter((d) => !notAsked.includes(d.id))) {
       expect(d.interactive).not.toBe(false);
     }
   });

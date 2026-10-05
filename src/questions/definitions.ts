@@ -146,18 +146,22 @@ export const questionDefinitions: readonly QuestionDefinition[] = [
   {
     id: "auth",
     title: "認証方式",
+    // 認証は機能要件に付随するため、生成のときに聞かず、要件定義で決める（#79）。--answers に書けばその値を使う
+    interactive: false,
+    defaultValue: "undecided",
     kind: "select",
     options: opts(
       ["none", "なし"],
       ["app", "アプリ独自認証"],
       ["oidc", "OIDC（推奨）"],
       ["both", "両方の併用"],
+      ["undecided", "未定"],
     ),
-    initialValue: "oidc",
   },
   {
     id: "idp",
     title: "外部IdP",
+    interactive: false,
     kind: "select",
     options: opts(
       ["google", "Googleアカウント"],
@@ -252,12 +256,16 @@ export const questionDefinitions: readonly QuestionDefinition[] = [
   {
     id: "file_upload",
     title: "ファイルのアップロード",
+    // 認証と同じく、要件定義で決める（#79）
+    interactive: false,
+    defaultValue: "undecided",
     kind: "select",
-    options: opts(["no", "使わない"], ["yes", "使う"]),
+    options: opts(["no", "使わない"], ["yes", "使う"], ["undecided", "未定"]),
   },
   {
     id: "file_kinds",
     title: "扱うファイルの種類",
+    interactive: false,
     kind: "multiselect",
     options: opts(["image", "画像"], ["video", "動画"], ["document", "その他の文書"]),
     when: { id: "file_upload", equals: "yes" },

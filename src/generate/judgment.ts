@@ -32,6 +32,8 @@ const UNDECIDED_NOTE = "未定のため、安全側として扱う";
 /**
  * 回答（質問A〜G）から、ASVS のレベル・有効にするルール・ペネトレーションテストの要否を決める（F-26）。
  * 「未定」（回答がない場合も同じ）は、安全側（扱う・ある・する）として判定し、未定の一覧に入れる。
+ * 認証（auth）が未定のときは、admin・collaborative を「なし」に決める条件（auth = none）が働かず、
+ * 回答どおり未定のまま安全側になる（認証・アップロードは要件定義で決める。#79）。
  */
 export function judge(answers: Answers): Judgment {
   const a = answers as unknown as Raw;

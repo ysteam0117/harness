@@ -85,7 +85,7 @@
   development: 開発用に生成したランダムな値
   test: 検証用に生成したランダムな値（開発とは別にする）
   production: 本番用に生成したランダムな値（wrangler secret put で入力する）
-  when: { answer: auth, notEquals: none }
+  when: { answer: auth, in: [app, oidc, both] }
 
 - name: OIDC_CLIENT_ID
   purpose: 外部IdPに登録したアプリの識別子

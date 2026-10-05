@@ -9,7 +9,11 @@
 //   export function findMissing(definitions, initial: Partial<Answers>): string[];
 //     - initial で足りない（対話なら聞くことになる）質問の id を、定義の順に返す
 import { describe, expect, it } from "vitest";
-import { findMissing, runQuestions } from "../../src/questions/flow.js";
+import {
+  findMissing,
+  runQuestions,
+  runQuestionsResolvingConflicts,
+} from "../../src/questions/flow.js";
 import {
   questionDefinitions as defs,
   type QuestionDefinition,
@@ -38,7 +42,7 @@ const ASVS_IDS = [
   "availability",
 ];
 
-/** 条件の質問がすべて出る回答の列（質問A〜Gは含まない：対話で聞かないため） */
+/** 条件の質問がすべて出る回答の列（質問A〜G・auth・idp・file_upload・file_kinds は含まない：対話で聞かないため（#79）） */
 const fullScript = (): Record<string, unknown[]> => ({
   app_name: ["testapp-001"],
   ais: [["claude", "codex"]],
@@ -47,10 +51,6 @@ const fullScript = (): Record<string, unknown[]> => ({
   team_size: ["team"],
   database: ["postgresql"],
   postgres_provider: ["neon"],
-  auth: ["oidc"],
-  idp: ["google"],
-  file_upload: ["yes"],
-  file_kinds: [["image"]],
   check_location: ["both"],
   version_policy: ["verified"],
 });
@@ -71,10 +71,6 @@ describe("#32 AC-1: 質問の順番と回答", () => {
       "team_size",
       "database",
       "postgres_provider",
-      "auth",
-      "idp",
-      "file_upload",
-      "file_kinds",
       "check_location",
       "version_policy",
     ]);
@@ -90,11 +86,9 @@ describe("#32 AC-1: 質問の順番と回答", () => {
       team_size: "team",
       database: "postgresql",
       postgres_provider: "neon",
-      auth: "oidc",
-      idp: "google",
       ...UNDECIDED_VALUES, // 質問A〜Gは聞かず「未定」
-      file_upload: "yes",
-      file_kinds: ["image"],
+      auth: "undecided", // 認証・アップロードも聞かず「未定」（#79）
+      file_upload: "undecided",
       check_location: "both",
       version_policy: "verified",
       ...AUTO_VALUES,
@@ -154,24 +148,42 @@ describe("#32 AC-1: 条件の質問", () => {
     expect(p.notes.some((n) => n.includes(title("data_access") ?? "未定義"))).toBe(false);
   });
 
-  it("#32 AC-1: auth が oidc・both のときだけ idp を聞く（none・app では聞かない）", async () => {
-    for (const [auth, asked] of [
-      ["oidc", true],
-      ["both", true],
-      ["app", false],
-      ["none", false],
-    ] as const) {
-      const script: Record<string, unknown[]> = { ...fullScript(), auth: [auth] };
-      if (!asked) delete script.idp;
-      if (auth === "none") {
-        delete script.admin;
-        delete script.collaborative;
+  it("#79 AC-1: auth・idp・file_upload・file_kinds は、どの回答でも対話で聞かれない", async () => {
+    for (const initial of [
+      {},
+      { auth: "oidc", idp: "google", file_upload: "yes", file_kinds: ["image"] },
+      { auth: "both", idp: "google" },
+      { auth: "none" },
+    ]) {
+      const p = new FakePrompter(fullScript());
+      await runQuestions(defs, p, initial as never);
+      for (const id of ["auth", "idp", "file_upload", "file_kinds"]) {
+        expect(p.askedIds).not.toContain(id);
       }
-      const p = new FakePrompter(script);
-      const answers = await runQuestions(defs, p, {});
-      expect(p.askedIds.includes("idp")).toBe(asked);
-      expect(answers.idp !== undefined).toBe(asked);
     }
+  });
+
+  it("#79 AC-1: 書かなければ auth・file_upload は undecided（idp・file_kinds は親が未定なので回答に入らない）", async () => {
+    const answers = await runQuestions(defs, new FakePrompter(fullScript()), {});
+    expect(answers.auth).toBe("undecided");
+    expect(answers.file_upload).toBe("undecided");
+    expect(answers).not.toHaveProperty("idp");
+    expect(answers).not.toHaveProperty("file_kinds");
+  });
+
+  it("#79 AC-1: 明示した auth・idp・file_upload・file_kinds は、そのまま回答に入る", async () => {
+    const answers = await runQuestions(defs, new FakePrompter(fullScript()), {
+      auth: "oidc",
+      idp: "google",
+      file_upload: "yes",
+      file_kinds: ["image"],
+    } as never);
+    expect(answers).toMatchObject({
+      auth: "oidc",
+      idp: "google",
+      file_upload: "yes",
+      file_kinds: ["image"],
+    });
   });
 
   it("#32 AC-2: 質問A〜G（critical_ops_kinds を含む）は、どの回答でも一度も聞かれない", async () => {
@@ -179,15 +191,6 @@ describe("#32 AC-1: 条件の質問", () => {
     await runQuestions(defs, p, {});
     for (const id of ASVS_IDS) expect(p.askedIds).not.toContain(id);
     expect(p.inputs.every((e) => !ASVS_IDS.includes(e.id ?? ""))).toBe(true);
-  });
-
-  it("#32 AC-1: file_upload = yes のときだけ file_kinds を聞く", async () => {
-    const script: Record<string, unknown[]> = { ...fullScript(), file_upload: ["no"] };
-    delete script.file_kinds;
-    const p = new FakePrompter(script);
-    const answers = await runQuestions(defs, p, {});
-    expect(p.askedIds).not.toContain("file_kinds");
-    expect(answers).not.toHaveProperty("file_kinds");
   });
 });
 
@@ -198,14 +201,6 @@ describe("#32 AC-1: 聞き方（Prompter に渡す内容）", () => {
     expect(p.inputs[0]?.method).toBe("text");
     expect(p.rejections.map((r) => r.value)).toEqual(["Bad_Name", "-abc"]);
     expect(answers.app_name).toBe("testapp-001");
-  });
-
-  it("#32 AC-1: auth の初期値は oidc", async () => {
-    const p = new FakePrompter(fullScript());
-    await runQuestions(defs, p, {});
-    const call = p.inputs.find((e) => e.id === "auth");
-    expect(call?.method).toBe("select");
-    expect(call?.opts.initialValue).toBe("oidc");
   });
 
   it("#32 AC-1: select には定義の選択肢（値と日本語の表示）をそのまま渡す", async () => {
@@ -220,14 +215,12 @@ describe("#32 AC-1: 聞き方（Prompter に渡す内容）", () => {
     expect(call?.opts.options[0].label).toContain("（標準）");
   });
 
-  it("#32 AC-1: multiselect（ais・file_kinds）は1つ以上を必須にして渡す（R6）", async () => {
+  it("#32 AC-1: multiselect（ais）は1つ以上を必須にして渡す（R6）", async () => {
     const p = new FakePrompter(fullScript());
     await runQuestions(defs, p, {});
-    for (const id of ["ais", "file_kinds"]) {
-      const call = p.inputs.find((e) => e.id === id);
-      expect(call?.method).toBe("multiselect");
-      expect(call?.opts.required).toBe(true);
-    }
+    const call = p.inputs.find((e) => e.id === "ais");
+    expect(call?.method).toBe("multiselect");
+    expect(call?.opts.required).toBe(true);
   });
 
   it("#32 AC-1: 質問の見出しを message に使う", async () => {
@@ -255,10 +248,8 @@ describe("#32 AC-2: 質問A〜G は聞かずに「未定」とする（利用者
   });
 
   it("#32 AC-2: auth = none のとき admin・collaborative は「no」になり、「（自動で決定）」と表示される。ほかは「undecided」", async () => {
-    const script: Record<string, unknown[]> = { ...fullScript(), auth: ["none"] };
-    delete script.idp;
-    const p = new FakePrompter(script);
-    const answers = await runQuestions(defs, p, {});
+    const p = new FakePrompter(fullScript());
+    const answers = await runQuestions(defs, p, { auth: "none" } as never);
     expect(answers.admin).toBe("no");
     expect(answers.collaborative).toBe("no");
     expect(answers).toMatchObject({
@@ -277,10 +268,14 @@ describe("#32 AC-2: 質問A〜G は聞かずに「未定」とする（利用者
   });
 
   it("#32 AC-2: auth = app のとき admin・collaborative は「undecided」（聞かない）", async () => {
-    const script: Record<string, unknown[]> = { ...fullScript(), auth: ["app"] };
-    delete script.idp;
-    const p = new FakePrompter(script);
-    const answers = await runQuestions(defs, p, {});
+    const p = new FakePrompter(fullScript());
+    const answers = await runQuestions(defs, p, { auth: "app" } as never);
+    expect(answers.admin).toBe("undecided");
+    expect(answers.collaborative).toBe("undecided");
+  });
+
+  it("#79 AC-1: auth が未定（既定）のとき、admin・collaborative は「undecided」（「なし」に決めない）", async () => {
+    const answers = await runQuestions(defs, new FakePrompter(fullScript()), {});
     expect(answers.admin).toBe("undecided");
     expect(answers.collaborative).toBe("undecided");
   });
@@ -425,5 +420,40 @@ describe("#32 AC-1: 質問の追加は定義の追加だけで済む（C-38）",
     const p2 = new FakePrompter({ color: ["blue"] });
     const answers2 = (await runQuestions(custom, p2, {})) as unknown as Record<string, string>;
     expect(answers2).toEqual({ color: "blue", size: "m" });
+  });
+});
+
+describe("#32 AC-4: 先に書かれた回答との矛盾（forced の値）は、黙って上書きしない（#79：auth を聞かなくなったため、独自の定義で確かめる）", () => {
+  const custom = [
+    {
+      id: "mode",
+      title: "方式",
+      kind: "select",
+      options: [
+        { value: "a", label: "甲" },
+        { value: "b", label: "乙" },
+      ],
+    },
+    {
+      id: "level",
+      title: "段階",
+      kind: "select",
+      options: [
+        { value: "low", label: "低" },
+        { value: "high", label: "高" },
+      ],
+      interactive: false,
+      forced: { when: { id: "mode", equals: "a" }, value: "low" },
+    },
+  ] as unknown as QuestionDefinition[];
+
+  it("#32 AC-4: 方式 = a（level は low に決まる）で、先に level: high が書かれていると、矛盾を示して直す質問を聞く", async () => {
+    const p = new FakePrompter({ mode: ["a"], fix_question: ["level"] });
+    const answers = (await runQuestionsResolvingConflicts(custom, p, {
+      level: "high",
+    } as never)) as unknown as Record<string, string>;
+    expect(p.askedIds).toEqual(["mode", "fix_question"]);
+    expect(p.notes.join("\n")).toContain("段階");
+    expect(answers).toEqual({ mode: "a", level: "low" });
   });
 });

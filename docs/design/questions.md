@@ -78,9 +78,9 @@ flowchart TD
 | --- | --- |
 | `postgres_provider` | `database` が `postgresql` |
 | `data_access` | `database` が `none` 以外 |
-| `idp` | `auth` が `oidc` か `both` |
+| `idp` | `auth` が `oidc` か `both`（聞かない質問のため、`--answers` に書いたときだけ。#79） |
 | `critical_ops_kinds` | `critical_ops` が `yes`（聞かない質問のため、`--answers` に書いたときだけ） |
-| `file_kinds` | `file_upload` が `yes` |
+| `file_kinds` | `file_upload` が `yes`（聞かない質問のため、`--answers` に書いたときだけ。#79） |
 
 ### リポジトリの置き場所（`repository`、C-83・Issue #61）
 
@@ -100,15 +100,27 @@ CLI の質問は開発環境に絞り、F-26 の質問A〜G（`personal_data`・
 - `--answers` に書いた値は検証して使う。足りない回答（`findMissing`）には含めない
 - 「未定」の扱い（安全側の判定など）は #34 が行う
 
+### 認証・アップロードも対話で聞かない（Issue #79）
+
+認証・ファイルのアップロードは機能要件に付随するため、生成のときではなく要件定義で決める。`auth`・`idp`・`file_upload`・`file_kinds` も `interactive: false` とする。
+
+- `auth` と `file_upload` は、選択肢に `undecided`（未定）を足し、`defaultValue` を `undecided` にする（`initialValue`（推奨 `oidc`）は持たない）。`idp`・`file_kinds` は既定値がなく、親（`auth` が `oidc`・`both`、`file_upload` が `yes`）に合うときだけ `--answers` に書ける（質問Cの `critical_ops_kinds` と同じ）
+- `--answers` に書けば、今までどおりその値を使う。マージ済みの認証のひな形（#72・#73）・アップロードの設定（R2 の IaC 等）は、明示したときだけ出る
+- 既定を `none` にしない理由：`auth = none` なら `admin`・`collaborative` が `no` に決まり、F-26 の判定が甘い側に倒れるため。未定は安全側になる（ASVS・ペネトレーションテストの判定が残る）
+- 認証の有無を見る条件は、`auth` が `app`・`oidc`・`both` のとき「認証あり」とする（`notEquals: none` だと未定を認証ありと見なすため）。認証なしのときだけ出す共通のひな形（`frontend/src/App.tsx`・drizzle の `index.ts` など）は、`auth` が `none` か `undecided` のときに出す
+- 整合性チェック：`auth-needs-db`・`upload-needs-db` は未定では発火しない。`upload-without-auth` は `yes` と `none` のときだけで、「`yes`＋未定」には広げない
+- 整合性チェックの聞き直し（`fix_question`）で `auth`・`file_upload` を選ぶと、聞き直さず「未定」に戻る（依存する質問も既定に戻る）。値を決めたいときは `--answers` に書くか、要件定義で決める
+- 要件定義書の節「要件定義で決める機能の項目」と、Skill「実装の進め方」の「機能に付随する項目の確認」に、決める項目と従う共通仕様（C-12〜C-20、F-26、C-63）を載せる。決まったら `.harness/config.yaml` の `answers` と要件定義書を更新する（ひな形の生成し直しではなく、アプリの中で実装する）
+
 ### 条件で値が決まる質問
 
-`forced`：`auth` が `none` のとき、`admin`（質問B）と `collaborative`（質問D）は `no` に決め、「自動で決定」と表示する。`auth` が `none` 以外のときは、聞かずに `undecided` とする。
+`forced`：`auth` が `none` のとき、`admin`（質問B）と `collaborative`（質問D）は `no` に決め、「自動で決定」と表示する。`auth` が `none` 以外（未定を含む）のときは、聞かずに `undecided` とする。
 
 ### 入力の確かめ
 
 - `app_name`：`validateAppName`。英小文字・数字・ハイフンだけ。先頭と末尾はハイフン不可（`-` で始まるとコマンドの引数と取り違えられ、Docker のコンテナ名にも使えないため）
 - 複数選択（`ais`・`critical_ops_kinds`・`file_kinds`）：1つ以上が必須。対話と YAML の両方で同じ確かめ（`validateValue`）を使う
-- `auth` は推奨（`oidc`）を初期値にする
+- `auth` は対話で聞かないため、初期値（推奨）は持たない（#79）
 
 ## `--answers` の検証の決まり
 
@@ -195,18 +207,18 @@ CLI の質問は開発環境に絞り、F-26 の質問A〜G（`personal_data`・
 
 `fix` が空のエラーがあるとき、または対話しないときは、エラーの一覧を示して終了コード1で終わる。
 
-例：DBを `none` から `postgresql` に直すと `postgres_provider` を聞く。`auth` を `app` から `none` に直すと `idp` が消え、`admin`・`collaborative` が `no` になる。
+例：DBを `none` から `postgresql` に直すと `postgres_provider` を聞く。`auth` を直すと（#79：聞かないため）`undecided` に戻り、`idp` が消え、`admin`・`collaborative` も `undecided` に戻る。
 
 ## YAML と対話の回答の矛盾
 
-`--answers` の一部だけを書いて、残りを対話で聞くと、対話で選んだ回答が YAML の回答と矛盾することがある（例：YAML に `idp`・`admin: yes` があり、対話で `auth` を `none` にした）。黙って消さず、`runQuestionsResolvingConflicts` が次のように扱う。
+`--answers` の一部だけを書いて、残りを対話で聞くと、対話で選んだ回答が YAML の回答と矛盾することがある（例：YAML に `postgres_provider` があり、対話で `database` を `d1` にした）。黙って消さず、`runQuestionsResolvingConflicts` が次のように扱う。
 
 1. 矛盾を理由付きで表示する（条件に合わなくなった回答、自動の値と違う回答）
 2. 矛盾している質問と、その原因の質問のうち、どれを直すかを選んでもらう（`fix_question`）
 3. 選んだ質問の YAML の回答だけを捨て、進め直す。対話で答えた内容は聞き直さない
 4. 矛盾がなくなるまで繰り返す
 
-端末でないときは、`auth` などが足りない回答として示し、終了コード1で終わる（矛盾を抱えて進まない）。
+端末でないときは、`database` などが足りない回答として示し、終了コード1で終わる（矛盾を抱えて進まない）。
 
 ## 警告の承知
 
@@ -232,6 +244,7 @@ CLI の質問は開発環境に絞り、F-26 の質問A〜G（`personal_data`・
 | --- | --- |
 | AC-1：質問の一覧のとおりに質問し、選択肢が1つの質問は自動で決めて表示する | `test/questions/flow.test.ts`・`definitions.test.ts`・`app-name.test.ts`・`test/commands/create.test.ts` |
 | AC-2：認証が「なし」なら質問B・Dを聞かずに「ない」とする | `test/questions/flow.test.ts`・`test/commands/create.test.ts`（YAML との矛盾を含む） |
+| #79 AC-1・AC-2・AC-3：認証・アップロードを聞かず未定にし、未定の生成物にひな形を出さず、要件定義書・Skill に決める項目を載せる | `test/questions/definitions.test.ts`・`flow.test.ts`・`test/generate/undecided-auth.test.ts`・`test/scripts/smoke-generated.test.ts`（既定の未定の通り） |
 | AC-3：10件のルールがエラー・警告・情報で判定され、承知した警告が記録される | `test/checks/rules.test.ts`・`facts.test.ts`・`review.test.ts`・`tools.test.ts`・`test/commands/create.test.ts` |
 | AC-4：`--answers` で、質問に答えずに同じ回答を渡せる | `test/questions/answers.test.ts`・`test/commands/create.test.ts`（入力のメソッドが一度も呼ばれないことを確かめる） |
 | AC-5：途中でやめると、ファイルを作らずに終わる | `test/commands/create.test.ts`（一時フォルダが空のまま・終了コード130） |

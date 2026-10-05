@@ -23,7 +23,7 @@ export interface Answers {
   database: "d1" | "postgresql" | "none";
   postgres_provider?: "neon" | "supabase" | "other";
   data_access?: "drizzle";
-  auth: "none" | "app" | "oidc" | "both";
+  auth: "none" | "app" | "oidc" | "both" | "undecided";
   idp?: "google" | "microsoft" | "other";
   personal_data: "none" | "basic" | "sensitive" | "undecided";
   admin: YesNoUndecided;
@@ -33,7 +33,7 @@ export interface Answers {
   org_separation: YesNoUndecided;
   realtime: YesNoUndecided;
   availability: "tolerant" | "critical" | "undecided";
-  file_upload: "no" | "yes";
+  file_upload: YesNoUndecided;
   file_kinds?: ("image" | "video" | "document")[];
   check_location: "local" | "github_actions" | "both";
   version_policy: "verified" | "latest";

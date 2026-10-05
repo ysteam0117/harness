@@ -286,9 +286,9 @@ describe("#32 AC-3: エラーの聞き直し（対話。R3）", () => {
     expect(out.result.infos.map((h) => h.id)).toEqual(["postgresql-needs-service"]);
   });
 
-  it("#32 AC-3: auth を app → none に直すと、idp が消え、admin・collaborative が「no」に決まり直す", async () => {
+  it("#79 AC-3: auth を直すと（auth は対話で聞かない）、auth は「未定」に戻り、idp が消え、admin・collaborative も未定（要件定義で決める）に戻る。エラーが消えて ok になる", async () => {
     // auth = both（idp あり）・admin・collaborative = yes・database = none → ルール1のエラー
-    const p = new FakePrompter({ fix_question: ["auth"], auth: ["none"] });
+    const p = new FakePrompter({ fix_question: ["auth"] });
     const out = await reviewAnswers({
       rules,
       prompter: p,
@@ -297,12 +297,11 @@ describe("#32 AC-3: エラーの聞き直し（対話。R3）", () => {
       interactive: true,
     });
     expect(out.status).toBe("ok");
-    expect(out.answers.auth).toBe("none");
+    expect(out.answers.auth).toBe("undecided");
     expect(out.answers).not.toHaveProperty("idp");
-    expect(out.answers.admin).toBe("no");
-    expect(out.answers.collaborative).toBe("no");
-    expect(p.askedIds).toEqual(["fix_question", "auth"]);
-    expect(p.notes.some((n) => n.includes("（自動で決定）"))).toBe(true);
+    expect(out.answers.admin).toBe("undecided");
+    expect(out.answers.collaborative).toBe("undecided");
+    expect(p.askedIds).toEqual(["fix_question"]);
   });
 
   it("#32 AC-3: app_name を直すと、事実を集め直して生成先の判定が変わる（invalid → 既存 → 解消）", async () => {

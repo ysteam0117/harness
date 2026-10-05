@@ -52,7 +52,7 @@ files:
 files_when:
   - when:
       all:
-        - { answer: auth, notEquals: none }
+        - { answer: auth, in: [app, oidc, both] }
         - { answer: database, equals: d1 }
     files:
       files/auth-schema.d1.ts: backend/db/auth-schema.ts
@@ -64,7 +64,7 @@ files_when:
       files/auth-session.d1.test.ts: backend/src/routes/auth-session.d1.test.ts
   - when:
       all:
-        - { answer: auth, notEquals: none }
+        - { answer: auth, in: [app, oidc, both] }
         - { answer: database, equals: postgresql }
     files:
       files/auth-schema.pg.ts: backend/db/auth-schema.ts

@@ -39,9 +39,9 @@ files:
   files/sample-users.route.ts: backend/src/routes/sample-users.ts
   files/seed.sql: backend/db/seeds/seed.sql
 # DB の種類・認証の有無で変わるファイル。マイグレーション（SQL と meta の journal・snapshot）は、drizzle-kit generate で実際に作ったもの。
-# 認証ありのとき（auth/session）は、index.ts・cleanup.sql・drizzle.config.ts・meta/_journal.json を、認証の版（同じ出力先）で出す
+# 認証ありのとき（auth/session。auth が app・oidc・both）は、index.ts・cleanup.sql・drizzle.config.ts・meta/_journal.json を、認証の版（同じ出力先）で出す
 files_when:
-  - when: { answer: auth, equals: none }
+  - when: { answer: auth, in: [none, undecided] }
     files:
       files/index.ts: backend/src/index.ts
       files/cleanup.sql: backend/db/seeds/cleanup.sql
@@ -56,7 +56,7 @@ files_when:
   - when:
       all:
         - { answer: database, equals: d1 }
-        - { answer: auth, equals: none }
+        - { answer: auth, in: [none, undecided] }
     files:
       files/drizzle.d1.config.ts: drizzle.config.ts
       files/migrations-d1/meta/_journal.json: backend/db/migrations/meta/_journal.json
@@ -69,7 +69,7 @@ files_when:
   - when:
       all:
         - { answer: database, equals: postgresql }
-        - { answer: auth, equals: none }
+        - { answer: auth, in: [none, undecided] }
     files:
       files/drizzle.pg.config.ts: drizzle.config.ts
       files/migrations-pg/meta/_journal.json: backend/db/migrations/meta/_journal.json

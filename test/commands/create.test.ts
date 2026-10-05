@@ -557,117 +557,84 @@ describe("#32 AC-3: 手元の道具の警告は、承知を確かめる前に詳
 });
 
 describe("#32 AC-4: YAML の回答と対話の回答の矛盾は、黙って消さない（レビュー指摘2）", () => {
-  /** auth を省き、auth = none と矛盾する回答（idp・admin・collaborative）を YAML に書く */
+  // #79：auth は対話で聞かなくなったため、聞く質問の database と、その条件の質問（postgres_provider）で確かめる
+  /** database を省き、database = d1 と矛盾する回答（postgres_provider）を YAML に書く */
   const conflictYaml = () => {
-    const a = baseAnswers({ admin: "yes", collaborative: "yes", idp: "google" }) as Record<
-      string,
-      unknown
-    >;
-    delete a.auth;
+    const a = baseAnswers({ postgres_provider: "neon" }) as Record<string, unknown>;
+    delete a.database;
     return a;
   };
 
-  it("#32 AC-4: 対話で auth = none を選ぶと、矛盾を理由付きで表示し、直す質問を聞く（idp・admin・collaborative の全部）", async () => {
+  it("#32 AC-4: 対話で database = d1 を選ぶと、矛盾を理由付きで表示し、直す質問を聞く（postgres_provider）", async () => {
     const s = setup(
-      { auth: ["none"], fix_question: [new CancelledError()] },
+      { database: ["d1"], fix_question: [new CancelledError()] },
       { interactive: true },
     );
     await runCreate({ answers: s.writeAnswers(conflictYaml()) }, s.deps);
     const notes = s.prompter.notes.join("\n");
-    for (const id of ["idp", "admin", "collaborative"]) {
-      expect(notes).toContain(title(id));
-    }
-    expect(notes).toContain(title("auth")); // 理由に原因の質問の見出しが入る
+    expect(notes).toContain(title("postgres_provider"));
+    expect(notes).toContain(title("database")); // 理由に原因の質問の見出しが入る
     const fix = s.prompter.inputs.find((e) => e.id === "fix_question");
     expect(fix?.method).toBe("select");
     expect(fix?.opts.options.map((o: { value: string }) => o.value).sort()).toEqual(
-      ["admin", "auth", "collaborative", "idp"].sort(),
+      ["database", "postgres_provider"].sort(),
     );
     // 矛盾を示した後でなければ、聞き直しの選択は出ない
     const noteAt = s.prompter.events.findIndex(
-      (e) => e.type === "note" && e.message.includes(title("idp")),
+      (e) => e.type === "note" && e.message.includes(title("postgres_provider")),
     );
     const fixAt = s.prompter.events.findIndex((e) => e.type === "input" && e.id === "fix_question");
     expect(noteAt).toBeGreaterThanOrEqual(0);
     expect(noteAt).toBeLessThan(fixAt);
   });
 
-  it("#32 AC-4: auth を選び直すと、YAML の回答（idp・admin・collaborative）が残ったまま確認まで進む（黙って no に上書きしない）", async () => {
+  it("#32 AC-4: database を選び直すと、YAML の回答（postgres_provider）が残ったまま確認まで進む", async () => {
     const s = setup(
       {
-        auth: ["none", "oidc"],
-        fix_question: ["auth"],
-        confirm_generate: [true],
-      },
-      { interactive: true },
-    );
-    const out = await runCreate({ answers: s.writeAnswers(conflictYaml()) }, s.deps);
-    expect(s.prompter.askedIds).toEqual(["auth", "fix_question", "auth", "confirm_generate"]);
-    expect(out.answers).toMatchObject({
-      auth: "oidc",
-      idp: "google",
-      admin: "yes",
-      collaborative: "yes",
-    });
-    expect(generated(s.tmp.cwd)).toBe(true); // 生成した
-  });
-
-  it("#32 AC-4: 矛盾する YAML の回答を1つずつ捨てると、auth = none のまま進み、idp は消え、admin・collaborative は no になる", async () => {
-    const s = setup(
-      {
-        auth: ["none"],
-        fix_question: ["idp", "admin", "collaborative"],
+        database: ["d1", "postgresql"],
+        fix_question: ["database"],
         confirm_generate: [true],
       },
       { interactive: true },
     );
     const out = await runCreate({ answers: s.writeAnswers(conflictYaml()) }, s.deps);
     expect(s.prompter.askedIds).toEqual([
-      "auth",
+      "database",
       "fix_question",
-      "fix_question",
-      "fix_question",
+      "database",
       "confirm_generate",
     ]);
-    expect(out.answers?.auth).toBe("none");
-    expect(out.answers).not.toHaveProperty("idp");
-    expect(out.answers?.admin).toBe("no");
-    expect(out.answers?.collaborative).toBe("no");
+    expect(out.answers).toMatchObject({ database: "postgresql", postgres_provider: "neon" });
+    expect(generated(s.tmp.cwd)).toBe(true); // 生成した
   });
 
-  it("#32 AC-4: 条件の質問（idp）だけが矛盾する場合も、黙って捨てずに示す", async () => {
-    const a = baseAnswers({ idp: "google" }) as Record<string, unknown>;
-    delete a.auth;
-    const s = setup({ auth: ["app"], fix_question: [new CancelledError()] }, { interactive: true });
-    await runCreate({ answers: s.writeAnswers(a) }, s.deps);
-    expect(s.prompter.notes.join("\n")).toContain(title("idp"));
-    expect(s.prompter.askedIds).toEqual(["auth", "fix_question"]);
-  });
-
-  it("#32 AC-4: 条件で決まる値（admin: yes）だけが矛盾する場合も、黙って no にしない", async () => {
-    const a = baseAnswers({ admin: "yes", idp: undefined }) as Record<string, unknown>;
-    delete a.auth;
+  it("#32 AC-4: 矛盾する YAML の回答を捨てると、database = d1 のまま進み、postgres_provider は消える", async () => {
     const s = setup(
-      { auth: ["none"], fix_question: [new CancelledError()] },
+      {
+        database: ["d1"],
+        fix_question: ["postgres_provider"],
+        confirm_generate: [true],
+      },
       { interactive: true },
     );
-    await runCreate({ answers: s.writeAnswers(a) }, s.deps);
-    expect(s.prompter.notes.join("\n")).toContain(title("admin"));
-    expect(s.prompter.askedIds).toEqual(["auth", "fix_question"]);
-  });
-
-  it("#32 AC-4: 矛盾がなければ、聞き直しは出ない（auth = oidc で YAML の idp・admin はそのまま）", async () => {
-    const s = setup({ auth: ["oidc"], confirm_generate: [true] }, { interactive: true });
     const out = await runCreate({ answers: s.writeAnswers(conflictYaml()) }, s.deps);
-    expect(s.prompter.askedIds).toEqual(["auth", "confirm_generate"]);
-    expect(out.answers).toMatchObject({ auth: "oidc", idp: "google", admin: "yes" });
+    expect(s.prompter.askedIds).toEqual(["database", "fix_question", "confirm_generate"]);
+    expect(out.answers?.database).toBe("d1");
+    expect(out.answers).not.toHaveProperty("postgres_provider");
   });
 
-  it("#32 AC-4: 端末でないときは、auth が足りない回答として示し、終了コード1（矛盾を抱えて進まない）", async () => {
+  it("#32 AC-4: 矛盾がなければ、聞き直しは出ない（database = postgresql で YAML の postgres_provider はそのまま）", async () => {
+    const s = setup({ database: ["postgresql"], confirm_generate: [true] }, { interactive: true });
+    const out = await runCreate({ answers: s.writeAnswers(conflictYaml()) }, s.deps);
+    expect(s.prompter.askedIds).toEqual(["database", "confirm_generate"]);
+    expect(out.answers).toMatchObject({ database: "postgresql", postgres_provider: "neon" });
+  });
+
+  it("#32 AC-4: 端末でないときは、database が足りない回答として示し、終了コード1（矛盾を抱えて進まない）", async () => {
     const s = setup();
     const out = await runCreate({ answers: s.writeAnswers(conflictYaml()), yes: true }, s.deps);
     expect(out.exitCode).toBe(1);
-    expect(s.err()).toContain("auth");
+    expect(s.err()).toContain("database");
     expect(generated(s.tmp.cwd)).toBe(false); // 生成しない
     expect(s.prompter.inputs).toHaveLength(0);
   });

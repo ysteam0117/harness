@@ -350,9 +350,9 @@ server.listen(port, host);`,
 });
 
 describe("#56 AC-1: 回答の YAML の生成（架空の値）", () => {
-  it("#56 AC-1: 3 通り（D1・PostgreSQL・DB なし）で、アップロードあり・認証ありを1つは含む", () => {
-    expect(SMOKE_CASES.map((c) => c.id).sort()).toEqual(["d1", "none", "postgresql"]);
-    expect(SMOKE_CASES.map((c) => c.database).sort()).toEqual(["d1", "none", "postgresql"]);
+  it("#56 AC-1: 4 通り（D1・PostgreSQL・DB なし・既定の未定）で、アップロードあり・認証ありを1つは含む（#79：未定の通りを足した）", () => {
+    expect(SMOKE_CASES.map((c) => c.id).sort()).toEqual(["d1", "none", "postgresql", "undecided"]);
+    expect(SMOKE_CASES.map((c) => c.database).sort()).toEqual(["d1", "d1", "none", "postgresql"]);
     expect(SMOKE_CASES.some((c) => c.fileUpload)).toBe(true);
     expect(SMOKE_CASES.some((c) => c.auth !== "none")).toBe(true);
   });
@@ -384,6 +384,17 @@ describe("#56 AC-1: 回答の YAML の生成（架空の値）", () => {
         expect(m[0]).toMatch(/@example\.(com|org|net)$/);
       }
     }
+  });
+
+  it("#79 AC-1: 未定の通りは、auth・file_upload を書かず、読めて、auth・file_upload は未定になる", async () => {
+    const c = SMOKE_CASES.find((x) => x.id === "undecided");
+    expect(c?.auth).toBe("undecided");
+    const parsed = parseAnswersYaml(c?.answersYaml ?? "");
+    for (const k of ["auth", "idp", "file_upload", "file_kinds", "admin", "collaborative"]) {
+      expect(parsed.answers, k).not.toHaveProperty(k);
+    }
+    const complete = await runQuestions(questionDefinitions, new FakePrompter(), parsed.answers);
+    expect(complete).toMatchObject({ auth: "undecided", file_upload: "undecided" });
   });
 
   it("#56 AC-1: buildAnswersYaml は、上書きした回答を反映する", () => {

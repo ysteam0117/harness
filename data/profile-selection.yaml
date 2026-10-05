@@ -5,7 +5,7 @@
 # when    : 書かなければ常に選ぶ。書く場合は、質問の id（answer）と、equals・in・notEquals のどれか1つ
 #           （consistency-rules.yaml の answer 条件と同じ書き方）。
 #           複数の条件をすべて満たすときだけ選ぶ場合は、all に answer 条件を並べる（#72）
-#           例：when: { all: [{ answer: database, equals: d1 }, { answer: auth, notEquals: none }] }
+#           例：when: { all: [{ answer: database, equals: d1 }, { answer: auth, in: [app, oidc, both] }] }
 
 - profile: backend-framework/hono
 - profile: logger/structured-logger
@@ -18,7 +18,7 @@
   when: { answer: database, notEquals: none }
 # 認証（#72 は枠だけ。中身は #73〜#75）。auth/session は認証ありの共通、app-auth・oidc-auth は方式ごと
 - profile: auth/session
-  when: { answer: auth, notEquals: none }
+  when: { answer: auth, in: [app, oidc, both] }
 - profile: auth/app-auth
   when: { answer: auth, in: [app, both] }
 - profile: auth/oidc-auth

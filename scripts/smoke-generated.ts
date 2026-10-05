@@ -1,6 +1,6 @@
 // 生成したプロジェクトが実際に動くことの確かめ（#56 AC-1・AC-2、R4・R5・R9）。
 //
-// 回答の YAML（架空の値）で3通り（D1・PostgreSQL・DB なし）のプロジェクトを、一時的なフォルダに生成し、それぞれ
+// 回答の YAML（架空の値）で4通り（D1・PostgreSQL・DB なし・既定の未定）のプロジェクトを、一時的なフォルダに生成し、それぞれ
 //   npm install → npm run check → npm run build → 開発サーバー（/api/health・/・サンプルの利用者の API）→ Docker（docker compose up）
 // を確かめて、起動したものはすべて止め、一時的なフォルダは消す。
 // アプリ名は実行ごとに一意（smoke-<乱数>）で、同時に実行しても、コンテナ・ボリュームが混ざらない。
@@ -29,9 +29,9 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
 export type SmokeCase = {
   /** 通りの名前（失敗したときに示す） */
-  id: "d1" | "postgresql" | "none";
+  id: "d1" | "postgresql" | "none" | "undecided";
   database: "d1" | "postgresql" | "none";
-  /** 回答の auth */
+  /** 回答の auth（回答に書かない既定は undecided） */
   auth: string;
   /** 回答の file_upload が yes か */
   fileUpload: boolean;
@@ -65,6 +65,10 @@ export function buildAnswersYaml(over: Record<string, unknown> = {}): string {
     accepted_warnings: ["missing-tools"],
   };
   const merged = { ...base, ...over };
+  // undefined で上書きした回答は、書かない（auth・file_upload・admin・collaborative を省くと、未定になる。#79）
+  for (const [key, value] of Object.entries(merged)) {
+    if (value === undefined) delete merged[key];
+  }
   // 質問の条件で聞かない回答は、書かない（回答ファイルの検証で誤りになるため）
   if (merged["auth"] !== "oidc" && merged["auth"] !== "both") delete merged["idp"];
   if (merged["file_upload"] !== "yes") delete merged["file_kinds"];
@@ -73,7 +77,7 @@ export function buildAnswersYaml(over: Record<string, unknown> = {}): string {
 }
 
 function smokeCase(
-  id: SmokeCase["id"],
+  id: Exclude<SmokeCase["id"], "undecided">,
   over: Record<string, unknown>,
   auth: string,
   fileUpload: boolean,
@@ -87,11 +91,31 @@ function smokeCase(
   };
 }
 
-/** 3通り。アップロードあり・認証ありを1つは含める */
+/**
+ * 既定（認証・アップロードを書かない＝未定）の通り（#79）。D1 の DB あり。
+ * 未定は認証なしと同じ共通のひな形（App.tsx・drizzle の index.ts 等）を出すため、npm run check・build・DB の操作が通ることを確かめる
+ */
+const UNDECIDED_CASE: SmokeCase = {
+  id: "undecided",
+  database: "d1",
+  auth: "undecided",
+  fileUpload: false,
+  answersYaml: buildAnswersYaml({
+    database: "d1",
+    auth: undefined,
+    idp: undefined,
+    file_upload: undefined,
+    admin: undefined,
+    collaborative: undefined,
+  }),
+};
+
+/** 4通り。アップロードあり・認証ありを1つは含める。既定（未定）の通りも1つ含める */
 export const SMOKE_CASES: readonly SmokeCase[] = [
   smokeCase("d1", { idp: "google", file_upload: "yes", file_kinds: ["image"] }, "oidc", true),
   smokeCase("postgresql", { postgres_provider: "neon", auth: "app" }, "app", false),
   smokeCase("none", { auth: "none", idp: undefined }, "none", false),
+  UNDECIDED_CASE,
 ];
 
 /** GitHub を使わない（手元の Git だけ）通りの名前（#61）。SMOKE_CASES=local で選ぶ */
@@ -1307,7 +1331,7 @@ async function checkTestIsolation(
       const names = usernamesOf(await getJson(`${server.url}/api/sample-users`), c.database);
       if (names.includes(marker)) throw new Error("検証DBに開発DBの記録が混入しました");
       // 認証ありの通りは、実際の DB でセッションを確かめる（#73 R2）
-      if (c.auth !== "none") {
+      if (c.auth !== "none" && c.auth !== "undecided") {
         await runStage(c.id, "実 DB のセッション（/api/auth/me・期限切れ・ログアウト）", () =>
           checkSessionAgainstRealDb(database, projectDir, server, registry),
         );
@@ -1607,12 +1631,12 @@ async function runCase(c: SmokeCase, withDocker: boolean, appName: string): Prom
       // 環境ファイルの後でのみ Docker の資源を登録する。
       if (withDocker) registry.trackCompose(projectDir);
 
-      if (c.id === "d1") {
+      if (c.database === "d1") {
         await checkDatabaseLifecycle("d1", projectDir, registry, async () => {
           await npm(["run", "db:migrate:local"], projectDir);
           await npm(["run", "db:seed:local"], projectDir);
         });
-      } else if (c.id === "postgresql") {
+      } else if (c.database === "postgresql") {
         await runStage(c.id, "PostgreSQL のコンテナの起動", async () => {
           await runCommand("docker", [...composeArgs(projectDir), "up", "-d", "--wait", "db"], {
             cwd: projectDir,

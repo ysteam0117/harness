@@ -465,17 +465,13 @@ describe("#33 R3: 整合性チェックの聞き直しで回答が変わった�
 
   it("#33 R3: 回答が変わっても対象が変わらない（auth の直しなど）なら、調べ直さない", async () => {
     const f = registryForReal();
-    const s = setup(
-      f,
-      { fix_question: ["auth"], auth: ["none"], confirm_generate: [true] },
-      { interactive: true },
-    );
-    // database = none・auth = app はエラー。auth を none に直すと対象は変わらない
+    const s = setup(f, { fix_question: ["auth"], confirm_generate: [true] }, { interactive: true });
+    // database = none・auth = app はエラー。auth を直すと（#79：聞かずに「未定」に戻る）、対象は変わらない
     const file = s.writeAnswers(
       baseAnswers({ auth: "app", idp: undefined, database: "none" }) as Record<string, unknown>,
     );
     const out = await runCreate({ answers: file }, s.deps);
-    expect(out.answers?.auth).toBe("none");
+    expect(out.answers?.auth).toBe("undecided");
     const asked = f.npmNames();
     expect(asked.filter((x) => x === "hono")).toHaveLength(1);
     expect(out.versions?.entries.map((e) => e.name)).not.toContain("drizzle-orm");
