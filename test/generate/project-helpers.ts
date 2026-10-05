@@ -100,7 +100,9 @@ export function makeWorkDir(): string {
 }
 
 export function cleanupProjectTmp(): void {
-  for (const dir of tmpRoots.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of tmpRoots.splice(0)) {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  }
 }
 
 /** 実際の templates/ を一時フォルダに写す（一部を足す・消して、別のひな形を作るため） */

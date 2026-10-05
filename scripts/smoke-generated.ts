@@ -18,8 +18,10 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSy
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import type * as VerifyModule from "../src/verify/verify.ts";
+import type * as RunnerModule from "../src/verify/runner.ts";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -117,6 +119,9 @@ export const SMOKE_CASES: readonly SmokeCase[] = [
   smokeCase("none", { auth: "none", idp: undefined }, "none", false),
   UNDECIDED_CASE,
 ];
+
+/** 生成の直後の動作確認（harness create --verify と同じ verifyProject）の通りの名前（#57）。SMOKE_CASES=verify で選ぶ（D1・PostgreSQL） */
+export const VERIFY_CASE_ID = "verify";
 
 /** GitHub を使わない（手元の Git だけ）通りの名前（#61）。SMOKE_CASES=local で選ぶ */
 export const LOCAL_GIT_CASE_ID = "local";
@@ -611,6 +616,24 @@ export function installInterruptHandlers(
     process.off("SIGINT", onInt);
     process.off("SIGTERM", onTerm);
   };
+}
+
+/** 検証を中断し、Docker を含む検証自身の後始末が終わるまで、先に登録したフォルダの削除を待たせる。 */
+export function runVerificationWithCleanup<T>(
+  registry: CleanupRegistry,
+  verify: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  const running = Promise.resolve().then(() => verify(controller.signal));
+  registry.add("動作確認の中断と完了待ち", async () => {
+    controller.abort();
+    // 検証の失敗は呼び出し側で扱う。ここでは失敗時も検証自身の後始末の完了を待つ。
+    await running.then(
+      () => undefined,
+      () => undefined,
+    );
+  });
+  return running;
 }
 
 /**
@@ -1857,11 +1880,68 @@ async function runLocalGitCase(appName: string): Promise<void> {
   }
 }
 
+/**
+ * 生成の直後の動作確認（#57 R2）。生成だけして、環境ファイルを書く処理は使わず、verifyProject が作った
+ * .env.development・.env.test だけで、npm install → npm run check が通ることを確かめる。
+ * PostgreSQL は、検証用 DB の起動と停止（docker:up:test・docker:down:test）も通る。
+ */
+async function runVerifyCase(c: SmokeCase, appName: string): Promise<void> {
+  const id = `${VERIFY_CASE_ID}-${c.id}`;
+  const registry = createCleanupRegistry();
+  const uninstall = installInterruptHandlers(registry);
+  try {
+    await runWithCleanup(id, registry, async () => {
+      const run = buildSmokeRun(c, appName);
+      const workDir = mkdtempSync(path.join(os.tmpdir(), `harness-smoke-${id}-`));
+      registry.add(`${id}：一時的なフォルダの削除`, () =>
+        rmSync(workDir, { recursive: true, force: true }),
+      );
+      const projectDir = path.join(workDir, run.projectDirName);
+      await runStage(id, "生成（harness create）", async () => {
+        writeFileSync(path.join(workDir, "answers.yaml"), run.answersYaml);
+        await runCommand(
+          process.execPath,
+          [path.join(rootDir, "dist", "cli.js"), "create", "--answers", "answers.yaml", "--yes"],
+          { cwd: workDir, registry },
+        );
+      });
+      // 組み立て（dist/）の後の、本物の verifyProject・既定の runner を読む
+      const dist = (name: string) => pathToFileURL(path.join(rootDir, "dist", "verify", name)).href;
+      const { verifyProject } = (await import(dist("verify.js"))) as typeof VerifyModule;
+      const { defaultRunner } = (await import(dist("runner.js"))) as typeof RunnerModule;
+      const result = await runVerificationWithCleanup(registry, (signal) =>
+        verifyProject({
+          projectDir,
+          database: c.database,
+          versions: { entries: [], newerThanVerified: false },
+          runner: defaultRunner,
+          dockerAvailable: async () => true,
+          signal,
+          onProgress: (message) => console.log(`[${id}] ${message}`),
+        }),
+      );
+      if (result.status !== "passed") {
+        throw new Error(
+          `動作確認が通りませんでした（${result.status}${result.status === "failed" ? `：${result.failedStep}` : ""}）`,
+        );
+      }
+      if (result.cleanupFailures.length > 0) {
+        throw new Error(`後始末に失敗しました：${result.cleanupFailures.join("、")}`);
+      }
+      console.log(`[${id}] 成功しました`);
+    });
+  } finally {
+    uninstall();
+  }
+}
+
 async function main(): Promise<void> {
   const only = process.env["SMOKE_CASES"]?.split(",").map((s) => s.trim());
   const cases = SMOKE_CASES.filter((c) => only === undefined || only.includes(c.id));
   const runLocal = only === undefined || only.includes(LOCAL_GIT_CASE_ID);
-  if (cases.length === 0 && !runLocal) throw new Error("SMOKE_CASES に合う通りがありません");
+  const runVerify = only === undefined || only.includes(VERIFY_CASE_ID);
+  if (cases.length === 0 && !runLocal && !runVerify)
+    throw new Error("SMOKE_CASES に合う通りがありません");
 
   const docker = dockerAvailable();
   const requireDocker = process.env["SMOKE_REQUIRE_DOCKER"] === "1";
@@ -1895,6 +1975,22 @@ async function main(): Promise<void> {
       const message = e instanceof Error ? e.message : String(e);
       console.error(message);
       failures.push(message);
+    }
+  }
+  if (only === undefined || only.includes(VERIFY_CASE_ID)) {
+    for (const c of SMOKE_CASES.filter((x) => x.id === "d1" || x.id === "postgresql")) {
+      if (c.database === "postgresql" && !docker) {
+        console.log(`[${VERIFY_CASE_ID}-${c.id}] Docker が使えないため、この通りを飛ばしました`);
+        continue;
+      }
+      console.log(`[${VERIFY_CASE_ID}-${c.id}] 確かめを始めます…`);
+      try {
+        await runVerifyCase(c, createSmokeAppName());
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.error(message);
+        failures.push(message);
+      }
     }
   }
   if (runLocal) {

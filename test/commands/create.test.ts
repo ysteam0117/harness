@@ -176,14 +176,24 @@ describe("#32 AC-4: 足りない回答", () => {
 
   it("#32 AC-4: 端末のときは、足りない回答だけ対話で聞く", async () => {
     const s = setup(
-      { team_size: ["team"], check_location: ["both"], confirm_generate: [true] },
+      {
+        team_size: ["team"],
+        check_location: ["both"],
+        confirm_generate: [true],
+        verify_after_generate: [false],
+      },
       { interactive: true },
     );
     const answers = baseAnswers() as Record<string, unknown>;
     delete answers.team_size;
     delete answers.check_location;
     const out = await runCreate({ answers: s.writeAnswers(answers) }, s.deps);
-    expect(s.prompter.askedIds).toEqual(["team_size", "check_location", "confirm_generate"]);
+    expect(s.prompter.askedIds).toEqual([
+      "team_size",
+      "check_location",
+      "confirm_generate",
+      "verify_after_generate",
+    ]);
     expect(out.answers?.team_size).toBe("team");
     expect(out.exitCode).toBe(0);
     expect(generated(s.tmp.cwd)).toBe(true); // 生成した
@@ -204,7 +214,10 @@ describe("#32 AC-1: 確認（--yes と対話）", () => {
   });
 
   it("#32 AC-1: 端末で「この内容で生成しますか」に「はい」なら、生成して終了コード0", async () => {
-    const s = setup({ confirm_generate: [true] }, { interactive: true });
+    const s = setup(
+      { confirm_generate: [true], verify_after_generate: [false] },
+      { interactive: true },
+    );
     const out = await runCreate(
       { answers: s.writeAnswers(baseAnswers() as Record<string, unknown>) },
       s.deps,
@@ -252,12 +265,13 @@ describe("#32 AC-1: 確認（--yes と対話）", () => {
         check_location: ["both"],
         version_policy: ["verified"],
         confirm_generate: [true],
+        verify_after_generate: [false],
       },
       { interactive: true },
     );
     const out = await runCreate({}, s.deps);
     expect(s.prompter.askedIds[0]).toBe("app_name");
-    expect(s.prompter.askedIds.at(-1)).toBe("confirm_generate");
+    expect(s.prompter.askedIds.at(-2)).toBe("confirm_generate");
     // 質問A〜Gは聞かず「未定」にする
     for (const id of [
       "personal_data",
@@ -325,7 +339,11 @@ describe("#32 AC-3: 警告・エラー（--answers）", () => {
 
   it("#32 AC-3: 端末で警告を承知すると、承知した内容が結果に入り、確認まで進む", async () => {
     const s = setup(
-      { "accept_warning:team-needs-ci": [true], confirm_generate: [true] },
+      {
+        "accept_warning:team-needs-ci": [true],
+        confirm_generate: [true],
+        verify_after_generate: [false],
+      },
       { interactive: true },
     );
     const out = await runCreate({ answers: s.writeAnswers(warnYaml()) }, s.deps);
@@ -417,6 +435,7 @@ describe("#32 AC-3: 警告・エラー（--answers）", () => {
         fix_question: ["database"],
         database: ["d1"],
         confirm_generate: [true],
+        verify_after_generate: [false],
       },
       { interactive: true },
     );
@@ -424,7 +443,12 @@ describe("#32 AC-3: 警告・エラー（--answers）", () => {
       baseAnswers({ auth: "app", idp: undefined, database: "none" }) as Record<string, unknown>,
     );
     const out = await runCreate({ answers: file }, s.deps);
-    expect(s.prompter.askedIds).toEqual(["fix_question", "database", "confirm_generate"]);
+    expect(s.prompter.askedIds).toEqual([
+      "fix_question",
+      "database",
+      "confirm_generate",
+      "verify_after_generate",
+    ]);
     expect(out.answers?.database).toBe("d1");
     expect(generated(s.tmp.cwd)).toBe(true); // 生成した
   });
@@ -538,7 +562,11 @@ describe("#32 AC-3: 手元の道具の警告は、承知を確かめる前に詳
   ] as const) {
     it(`#32 AC-3: ${label}場合も、確認の前に、道具の名前・確かめられない理由・導入の案内が表示されている`, async () => {
       const s = setup(
-        { "accept_warning:missing-tools": [accept], confirm_generate: [true] },
+        {
+          "accept_warning:missing-tools": [accept],
+          confirm_generate: [true],
+          verify_after_generate: [false],
+        },
         { interactive: true, checkTools: toolsWithProblems },
       );
       await runCreate(
@@ -594,6 +622,7 @@ describe("#32 AC-4: YAML の回答と対話の回答の矛盾は、黙って消�
         database: ["d1", "postgresql"],
         fix_question: ["database"],
         confirm_generate: [true],
+        verify_after_generate: [false],
       },
       { interactive: true },
     );
@@ -603,6 +632,7 @@ describe("#32 AC-4: YAML の回答と対話の回答の矛盾は、黙って消�
       "fix_question",
       "database",
       "confirm_generate",
+      "verify_after_generate",
     ]);
     expect(out.answers).toMatchObject({ database: "postgresql", postgres_provider: "neon" });
     expect(generated(s.tmp.cwd)).toBe(true); // 生成した
@@ -614,19 +644,28 @@ describe("#32 AC-4: YAML の回答と対話の回答の矛盾は、黙って消�
         database: ["d1"],
         fix_question: ["postgres_provider"],
         confirm_generate: [true],
+        verify_after_generate: [false],
       },
       { interactive: true },
     );
     const out = await runCreate({ answers: s.writeAnswers(conflictYaml()) }, s.deps);
-    expect(s.prompter.askedIds).toEqual(["database", "fix_question", "confirm_generate"]);
+    expect(s.prompter.askedIds).toEqual([
+      "database",
+      "fix_question",
+      "confirm_generate",
+      "verify_after_generate",
+    ]);
     expect(out.answers?.database).toBe("d1");
     expect(out.answers).not.toHaveProperty("postgres_provider");
   });
 
   it("#32 AC-4: 矛盾がなければ、聞き直しは出ない（database = postgresql で YAML の postgres_provider はそのまま）", async () => {
-    const s = setup({ database: ["postgresql"], confirm_generate: [true] }, { interactive: true });
+    const s = setup(
+      { database: ["postgresql"], confirm_generate: [true], verify_after_generate: [false] },
+      { interactive: true },
+    );
     const out = await runCreate({ answers: s.writeAnswers(conflictYaml()) }, s.deps);
-    expect(s.prompter.askedIds).toEqual(["database", "confirm_generate"]);
+    expect(s.prompter.askedIds).toEqual(["database", "confirm_generate", "verify_after_generate"]);
     expect(out.answers).toMatchObject({ database: "postgresql", postgres_provider: "neon" });
   });
 
@@ -750,7 +789,10 @@ function treeOf(dir: string): Record<string, string> {
 
 describe("#34 AC-3: 生成する（harness create の最後）", () => {
   it("#34 AC-3: 確認で「はい」→ <cwd>/<アプリ名> に生成し、終了コード0。.harness/config.yaml と AGENTS.md ができる", async () => {
-    const s = setup({ confirm_generate: [true] }, { interactive: true });
+    const s = setup(
+      { confirm_generate: [true], verify_after_generate: [false] },
+      { interactive: true },
+    );
     const out = await runCreate({ answers: s.writeAnswers(answersYaml()) }, s.deps);
     expect(out.exitCode).toBe(0);
     const dir = path.join(s.tmp.cwd, APP);

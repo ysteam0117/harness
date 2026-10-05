@@ -44,11 +44,12 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
-  if (baseRoot) rmSync(baseRoot, { recursive: true, force: true });
+  if (baseRoot) rmSync(baseRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
 
 afterEach(() => {
-  for (const dir of roots.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of roots.splice(0))
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
 
 type Result = { status: number | null; stdout: string; stderr: string };

@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { Command } from "commander";
 import { collectFacts } from "../checks/facts.js";
 import { reviewAnswers, type AcceptedWarning, type ReviewOutcome } from "../checks/review.js";
@@ -29,6 +30,22 @@ import { selectProfiles } from "../versions/profile-selection.js";
 import { targetsFor, type Target } from "../versions/targets.js";
 import { alignTable, shortReason } from "../versions/table.js";
 import { renderTechStack } from "../versions/tech-stack.js";
+import {
+  INTERRUPT_AGAIN_NOTICE,
+  INTERRUPT_NOTICE,
+  VERIFY_CONFIRM_ID,
+  VERIFY_QUESTION,
+  cancelledAfterGenerate,
+  failedMessage,
+  interruptedMessage,
+  nextSteps,
+  passedMessage,
+  skippedMessage,
+} from "../verify/messages.js";
+import { defaultDockerAvailable, defaultRunner, type CommandRunner } from "../verify/runner.js";
+import { appendVerifiedRecord } from "../verify/tech-stack-record.js";
+import { verifyProject, type VerifyResult } from "../verify/verify.js";
+import { localDay } from "../generate/config.js";
 
 export interface CreateDeps {
   /** 入力と表示（note）の窓口。回答の一覧・チェックの結果は prompter.note で表示する */
@@ -47,6 +64,10 @@ export interface CreateDeps {
   now?: () => Date;
   /** 生成のファイル操作（書き込み・名前の変更など）の差し替え（テスト用）。既定は本物 */
   generateFs?: Partial<FsOps>;
+  /** 動作確認のコマンド（npm・docker）の実行の差し替え（テスト用）。既定は本物 */
+  runCommand?: CommandRunner;
+  /** Docker が使えるかの確かめの差し替え（テスト用）。既定は docker info */
+  dockerAvailable?: () => Promise<boolean>;
 }
 
 export interface CreateOptions {
@@ -54,6 +75,8 @@ export interface CreateOptions {
   answers?: string;
   /** --yes：最後の確認を省く */
   yes?: boolean;
+  /** --verify：生成の直後に、npm install と npm run check で動作を確かめる（聞かずに実行する） */
+  verify?: boolean;
 }
 
 export interface CreateOutcome {
@@ -67,6 +90,8 @@ export interface CreateOutcome {
   techStack?: string;
   /** 生成した場所（<cwd>/<app_name>）。生成したときだけ入る */
   projectDir?: string;
+  /** 生成の直後の動作確認の結果。確かめたときだけ入る */
+  verification?: VerifyResult;
 }
 
 const RULE7 = "version-newer-than-verified";
@@ -379,7 +404,7 @@ async function run(options: CreateOptions, deps: CreateDeps): Promise<CreateOutc
     if (!go) return { exitCode: 0, ...done };
   }
 
-  return generate(done, deps, now);
+  return generate(done, deps, now, options);
 }
 
 interface Confirmed {
@@ -388,18 +413,6 @@ interface Confirmed {
   result: CheckResult;
   versions: VersionResult;
   techStack: string;
-}
-
-function nextSteps(dir: string): string {
-  return [
-    `生成した場所：${dir}`,
-    "",
-    "次の手順",
-    "1. 生成した場所に移動して、README を読む",
-    "2. npm install で、依存するパッケージを入れる",
-    "",
-    "（Git の初期化・リモートリポジトリの作成は、まだ行っていません）",
-  ].join("\n");
 }
 
 /**
@@ -411,6 +424,7 @@ async function generate(
   done: Confirmed,
   deps: CreateDeps,
   now: () => Date,
+  options: CreateOptions,
 ): Promise<CreateOutcome> {
   let files;
   try {
@@ -443,8 +457,7 @@ async function generate(
       );
       return { exitCode: 130, ...done, projectDir: written.dir };
     }
-    deps.prompter.note(nextSteps(written.dir), "生成しました");
-    return { exitCode: 0, ...done, projectDir: written.dir };
+    return await afterGenerate(written.dir, done, options, deps, now);
   } catch (e) {
     if (e instanceof GenerationInterrupted) {
       deps.stderr(`${CANCEL_MESSAGE}\n`);
@@ -466,6 +479,10 @@ export function createCommand(deps: Partial<CreateDeps> = {}): Command {
     .description("質問に答えて、プロジェクトを生成する")
     .option("--answers <file>", "質問への回答をまとめたファイルを指定する")
     .option("--yes", "最後の確認（この内容で生成しますか）を省く")
+    .option(
+      "--verify",
+      "生成の直後に、npm install と npm run check で動作を確かめて、記録する（聞かずに実行する）",
+    )
     .action(async (options: CreateOptions) => {
       const outcome = await runCreate(options, {
         prompter: deps.prompter ?? createClackPrompter(),
@@ -476,7 +493,117 @@ export function createCommand(deps: Partial<CreateDeps> = {}): Command {
         ...(deps.fetch ? { fetch: deps.fetch } : {}),
         ...(deps.now ? { now: deps.now } : {}),
         ...(deps.generateFs ? { generateFs: deps.generateFs } : {}),
+        ...(deps.runCommand ? { runCommand: deps.runCommand } : {}),
+        ...(deps.dockerAvailable ? { dockerAvailable: deps.dockerAvailable } : {}),
       });
       process.exitCode = outcome.exitCode;
     });
+}
+
+/** 生成の後：動作を確かめるかを決め、確かめて、結果の表示・記録・終了コードを決める */
+async function afterGenerate(
+  dir: string,
+  done: Confirmed,
+  options: CreateOptions,
+  deps: CreateDeps,
+  now: () => Date,
+): Promise<CreateOutcome> {
+  const base = { exitCode: 0, ...done, projectDir: dir };
+  let verify = options.verify === true;
+  if (!verify && !options.yes && deps.interactive) {
+    try {
+      verify = await deps.prompter.confirm({
+        id: VERIFY_CONFIRM_ID,
+        message: VERIFY_QUESTION,
+        initialValue: false,
+      });
+    } catch (e) {
+      if (!(e instanceof CancelledError)) throw e;
+      // 生成は終わっているので、生成物は残す
+      deps.stderr(`${cancelledAfterGenerate(dir)}
+`);
+      return { ...base, exitCode: 130 };
+    }
+  }
+  if (!verify) {
+    deps.prompter.note(nextSteps(dir), "生成しました");
+    return base;
+  }
+
+  // 確かめの間だけ、SIGINT・SIGTERM を受ける。実行中の処理を止め、後始末は止めずに終わらせる
+  const controller = new AbortController();
+  let received = false;
+  const onSignal = (): void => {
+    if (received) {
+      deps.stderr(`${INTERRUPT_AGAIN_NOTICE}
+`);
+      return;
+    }
+    received = true;
+    deps.stderr(`${INTERRUPT_NOTICE}
+`);
+    controller.abort();
+  };
+  process.on("SIGINT", onSignal);
+  process.on("SIGTERM", onSignal);
+  let result: VerifyResult;
+  try {
+    result = await verifyProject({
+      projectDir: dir,
+      database: done.answers.database,
+      versions: done.versions,
+      runner: deps.runCommand ?? defaultRunner,
+      dockerAvailable: deps.dockerAvailable ?? defaultDockerAvailable,
+      signal: controller.signal,
+      onProgress: (message) => deps.prompter.note(message),
+    });
+  } catch (e) {
+    deps.stderr(
+      `エラー: 動作確認を続けられませんでした：${e instanceof Error ? e.message : String(e)}
+`,
+    );
+    return { ...base, exitCode: 1 };
+  } finally {
+    process.off("SIGINT", onSignal);
+    process.off("SIGTERM", onSignal);
+  }
+
+  const withResult = { ...base, verification: result };
+  switch (result.status) {
+    case "passed": {
+      const file = path.join(dir, "docs", "tech-stack.md");
+      try {
+        writeFileSync(file, appendVerifiedRecord(readFileSync(file, "utf8"), localDay(now())));
+      } catch (e) {
+        deps.stderr(
+          `エラー: docs/tech-stack.md に記録できませんでした：${e instanceof Error ? e.message : String(e)}
+`,
+        );
+        return { ...withResult, exitCode: 1 };
+      }
+      deps.prompter.note(passedMessage(result, done.versions.entries), "動作確認");
+      deps.prompter.note(nextSteps(dir, result), "生成しました");
+      return withResult;
+    }
+    case "failed": {
+      deps.prompter.note(failedMessage(result, dir), "動作確認");
+      deps.prompter.note(nextSteps(dir, result), "生成しました");
+      if (options.verify) {
+        deps.stderr("エラー: 動作確認に失敗しました（生成したファイルは残しています）。\n");
+        return { ...withResult, exitCode: 1 };
+      }
+      return withResult;
+    }
+    case "skipped":
+      deps.prompter.note(skippedMessage(result.reason), "動作確認");
+      deps.prompter.note(nextSteps(dir), "生成しました");
+      return withResult;
+    case "interrupted":
+      deps.stderr(`${interruptedMessage(dir)}
+`);
+      for (const f of result.cleanupFailures)
+        deps.stderr(`${f}
+`);
+      return { ...withResult, exitCode: 130 };
+  }
 }

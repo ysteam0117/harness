@@ -106,14 +106,18 @@ describe("#33 R6・R8: 方針 verified（既定）でも調べて記録し、つ
   });
 
   it("#33 R8: 実際のプロファイルで、すべての取得が失敗しても、確認の後に検証済みで最後まで進む（質問は確認だけ）", async () => {
-    const s = setup(offlineFetch(), { confirm_generate: [true] }, { interactive: true });
+    const s = setup(
+      offlineFetch(),
+      { confirm_generate: [true], verify_after_generate: [false] },
+      { interactive: true },
+    );
     const out = await runCreate(
       { answers: s.writeAnswers(baseAnswers() as Record<string, unknown>) },
       s.deps,
     );
     expect(out.exitCode).toBe(0);
     expect(generated(s.cwd)).toBe(true); // 生成した（#34）
-    expect(s.prompter.askedIds).toEqual(["confirm_generate"]);
+    expect(s.prompter.askedIds).toEqual(["confirm_generate", "verify_after_generate"]);
     for (const e of out.versions?.entries ?? []) {
       expect(e.version).toBe(e.verified);
       expect(e.latestStable).toBeNull();
@@ -320,11 +324,19 @@ describe("#33 AC-4: ネットワークにつながらない場合（方針 lates
   it("#33 AC-4: 対話：「はい」なら検証済みで進み、最後の確認まで行く", async () => {
     const s = setup(
       offlineFetch(),
-      { versions_offline_confirm: [true], confirm_generate: [true] },
+      {
+        versions_offline_confirm: [true],
+        confirm_generate: [true],
+        verify_after_generate: [false],
+      },
       { interactive: true },
     );
     const out = await runCreate({ answers: s.writeAnswers(latestYaml()) }, s.deps);
-    expect(s.prompter.askedIds).toEqual(["versions_offline_confirm", "confirm_generate"]);
+    expect(s.prompter.askedIds).toEqual([
+      "versions_offline_confirm",
+      "confirm_generate",
+      "verify_after_generate",
+    ]);
     expect(out.exitCode).toBe(0);
     expect(generated(s.cwd)).toBe(true); // 生成した（#34）
     expect(out.versions?.entries.every((e) => e.version === e.verified)).toBe(true);
@@ -339,6 +351,7 @@ describe("#33 計画8：質問 → バージョンの調査と選択 → 事実�
       versions_mode: ["each"],
       [`accept_warning:${RULE7}`]: [true],
       confirm_generate: [true],
+      verify_after_generate: [false],
     };
     for (const n of names) script[`version_pick:${n}`] = [n === "vitest" ? "verified" : "latest"];
     const s = setup(newerRegistry(), script, { interactive: true });
@@ -347,7 +360,7 @@ describe("#33 計画8：質問 → バージョンの調査と選択 → 事実�
     const ids = s.prompter.askedIds;
     expect(ids[0]).toBe("versions_mode");
     expect(ids.indexOf("versions_mode")).toBeLessThan(ids.indexOf(`accept_warning:${RULE7}`));
-    expect(ids.at(-1)).toBe("confirm_generate");
+    expect(ids.at(-2)).toBe("confirm_generate");
     // 表（調べた結果）は、最初の入力より前に表示されている
     const firstInput = s.prompter.events.findIndex((e) => e.type === "input");
     const tableAt = s.prompter.events.findIndex(
@@ -386,7 +399,11 @@ describe("#33 計画8：質問 → バージョンの調査と選択 → 事実�
   });
 
   it("#33 計画8：最後の確認の一覧（note）に、採用するバージョンの表が加わる", async () => {
-    const s = setup(registryForReal(), { confirm_generate: [true] }, { interactive: true });
+    const s = setup(
+      registryForReal(),
+      { confirm_generate: [true], verify_after_generate: [false] },
+      { interactive: true },
+    );
     await runCreate({ answers: s.writeAnswers(baseAnswers() as Record<string, unknown>) }, s.deps);
     const confirmAt = s.prompter.events.findIndex(
       (e) => e.type === "input" && e.id === "confirm_generate",
@@ -423,6 +440,7 @@ describe("#33 R3: 整合性チェックの聞き直しで回答が変わった�
         database: ["postgresql"],
         postgres_provider: ["neon"],
         confirm_generate: [true],
+        verify_after_generate: [false],
       },
       { interactive: true },
     );
@@ -437,6 +455,7 @@ describe("#33 R3: 整合性チェックの聞き直しで回答が変わった�
       "database",
       "postgres_provider",
       "confirm_generate",
+      "verify_after_generate",
     ]);
 
     const names = out.versions?.entries.map((e) => e.name) ?? [];
@@ -465,7 +484,11 @@ describe("#33 R3: 整合性チェックの聞き直しで回答が変わった�
 
   it("#33 R3: 回答が変わっても対象が変わらない（auth の直しなど）なら、調べ直さない", async () => {
     const f = registryForReal();
-    const s = setup(f, { fix_question: ["auth"], confirm_generate: [true] }, { interactive: true });
+    const s = setup(
+      f,
+      { fix_question: ["auth"], confirm_generate: [true], verify_after_generate: [false] },
+      { interactive: true },
+    );
     // database = none・auth = app はエラー。auth を直すと（#79：聞かずに「未定」に戻る）、対象は変わらない
     const file = s.writeAnswers(
       baseAnswers({ auth: "app", idp: undefined, database: "none" }) as Record<string, unknown>,

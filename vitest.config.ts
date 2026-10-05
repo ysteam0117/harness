@@ -8,5 +8,8 @@ export default defineConfig({
   test: {
     include: ["test/**/*.test.ts"],
     exclude: ["**/node_modules/**", SMOKE_TESTS],
+    // 生成の全体を通すテストは、Windows の CI では既定の 5 秒を超えることがあるため延ばす（時間切れの不安定さを避ける）
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
   },
 });

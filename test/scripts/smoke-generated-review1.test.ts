@@ -76,6 +76,7 @@ import {
   runCommand,
   runSampleUserLifecycle,
   runWithCleanup,
+  runVerificationWithCleanup,
   type CleanupRegistry,
 } from "../../scripts/smoke-generated.js";
 
@@ -321,6 +322,70 @@ describe("#56 R(レビュー1)-4: smoke の中断で、起動したものを止�
     expect(codes[0]).toBe(130);
     expect(count).toBe(1);
   });
+
+  it.each(["SIGINT", "SIGTERM"] as const)(
+    "#57: %s では、検証の Docker の後始末が完了してからフォルダを削除して終了する",
+    async (signal) => {
+      const registry = createCleanupRegistry();
+      const events: string[] = [];
+      registry.add("一時的なフォルダの削除", () => {
+        events.push("folder-removed");
+      });
+      let finishDocker!: () => void;
+      const dockerDone = new Promise<void>((resolve) => {
+        finishDocker = resolve;
+      });
+      let notifyAborted!: () => void;
+      const aborted = new Promise<void>((resolve) => {
+        notifyAborted = resolve;
+      });
+      let notifyStarted!: () => void;
+      const started = new Promise<void>((resolve) => {
+        notifyStarted = resolve;
+      });
+      const running = runVerificationWithCleanup(registry, async (abortSignal) => {
+        abortSignal.addEventListener(
+          "abort",
+          () => {
+            events.push("verify-aborted");
+            notifyAborted();
+          },
+          { once: true },
+        );
+        notifyStarted();
+        await aborted;
+        await dockerDone;
+        events.push("docker:down:test-done");
+      });
+      const exited = new Promise<void>((resolve) => {
+        uninstalls.push(
+          installInterruptHandlers(registry, {
+            exit: (code) => {
+              events.push(`exit-${String(code)}`);
+              resolve();
+            },
+          }),
+        );
+      });
+      await started;
+      process.emit(signal);
+      await aborted;
+      expect(events).toEqual(["verify-aborted"]);
+      // 後始末の最中にもう一方の信号が来ても、待機を飛ばして終了しない。
+      process.emit(signal === "SIGINT" ? "SIGTERM" : "SIGINT");
+      expect(events).toEqual(["verify-aborted"]);
+      finishDocker();
+      await exited;
+      await running;
+      await registry.runAll();
+      expect(events).toEqual([
+        "verify-aborted",
+        "docker:down:test-done",
+        "folder-removed",
+        signal === "SIGINT" ? "exit-130" : "exit-143",
+      ]);
+    },
+  );
 
   it("#56 R(レビュー2)-1: 通常の runAll の後始末が終わる前に SIGTERM を受けても、exit は後始末が完了してから呼ばれる", async () => {
     const registry = createCleanupRegistry();

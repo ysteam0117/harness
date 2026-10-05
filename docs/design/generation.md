@@ -7,8 +7,9 @@
 - 作るもの：テンプレートの値の決定、F-26 の判定、`package.json` の組み立て、知見の写し、`docs/tech-stack.md`・承知した警告のADRの保存、`.harness/config.yaml`（管理するファイルの指紋を含む）、一時的な場所での生成と移動、`harness create` の最後の生成
 - 作らないもの（Issue を分けた）
   - #56：アプリのひな形（アプリのコード・`.env.example`・`wrangler.jsonc`・`docker-compose.yml`）は、#56 で追加した（[skeleton.md](skeleton.md)）。要件定義書のひな形・PR のテンプレートなどは #63 に移った
-  - #57：生成の直後の `npm install` と品質チェックによる確認
+  - #57（済み）：生成の直後の `npm install` と品質チェックによる確認（下の「生成の直後の動作確認」）
   - #55：GitHub を使わない（手元の Git だけの）プロジェクトへの対応。リモートリポジトリ・Issue の作成もこれで決める
+- 生成の直後の確認（#57）：[動作確認](#生成の直後の動作確認57)
 - 生成は手元のフォルダまで。Git の初期化はしない（#55 で決める）
 - `update`・`status`（#35）は扱わない。ただし `.harness/config.yaml` の `managed_files` は、#35 が差分を取るための記録である
 
@@ -302,6 +303,35 @@ Windows では、ウイルス対策ソフトなどの影響で `rename` が一�
 ### テストのための窓口
 
 ファイル操作は `FsOps`（`mkdir`・`writeFile`・`lstat`・`readdir`・`rmdir`・`rename`・`rm`・`sleep`）を通す。テストでは一部だけ差し替えて、途中の失敗・競合・再試行・中断を再現する。`runCreate` の `generateFs` から渡せる。`harness create` の実行時は本物のファイル操作を使う。
+
+## 生成の直後の動作確認（#57）
+
+`harness create` の最後（生成の後）に、生成したプロジェクトで動くかを確かめて記録する。実装は `src/verify/` と `src/commands/create.ts` の `afterGenerate`。
+
+| ファイル | 役割 |
+| --- | --- |
+| `src/verify/runner.ts` | `CommandRunner` と既定の実装（`defaultRunner`）。出力は全部つないで伏せ字にしてから最後の4000字を残す。時間切れ・中断の合図で、子プロセスを子孫まで止める（Windows は `taskkill /T /F`、それ以外はプロセスグループ）。`npmInvocation`：`npm_execpath` が npm-cli.js なら node で実行、なければ Windows は `npm.cmd` をシェル経由、それ以外は `npm` |
+| `src/verify/env-files.ts` | `ensureEnvFiles`（`.env.development`・`.env.test` を、無いときだけ、`.env.example` の項目から架空の値で作る）、`readEnvSecrets`・`buildRedactor`（出力の秘密の値を `[REDACTED]` にする） |
+| `src/verify/verify.ts` | `verifyProject`：結果は `passed`・`failed`・`skipped`・`interrupted` |
+| `src/verify/tech-stack-record.ts` | `appendVerifiedRecord`：`docs/tech-stack.md` の末尾の「## 動作確認」の節（何度でも1つ） |
+| `src/verify/messages.ts` | 表示の文言 |
+
+### 流れと終了コード
+
+- 確かめるか：`--verify` なら聞かずに確かめる。対話（端末・`--yes` なし）では `verify_after_generate` を聞く（既定は「いいえ」）。`--yes` だけ・端末でないときは確かめない。この質問の Ctrl+C は、生成物を残して終了コード130（生成前のキャンセルとは別）
+- 順序：Docker の確認（PostgreSQL のときだけ。`docker info`。使えなければ npm を呼ばずに飛ばす）→ 環境ファイルの用意 → `npm install` → （PostgreSQL）検証用 DB の起動（`npm run docker:up:test -- --wait db`）→ `npm run check` → （PostgreSQL）`npm run docker:down:test`。`docker:up/down` は node_modules が要るため install の後。install が失敗したら DB は起動しない。停止は起動の前に登録し、成功・失敗・例外・中断のどれでも1回実行する。停止には中断の合図を渡さず、停止用の時間切れ（2分）だけで実行する
+- 時間切れ：install・check はそれぞれ10分
+- 終了コード：通った・飛ばした・対話で「はい」を選んで失敗は0、`--verify` を付けて失敗は1、中断（SIGINT・SIGTERM）は130。中断しても生成物は残す
+- 通ったとき、検証済みより新しい版を採用していれば、C-78 の提案（プロファイルの `verified_versions` の更新）を表示する（何も書き込まない）
+- 失敗したとき：失敗した手順・script 名・原因の候補のパッケージ（出力に名前が出たものを先に、次に検証済みより新しい版・未検証の版）・検証済みの版に戻す方法（`package.json` の版の書き換え → `npm install` → `npm run check`、または `version_policy: verified` で作り直す）を表示する
+
+### 出力の扱い
+
+- 出力に出る秘密の値を伏せる：`.env.development`・`.env.test` の4文字以上の値と、URL の中のパスワード。`APP_ENV` の値（development・test）は環境の名前で、出力のあちこちにあるため、対象から除く
+- 秘密の項目（名前に PASSWORD・SECRET・TOKEN・KEY・DATABASE_URL・CONNECTION_STRING を含む）に8文字未満の値があるときは、出力を一切保存・表示しない
+- 出力から拾う情報（失敗した script 名・原因の候補のパッケージ名）は、`package.json` の scripts のキー、採用した版の一覧の名前と完全に一致するものだけを使う
+
+テスト：`test/verify/`（runner は小さな node の子プロセスで確かめる。固定の短い時間でなく、条件で待つ）、`test/commands/create-verify.test.ts`（偽の runner・偽の Docker）。本物の npm・Docker は使わない。
 
 ## 秘密情報を生成物に入れないこと
 
