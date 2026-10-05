@@ -1,0 +1,7 @@
+# 技術プロファイル：外部 IdP 認証（OIDC）（F-24。#72 は枠だけ。中身（files・packages）は #75 で作る）
+id: oidc-auth
+category: auth
+name: 外部 IdP 認証（OIDC）
+languages: [typescript]
+packages: []   # ライブラリは #75 で足す
+skill_name: auth-oidc

@@ -1,0 +1,7 @@
+# 技術プロファイル：認証のセッション（共通）（F-24。#72 は枠だけ。中身（files・packages）は #73 で作る）
+id: session
+category: auth
+name: 認証のセッション（共通）
+languages: [typescript]
+packages: []   # ライブラリは #73 で足す
+skill_name: auth-session

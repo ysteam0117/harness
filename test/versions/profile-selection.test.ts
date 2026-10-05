@@ -33,7 +33,10 @@ const ALWAYS = [
 
 describe("#33 selectProfiles：回答から使うプロファイルを決める", () => {
   it("#33 AC-2: database が d1 のとき、常に使う 7 つと data-access/drizzle を選ぶ", () => {
-    const keys = selectProfiles(baseAnswers({ database: "d1" }));
+    // 認証のプロファイル（auth/*。#72）は、別のテストで確かめる
+    const keys = selectProfiles(baseAnswers({ database: "d1" })).filter(
+      (k) => !k.startsWith("auth/"),
+    );
     expect(keys).toHaveLength(8);
     expect(keys).toEqual(expect.arrayContaining([...ALWAYS, "data-access/drizzle"]));
   });
@@ -115,6 +118,63 @@ describe("#33 selectProfiles：データの検証", () => {
       "- [unclosed\n",
     ]) {
       expect(() => parseProfileSelection(text, realTemplatesDir), text).toThrow(GenerateError);
+    }
+  });
+});
+
+describe("#72 認証のプロファイルの選択（auth/session・auth/app-auth・auth/oidc-auth）", () => {
+  const authKeys = (auth: "none" | "app" | "oidc" | "both") =>
+    selectProfiles(
+      baseAnswers({
+        database: "d1",
+        auth,
+        idp: auth === "oidc" || auth === "both" ? "google" : undefined,
+      }),
+    ).filter((k) => k.startsWith("auth/"));
+
+  it("#72 AC-1: auth が none のとき、auth/* は選ばれない", () => {
+    expect(authKeys("none")).toEqual([]);
+  });
+  it("#72 AC-1: app のとき auth/session と auth/app-auth", () => {
+    expect(authKeys("app")).toEqual(["auth/session", "auth/app-auth"]);
+  });
+  it("#72 AC-1: oidc のとき auth/session と auth/oidc-auth", () => {
+    expect(authKeys("oidc")).toEqual(["auth/session", "auth/oidc-auth"]);
+  });
+  it("#72 AC-1: both のとき 3 つとも", () => {
+    expect(authKeys("both")).toEqual(["auth/session", "auth/app-auth", "auth/oidc-auth"]);
+  });
+
+  it("#72 AC-1: 認証のプロファイルは packages が空で読め、実際の templates/ にある", () => {
+    for (const key of ["auth/session", "auth/app-auth", "auth/oidc-auth"]) {
+      const p = loadProfile(realTemplatesDir, key);
+      expect(p.category).toBe("auth");
+      expect(p.packages).toEqual([]);
+      expect(p.files).toEqual([]);
+    }
+  });
+
+  it("#72 AC-1: プロファイルの選択でも all が使える", () => {
+    const text =
+      "- profile: data-access/drizzle\n  when: { all: [{ answer: database, equals: d1 }, { answer: auth, notEquals: none }] }\n";
+    const rules = parseProfileSelection(text, realTemplatesDir);
+    expect(
+      selectProfiles(baseAnswers({ database: "d1", auth: "app", idp: undefined }), rules),
+    ).toEqual(["data-access/drizzle"]);
+    expect(
+      selectProfiles(baseAnswers({ database: "d1", auth: "none", idp: undefined }), rules),
+    ).toEqual([]);
+    expect(
+      selectProfiles(baseAnswers({ database: "none", auth: "app", idp: undefined }), rules),
+    ).toEqual([]);
+  });
+
+  it("#72 AC-1: all の誤り（空・知らない質問）はエラー（プロファイルを示す）", () => {
+    for (const when of ["{ all: [] }", "{ all: [{ answer: nope, equals: x }] }"]) {
+      const text = `- profile: data-access/drizzle\n  when: ${when}\n`;
+      expect(() => parseProfileSelection(text, realTemplatesDir), when).toThrow(
+        /data-access\/drizzle/,
+      );
     }
   });
 });

@@ -39,6 +39,7 @@
 | `asvs_level`・`pentest_requirement` | 既存の値（[generation.md](generation.md)） |
 | `enabled_rules` | 有効にした共通仕様を「、」でつないだもの。なければ「なし」 |
 | `undecided_items` | 未定の質問の箇条書き（記号・`title`・id）。なければ「なし」 |
+| `auth_undecided_rows` | 「未決定事項」の表に足す行。認証が `app`・`both` のときだけ4行、それ以外は空文字（表の区切りの行の直後に差し込むため、認証なしの出力は変わらない。#72。[generation.md](generation.md)） |
 | `license_year` | 生成した年（`now`）。LICENSE に使う |
 
 ## 仮のアイコン（C-55）

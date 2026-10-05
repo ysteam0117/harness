@@ -341,7 +341,7 @@ describe("#32 AC-3: 警告・エラー（--answers）", () => {
     const out = await runCreate({ answers: file, yes: true }, s.deps);
     expect(out.exitCode).toBe(1);
     expect(s.err()).toContain("auth-needs-db");
-    expect(s.err()).toContain("認証が「アプリ独自認証」または「併用」で、DBが「なし」です");
+    expect(s.err()).toContain("認証を使う場合、利用者とセッションを保存する DB が必要です");
     expect(generated(s.tmp.cwd)).toBe(false); // 生成しない
   });
 

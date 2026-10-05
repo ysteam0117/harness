@@ -5,7 +5,8 @@
 #     - when: { answer: <質問の id>, equals | in | notEquals: ... }
 #       value: 値
 #     - value: 値                  when を書かない行は、常に合う（最後に書いて、既定にする）
-# 条件の書き方は consistency-rules.yaml の answer 条件と同じ。
+# 条件の書き方は consistency-rules.yaml の answer 条件と同じ。複数の条件をすべて満たすときは、
+#   when: { all: [{ answer: ... }, { answer: ... }] } と書く（#72）。
 #
 # ここに書かない値は、回答から計算する（src/generate/values.ts）：
 #   app_name・auth_method・database・asvs_level・pentest_requirement・judgment_table・enabled_rules・undecided_items・
@@ -365,3 +366,15 @@ secrets_ci_setup:
         ```bash
         gh secret set <項目名>
         ```
+
+# 要件定義書の「7. 未決定事項」の表に足す行（独自認証のときだけ）。表の見出しの行の直後に差し込むため、行の前に改行を置く。
+# 行がないときは空文字にして、表の後に空行を残さない
+auth_undecided_rows:
+  - when: { answer: auth, in: [app, both] }
+    value: |-
+
+      | 1 | Workers のプラン（パスワードのハッシュ化の CPU 時間。無料プランの上限 10ms を超える） | 要件定義 |
+      | 2 | パスワードのハッシュ化のライブラリと強さ（既定は @noble/hashes の Argon2id。WASM 版への差し替えも可） | 要件定義 |
+      | 3 | パスワード再設定などのメールの送信サービス | 要件定義 |
+      | 4 | ログイン試行の制限の値（仮：5回で1分から倍々、上限15分） | 要件定義 |
+  - value: ""

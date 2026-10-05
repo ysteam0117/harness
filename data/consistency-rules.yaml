@@ -10,10 +10,10 @@
   level: error
   when:
     all:
-      - { answer: auth, in: [app, both] }
+      - { answer: auth, in: [app, oidc, both] }
       - { answer: database, equals: none }
-  message: 認証が「アプリ独自認証」または「併用」で、DBが「なし」です
-  reason: 利用者の情報を保存する場所がありません
+  message: 認証を使う場合、利用者とセッションを保存する DB が必要です
+  reason: セッションを DB に保存し、ログアウトでサーバー側も無効にするため（C-16）
   fix: [auth, database]
 
 - id: upload-needs-db

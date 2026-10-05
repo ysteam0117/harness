@@ -155,7 +155,7 @@ CLI の質問は開発環境に絞り、F-26 の質問A〜G（`personal_data`・
 
 | # | ルールの id | 段階 | 内容 | 事実 |
 | --- | --- | --- | --- | --- |
-| 1 | `auth-needs-db` | エラー | 認証が `app`・`both` で、DBが `none` | 回答のみ |
+| 1 | `auth-needs-db` | エラー | 認証が `app`・`oidc`・`both` で、DBが `none`（セッションを DB に保存するため。C-16。#72 で `oidc` を追加） | 回答のみ |
 | 2 | `upload-needs-db` | エラー | ファイルのアップロードを使い、DBが `none` | 回答のみ |
 | 3 | `upload-without-auth` | 警告 | ファイルのアップロードを使い、認証が `none` | 回答のみ |
 | 4 | `team-needs-ci` | 警告 | 開発人数が `team` で、品質チェックの場所が `local` | 回答のみ |

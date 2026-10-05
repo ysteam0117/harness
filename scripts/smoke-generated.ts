@@ -739,6 +739,13 @@ function dockerAvailable(): boolean {
   return r.status === 0;
 }
 
+/** OIDC の接続先の項目（空のときに入れる架空の値。開発・検証で同じ。#72） */
+const OIDC_ENDPOINT_DUMMIES: Readonly<Record<string, string>> = {
+  OIDC_ISSUER: "https://idp.example.test",
+  OIDC_REDIRECT_URI: "http://localhost:5173/api/auth/oidc/callback",
+  APP_BASE_URL: "http://localhost:5173",
+};
+
 /** .env.example の項目に、値を重ねて環境別の .env を作る（架空の値だけ）。 */
 export function writeEnvFile(
   projectDir: string,
@@ -759,6 +766,8 @@ export function writeEnvFile(
     ) {
       return `${name}=dummy_smoke_${environment}_${name.toLowerCase()}`;
     }
+    const endpoint = OIDC_ENDPOINT_DUMMIES[name];
+    if (line.slice(eq + 1) === "" && endpoint !== undefined) return `${name}=${endpoint}`;
     return line;
   });
   for (const [name, value] of Object.entries(values)) {

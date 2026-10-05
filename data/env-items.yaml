@@ -8,7 +8,8 @@
 # test        : 検証（手元。テストが読む .env.test）で入れるもの
 # production  : 本番（Cloudflare）で入れるもの
 # example     : .env.example に書く値。書かなければ空。実際の値は書かない（空か、changeme・<…> のプレースホルダだけ）
-# when        : 書かなければ常に入れる。書く場合は、質問の id（answer）と、equals・in・notEquals のどれか1つ
+# when        : 書かなければ常に入れる。書く場合は、質問の id（answer）と、equals・in・notEquals のどれか1つ。
+#               複数の条件をすべて満たすときだけ入れる場合は、all に answer 条件を並べる（#72）
 #
 # 表のセルに | と改行は書かない。
 
@@ -98,4 +99,25 @@
   development: 開発用に登録した値
   test: 検証用に登録した値（開発とは別にする）
   production: 本番用に登録した値（wrangler secret put で入力する）
+  when: { answer: auth, in: [oidc, both] }
+
+- name: OIDC_ISSUER
+  purpose: 外部IdPの issuer の URL（IdP の公開情報。秘密ではない）
+  development: 開発用に登録した IdP の issuer の URL
+  test: 検証用に登録した IdP の issuer の URL（開発とは別にする）
+  production: 本番用に登録した IdP の issuer の URL
+  when: { answer: auth, in: [oidc, both] }
+
+- name: OIDC_REDIRECT_URI
+  purpose: 外部IdPに登録した、ログイン後に戻ってくる URL（コールバック）
+  development: 手元の画面のURLに合わせた、コールバックの URL
+  test: 検証用のコールバックの URL（開発とは別にする）
+  production: 本番のドメインのコールバックの URL
+  when: { answer: auth, in: [oidc, both] }
+
+- name: APP_BASE_URL
+  purpose: このアプリ自身の URL（リダイレクト先の組み立てに使う）
+  development: 手元の画面のURL
+  test: 手元の画面のURL
+  production: 本番のドメイン
   when: { answer: auth, in: [oidc, both] }

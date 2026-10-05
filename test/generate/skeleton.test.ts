@@ -93,9 +93,9 @@ const DB_FILES = [
 ];
 
 describe("#56 AC-3: 組み合わせ（認証 × DB × アップロード）は、有効なものだけを対象にする", () => {
-  it("#56 AC-3: 有効な組み合わせは 18 通り（none 3・d1 8・postgresql 8 のうち DB なしは 2）", () => {
-    expect(combos).toHaveLength(18);
-    expect(combos.filter((c) => c.database === "none")).toHaveLength(2);
+  it("#56 AC-3: 有効な組み合わせは 17 通り（none 3・d1 8・postgresql 8 のうち DB なしは 1。#72 で DB なし＋oidc を除いた）", () => {
+    expect(combos).toHaveLength(17);
+    expect(combos.filter((c) => c.database === "none")).toHaveLength(1);
   });
 });
 
@@ -110,9 +110,10 @@ describe("#56 R7: 無効な組み合わせは、整合性チェックでエラ�
   const errorIds = (over: Record<string, unknown>) =>
     evaluateRules(rules, baseAnswers(over), facts).errors.map((e) => e.id);
 
-  it("#56 R7: DB なし＋独自認証（app・both）は auth-needs-db のエラー", () => {
+  it("#56 R7: DB なし＋認証あり（app・oidc・both）は auth-needs-db のエラー（oidc は #72 で追加）", () => {
     expect(errorIds({ database: "none", auth: "app" })).toContain("auth-needs-db");
     expect(errorIds({ database: "none", auth: "both" })).toContain("auth-needs-db");
+    expect(errorIds({ database: "none", auth: "oidc" })).toContain("auth-needs-db");
   });
 
   it("#56 R7: DB なし＋アップロードは upload-needs-db のエラー", () => {
@@ -121,12 +122,11 @@ describe("#56 R7: 無効な組み合わせは、整合性チェックでエラ�
     );
   });
 
-  it("#56 R7: DB なしでも、認証 none・oidc でアップロードなしならエラーにならない", () => {
+  it("#56 R7: DB なしでも、認証 none でアップロードなしならエラーにならない", () => {
     expect(errorIds({ database: "none", auth: "none" })).toEqual([]);
-    expect(errorIds({ database: "none", auth: "oidc" })).toEqual([]);
   });
 
-  it("#56 R7: 有効な 18 通りの組み合わせは、どれもエラーにならない", () => {
+  it("#56 R7: 有効な 17 通りの組み合わせは、どれもエラーにならない", () => {
     for (const c of combos) {
       const over = {
         database: c.database,

@@ -77,7 +77,7 @@ describe("#32 AC-3: ルールのデータ（data/consistency-rules.yaml）", () 
       expect(r.reason).toMatch(/[ぁ-んァ-ヶ一-龠]/);
     }
     expect(rules[0]?.message).toContain(
-      "認証が「アプリ独自認証」または「併用」で、DBが「なし」です",
+      "認証を使う場合、利用者とセッションを保存する DB が必要です",
     );
   });
 
@@ -108,15 +108,31 @@ describe("#32 AC-3: 10件のルールの判定（当たる・当たらない）"
     expect(hitIds({ auth: "app", idp: undefined, database: "none" })).toEqual(["auth-needs-db"]);
     expect(hitIds({ auth: "both", database: "none" })).toEqual(["auth-needs-db"]);
     expect(hitIds({ auth: "app", idp: undefined, database: "d1" })).toEqual([]);
-    expect(hitIds({ auth: "oidc", database: "none" })).toEqual([]);
     expect(hitIds({ auth: "none", idp: undefined, database: "none" })).toEqual([]);
+  });
+
+  it("#72 AC-3: ルール1（エラー）DB が none で、認証が oidc でもエラー（セッションを DB に保存するため）", () => {
+    expect(hitIds({ auth: "oidc", database: "none" })).toEqual(["auth-needs-db"]);
+    expect(hitIds({ auth: "oidc", database: "d1" })).toEqual([]);
+    const hit = evaluateRules(rules, baseAnswers({ auth: "oidc", database: "none" }), NO_FACTS)
+      .errors[0];
+    expect(hit?.message).toBe("認証を使う場合、利用者とセッションを保存する DB が必要です");
+    expect(hit?.reason).toBe(
+      "セッションを DB に保存し、ログアウトでサーバー側も無効にするため（C-16）",
+    );
   });
 
   it("#32 AC-3: ルール2（エラー）ファイルのアップロードを使い、DB が none", () => {
     const upload = { file_upload: "yes", file_kinds: ["image"] };
-    expect(hitIds({ ...upload, database: "none" })).toEqual(["upload-needs-db"]);
+    // 認証なしにして、アップロードのルールだけを見る（認証ありで DB なしは auth-needs-db。#72）
+    const noAuth = { auth: "none", idp: undefined };
+    expect(hitIds({ ...upload, ...noAuth, database: "none" })).toEqual([
+      "upload-needs-db",
+      "upload-without-auth",
+    ]);
+    expect(hitIds({ ...upload, database: "none" })).toEqual(["auth-needs-db", "upload-needs-db"]);
     expect(hitIds({ ...upload, database: "d1" })).toEqual([]);
-    expect(hitIds({ file_upload: "no", database: "none" })).toEqual([]);
+    expect(hitIds({ file_upload: "no", ...noAuth, database: "none" })).toEqual([]);
   });
 
   it("#32 AC-3: ルール3（警告）ファイルのアップロードを使い、認証が none", () => {
@@ -144,7 +160,7 @@ describe("#32 AC-3: 10件のルールの判定（当たる・当たらない）"
       "postgresql-needs-service",
     ]);
     expect(hitIds({ database: "d1" })).toEqual([]);
-    expect(hitIds({ database: "none" })).toEqual([]);
+    expect(hitIds({ auth: "none", idp: undefined, database: "none" })).toEqual([]);
   });
 
   it("#32 AC-3: ルール7（警告）最新を選び、検証済みより新しい（事実）", () => {

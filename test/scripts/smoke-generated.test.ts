@@ -210,6 +210,37 @@ describe("#51 AC-3: smoke の .env.development/.env.test は認証欄を必要�
     }
   });
 
+  it("#72 R2: OIDC の接続先の項目（OIDC_ISSUER・OIDC_REDIRECT_URI・APP_BASE_URL）も、開発・テストの両方に架空の値が入る", () => {
+    const dir = envFolder();
+    writeFileSync(
+      path.join(dir, ".env.example"),
+      "APP_ENV=\nOIDC_ISSUER=\nOIDC_REDIRECT_URI=\nAPP_BASE_URL=\n",
+    );
+    writeSmokeEnv(dir, "development", { APP_ENV: "development" });
+    writeSmokeEnv(dir, "test", { APP_ENV: "test" });
+    for (const file of [".env.development", ".env.test"]) {
+      const written = parseEnvExample(readFileSync(path.join(dir, file), "utf8"));
+      expect(written.OIDC_ISSUER, file).toBe("https://idp.example.test");
+      expect(written.OIDC_REDIRECT_URI, file).toBe("http://localhost:5173/api/auth/oidc/callback");
+      expect(written.APP_BASE_URL, file).toBe("http://localhost:5173");
+    }
+  });
+
+  it("#72 R2: 例に値がある・明示した値がある OIDC の項目は、上書きしない", () => {
+    const dir = envFolder();
+    writeFileSync(
+      path.join(dir, ".env.example"),
+      "APP_ENV=\nOIDC_ISSUER=https://issuer-in-example.example.test\nAPP_BASE_URL=\n",
+    );
+    writeSmokeEnv(dir, "development", {
+      APP_ENV: "development",
+      APP_BASE_URL: "http://localhost:5199",
+    });
+    const written = parseEnvExample(readFileSync(path.join(dir, ".env.development"), "utf8"));
+    expect(written.OIDC_ISSUER).toBe("https://issuer-in-example.example.test");
+    expect(written.APP_BASE_URL).toBe("http://localhost:5199");
+  });
+
   it("#51 AC-3: 認証以外の不足を無条件に埋めず、env:check は不足名で失敗する", () => {
     const dir = envFolder();
     writeFileSync(path.join(dir, ".env.example"), "APP_ENV=\nSESSION_SECRET=\nEXTRA_REQUIRED=\n");

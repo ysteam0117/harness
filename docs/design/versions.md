@@ -57,12 +57,15 @@ flowchart TD
 
 ## 回答から使うプロファイルを決める対応表
 
-`data/profile-selection.yaml` に、プロファイル（`<分類>/<id>`）と、選ぶ条件（回答の質問の id と、`equals`・`in`・`notEquals` のどれか1つ。整合性チェックの条件と同じ書き方）を書く。`when` を書かなければ常に選ぶ。
+`data/profile-selection.yaml` に、プロファイル（`<分類>/<id>`）と、選ぶ条件（回答の質問の id と、`equals`・`in`・`notEquals` のどれか1つ。整合性チェックの条件と同じ書き方）を書く。`when` を書かなければ常に選ぶ。複数の条件をすべて満たすときだけ選ぶ場合は、`all` に条件を並べる（#72。[generation.md](generation.md)）。`when` の検証と判定は `src/generate/conditions.ts` の `parseWhen`・`whenMatches` を使う。
 
 | 条件 | プロファイル |
 | --- | --- |
 | 常に | `backend-framework/hono`・`logger/structured-logger`・`frontend-build/vite-react-router`・`http-client/axios`・`frontend-state/tanstack-query-rhf-zod`・`test-framework/vitest-playwright`・`quality/typescript-standard` |
 | `database` が `none` でない | `data-access/drizzle` |
+| `auth` が `none` でない（#72） | `auth/session` |
+| `auth` が `app`・`both`（#72） | `auth/app-auth` |
+| `auth` が `oidc`・`both`（#72） | `auth/oidc-auth` |
 
 - 読み込み時に、プロファイルがない・知らない質問の id・知らない項目・条件の書き方の誤りは、`GenerateError`（日本語）にする
 - 選んだ順に、重複なしで返す

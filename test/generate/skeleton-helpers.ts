@@ -23,14 +23,14 @@ export interface Combo {
 
 /**
  * 有効な組み合わせだけ：認証 4 通り × DB 3 通り × アップロードあり・なし のうち、
- * 「DB なし＋独自認証（app・both）」「DB なし＋アップロード」は整合性チェックでエラーになる（別のテストで確かめる）ため除く。
+ * 「DB なし＋認証あり（app・oidc・both。oidc は #72 で追加）」「DB なし＋アップロード」は整合性チェックでエラーになる（別のテストで確かめる）ため除く。
  */
 export function validCombos(): Combo[] {
   const out: Combo[] = [];
   for (const auth of ["none", "app", "oidc", "both"] as const) {
     for (const database of ["d1", "postgresql", "none"] as const) {
       for (const upload of [false, true]) {
-        if (database === "none" && (auth === "app" || auth === "both")) continue;
+        if (database === "none" && auth !== "none") continue;
         if (database === "none" && upload) continue;
         out.push({
           auth,

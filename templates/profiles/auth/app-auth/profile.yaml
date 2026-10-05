@@ -1,0 +1,7 @@
+# 技術プロファイル：アプリ独自認証（F-24。#72 は枠だけ。中身（files・packages）は #74 で作る）
+id: app-auth
+category: auth
+name: アプリ独自認証
+languages: [typescript]
+packages: []   # ライブラリは #74 で足す
+skill_name: auth-app

@@ -35,7 +35,7 @@
 | `src/generate/package-json.ts` | `buildPackageJson`：生成するプロジェクトの `package.json` |
 | `src/generate/config.ts` | `buildConfigText`・`fingerprint`・`localDay`・`harnessVersion`・`CONFIG_PATH`：`.harness/config.yaml` |
 | `src/generate/write.ts` | `writeProject`：一時的な場所への書き込みと、生成先への移動。`GenerationInterrupted`・`FsOps` |
-| `src/generate/conditions.ts` | `parseWhen`・`whenMatches`：データファイルの条件（`when`）の検証と判定 |
+| `src/generate/conditions.ts` | `parseWhen`・`whenMatches`：データファイルの条件（`when`）の検証と判定。#72 で、条件の組み合わせ（`all`）を追加（下の「条件の組み合わせ（`all`）」） |
 | `src/generate/data.ts` | `readDataYaml`・`dataPath`・`isPlainObject`：`data/` の YAML の読み込み |
 | `src/generate/comments.ts` | `stripMarkerComments`（追加）：文書のどこにあっても、「もとになった共通仕様」の1行のコメントを取り除く |
 | `src/generate/profile.ts` | `dev_packages` の読み込みと検証（`Profile.devPackages`）を追加。#56 で `files_when`・`wrangler`・`wrangler_when`・`package_json_when` の読み込みと、まとめ方（`selectProfileFiles`・`mergeWrangler`・`mergePackageJson`）を追加（[skeleton.md](skeleton.md)） |
@@ -102,12 +102,26 @@ flowchart TD
 | `auth_method`・`database` | 回答の選択肢の表示の名前（質問の定義の `label`） |
 | `asvs_level`・`pentest_requirement` | `judge` の結果（下の「F-26 の判定」）。レベル3は「3を検討（結果をADRに記録する）」、ペネトレーションテストは必須なら「初回のリリースの前に必須（理由）」、そうでなければ「任意（推奨）」 |
 | `knowledge_index` | 写した知見の表の行（分野・ファイル・最初の見出し）。写すファイルと同じ一覧から作る |
+| `auth_undecided_rows` | 要件定義書の「未決定事項」の表に足す行（#72）。認証が `app`・`both` のときだけ4行（Workers のプラン・ハッシュ化のライブラリと強さ・メールの送信サービス・ログイン試行の制限の値。決める時期は「要件定義」）、それ以外は空文字。表の見出しの区切りの行の直後に `{{auth_undecided_rows}}` を置き、行の前に改行を持たせて、空のときに行も空行も残さない（認証なしの要件定義書が変わらない） |
 | `secrets_table` | `data/env-items.yaml` の項目のうち、回答の条件に合うものの表の行。項目の値は説明だけで、実際の値は書かない |
 | `compatibility_date`・`postgres_image_tag` | `data/runtimes.yaml` |
 | `terraform_version`・`terraform_cloudflare_version` | `data/runtimes.yaml`（`terraform_version`・`terraform_cloudflare_provider`）。確かめ方は [e2e-iac.md](e2e-iac.md) |
 | `claude_model_<役割>`・`codex_model_<役割>`・`codex_effort_<役割>` | `data/role-models.yaml`。選んだAIの分だけ値を持つ（Codex だけのときは Claude の値を求めない） |
 
 `data/template-values.yaml` の書き方は、名前に文字列を書く（常に同じ）か、`- when: {...}` と `value:` の並び（上から順に見て、最初に合うものを使う）である。条件は #32 のルールの `answer` 条件と同じ（`equals`・`in`・`notEquals`）。どの条件にも合わない値は、「最後に `when` のない行を書いてください」というエラーにする。データの書き間違い（知らない項目・知らない質問の id）も、場所を示して `GenerateError` にする。
+
+### 条件の組み合わせ（`all`）（#72）
+
+`when` には、`answer` と `equals`・`in`・`notEquals` のどれか1つの代わりに、`all` を書ける。`all` は `answer` 条件の並び（1つ以上）で、すべてに合うときだけ合う。
+
+```yaml
+when: { all: [{ answer: database, equals: d1 }, { answer: auth, notEquals: none }] }
+```
+
+- `all` は、`answer`・`equals`・`in`・`notEquals` と同時に書けない。`all` の中に `all` は書けない（入れ子は使えない。単純さを優先した）。空の `all`・知らない質問の id・演算子の誤りは、場所（`all` の何番目か）を示した `GenerateError` にする
+- 既存の書き方（`answer` と演算子1つ）はそのまま動く（後方互換）。型は `When = AnswerWhen | AllWhen`
+- `parseWhen`・`whenMatches` を通るすべての `when` で使える：`data/template-values.yaml`・`data/env-items.yaml`・`data/knowledge-selection.yaml`・`data/profile-selection.yaml`（`src/versions/profile-selection.ts` も `parseWhen`・`whenMatches` を使う）、`profile.yaml` の `files_when`・`wrangler_when`・`package_json_when`
+- 対象外：`profile.yaml` の `packages_when`（旧形式 `{ database: postgresql }`。`src/versions/targets.ts` が独自に判定する）と `data/consistency-rules.yaml`（`all`・`any` に `answer`・`fact` を並べる独自の形）。認証の依存パッケージは、`auth/*` プロファイルの `packages` に置くため、`packages_when` に `all` は要らない
 
 ### 役割とモデル（`data/role-models.yaml`）
 

@@ -551,3 +551,77 @@ wrangler_when:
     expect(run()).toBe(run());
   });
 });
+
+// #72 AC-1：files_when に all を書ける。認証なしのときだけ出す・認証ありのときに差し替える、の仕組みの確認
+describe("#72 AC-1: files_when の all（組み合わせの条件）", () => {
+  const input = (templatesDir: string, answers: object) => ({
+    templatesDir,
+    ais: ["claude" as const],
+    profiles: ["lib/alpha"],
+    values: { app_name: "testapp-001", claude_model_planner: "m" },
+    answers: answers as never,
+  });
+  const dest = (r: { files: { path: string }[] }) => r.files.map((f) => f.path);
+
+  const WITH_ALL = `files_when:
+  - when: { all: [{ answer: database, equals: d1 }, { answer: auth, notEquals: none }] }
+    files: { files/d1.ts: out/kind.ts }
+  - when: { all: [{ answer: database, equals: d1 }, { answer: auth, equals: none }] }
+    files: { files/pg.ts: out/kind.ts }
+`;
+
+  it("#72 AC-1: all の files_when を読み、組み合わせごとに出し分ける", () => {
+    const p = load(WITH_ALL);
+    expect(p.filesWhen[0]?.when).toEqual({
+      all: [
+        { answer: "database", equals: "d1" },
+        { answer: "auth", notEquals: "none" },
+      ],
+    });
+    const content = (answers: object) =>
+      buildOutputs(input(alpha(WITH_ALL), answers)).files.find((f) => f.path === "out/kind.ts")
+        ?.content;
+    expect(content({ database: "d1", auth: "app" })).toContain("'d1'");
+    expect(content({ database: "d1", auth: "none" })).toContain("'pg'");
+    expect(content({ database: "postgresql", auth: "app" })).toBeUndefined();
+  });
+
+  it("#72 AC-1: files から files_when（auth が none のときだけ）へ移しても、auth none の出力は同じ", () => {
+    const before = buildOutputs(
+      input(alpha("files:\n  files/common.ts: out/common.ts\n  files/d1.ts: out/kind.ts\n"), {
+        database: "d1",
+        auth: "none",
+      }),
+    );
+    const moved = `files:
+  files/common.ts: out/common.ts
+files_when:
+  - when: { answer: auth, equals: none }
+    files: { files/d1.ts: out/kind.ts }
+`;
+    const after = buildOutputs(input(alpha(moved), { database: "d1", auth: "none" }));
+    expect(after.files).toEqual(before.files);
+    // 認証ありのときは、元のファイルを出さない（後続の Issue が認証側の版を置ける）
+    const withAuth = buildOutputs(input(alpha(moved), { database: "d1", auth: "app" }));
+    expect(dest(withAuth)).not.toContain("out/kind.ts");
+  });
+
+  it("#72 AC-1: 認証側の版と元の版が同じ出力先でも、条件が排他なら重ならない", () => {
+    const yaml = `files_when:
+  - when: { answer: auth, equals: none }
+    files: { files/d1.ts: out/kind.ts }
+  - when: { answer: auth, notEquals: none }
+    files: { files/pg.ts: out/kind.ts }
+`;
+    const none = buildOutputs(input(alpha(yaml), { auth: "none" }));
+    const app = buildOutputs(input(alpha(yaml), { auth: "app" }));
+    expect(none.files.find((f) => f.path === "out/kind.ts")?.content).toContain("'d1'");
+    expect(app.files.find((f) => f.path === "out/kind.ts")?.content).toContain("'pg'");
+  });
+
+  it("#72 AC-1: all の誤りは loadProfile でエラー（場所を示す）", () => {
+    expect(() =>
+      load("files_when:\n  - when: { all: [] }\n    files: { files/d1.ts: out/a.ts }\n"),
+    ).toThrow(/files_when の 1 番目.*all/);
+  });
+});

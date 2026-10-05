@@ -22,7 +22,7 @@ AC-3 は「設定のファイルの違い」までを対象にする。認証・
 | #57 | 生成の直後の `npm install` と品質チェック | #56 は、`npm run smoke:generated` で生成物の動作を確かめる（ハーネス側の確認）。`harness create` が生成の直後に実行する処理は #57 |
 | #63 | 文書と GitHub のファイル（要件定義書・ADR・テストの手順書・PR／Issue のテンプレート・CI・LICENSE など） | CI の実行場所・公開・GitHub による違いは #63 |
 | #64 | E2E と IaC | 本番の Hyperdrive の id などの本物の値は IaC で決める。#56 の値は手元の開発用の仮の値 |
-| #65 | 認証の処理とテスト | #56 は認証の回答に応じた環境変数の項目（`SESSION_SECRET`・`OIDC_*`）まで |
+| #65（#72〜#75） | 認証の処理とテスト | #56 は認証の回答に応じた環境変数の項目（`SESSION_SECRET`・`OIDC_*`）まで。#72 は生成の仕組み（`all`・認証のプロファイルの枠・整合性ルール・環境変数・未決定事項）まで。処理は #73〜#75 |
 | #66 | アップロードの処理とテスト | #56 は R2 のバインディングを `wrangler.jsonc` に足すところまで |
 
 ## 生成されるプロジェクトの構成
@@ -68,7 +68,7 @@ C-03 の層構成「Controller → Service → Repository」に合わせる。
 
 ### 仕組み
 
-`profile.yaml` に、回答に合うときだけ働く4つの項目を足した。条件は `{ answer: <質問の id>, equals: <回答> }` の形で、`src/generate/conditions.ts` の `parseWhen`・`whenMatches` で読み、判定する（`packages_when` と同じ書き方）。
+`profile.yaml` に、回答に合うときだけ働く4つの項目を足した。条件は `{ answer: <質問の id>, equals: <回答> }` の形（#72 から、`{ all: [...] }` で組み合わせも書ける）で、`src/generate/conditions.ts` の `parseWhen`・`whenMatches` で読み、判定する（`packages_when` と同じ書き方）。
 
 | 項目 | 内容 | 組み立てる関数 |
 | --- | --- | --- |
@@ -92,9 +92,9 @@ C-03 の層構成「Controller → Service → Repository」に合わせる。
 | PostgreSQL | 上記の PostgreSQL 版（`pg` を使う）、`vitest.config.ts` は PostgreSQL 版、`wrangler.jsonc` に `hyperdrive`（バインディング名 `HYPERDRIVE`）と `compatibility_flags: [nodejs_compat]`、`db:*` の scripts（`drizzle-kit`・`docker compose exec ... psql`）、`docker-compose.yml` は `db` と backend、`.env.example` に `POSTGRES_*`・`DATABASE_URL`・Hyperdrive の手元の接続先 |
 | DB なし | `index.ts` は `createApp()` だけ（`index.none.ts`）。サンプルの利用者のファイル・スキーマ・マイグレーション・`drizzle.config.ts`・`db:*` の scripts は出ない。`vitest.config.ts` は DB なし版。`/api/sample-users` は 404 |
 | アップロードあり | `wrangler.jsonc` に `r2_buckets`（バインディング名 `UPLOADS`、バケット名 `<アプリ名>-uploads`）。処理とテストは #66 |
-| 認証あり（oidc・app・both） | `.env.example` に `SESSION_SECRET`。oidc・both は `OIDC_CLIENT_ID`・`OIDC_CLIENT_SECRET` も（`data/env-items.yaml` の `when`）。処理とテストは #65 |
+| 認証あり（oidc・app・both） | `.env.example` に `SESSION_SECRET`。oidc・both は `OIDC_CLIENT_ID`・`OIDC_CLIENT_SECRET`・`OIDC_ISSUER`・`OIDC_REDIRECT_URI`・`APP_BASE_URL` も（`data/env-items.yaml` の `when`。#72）。認証のプロファイル（`auth/session`・`auth/app-auth`・`auth/oidc-auth`）の枠が選ばれ、Skill が出る。処理とテストは #73〜#75 |
 
-無効な組み合わせ（DB なしの独自認証・DB なしのアップロード）は、これまでどおり整合性チェックがエラーにする。有効な組み合わせは 18 通りである（`test/generate/skeleton.test.ts`）。
+無効な組み合わせ（DB なしの認証あり（app・oidc・both。#72 で oidc を追加）・DB なしのアップロード）は、整合性チェックがエラーにする。有効な組み合わせは 17 通りである（`test/generate/skeleton.test.ts`）。
 
 どの `profile.yaml` が何を持つか。
 
@@ -105,6 +105,18 @@ C-03 の層構成「Controller → Service → Repository」に合わせる。
 | `frontend-build/vite-react-router` | `wrangler`（`name`・`main`・`compatibility_date`・`assets`・`vars`）、`files`（画面・`_headers`）、`package_json`（`dev`・`build`・`preview`・`types`・`predev`） |
 | `quality/typescript-standard` | `package_json`（`check` ほかの品質チェック）、`files`（`tsconfig.json`・`.dependency-cruiser.cjs` ほか） |
 | `test-framework/vitest-playwright` | `files_when`（`vitest.config.ts` の DB 別）、`package_json`（`test`・`pretest`） |
+
+## 認証のための生成の仕組み（#72）
+
+認証の処理とテストは #73〜#75 で作る。#72 は、そのための生成の仕組みだけを入れた。
+
+- `files_when` などの条件に、`all`（条件の組み合わせ）を書ける（[generation.md](generation.md)）。認証ありのとき、drizzle の `migrations/meta`・`backend/src/index.ts`・`frontend/src/App.tsx` を認証のプロファイル側の版で出したい。後続の Issue は、元のプロファイル（`data-access/drizzle`・`frontend-build/vite-react-router`）の該当ファイルを `files` から `files_when` へ移し、`when: { answer: auth, equals: none }`（DB の種類と組み合わせるときは `all`）で「認証なしのときだけ」出すようにして、認証側の版を同じ出力先で `when: { answer: auth, notEquals: none }` に置く。`files` から `files_when` へ移しても、認証なしの出力が変わらないことは `conditional-profile.test.ts` で確かめた。**#72 の時点では、認証ありでも元のファイルを出す**（差し替えは後続の Issue）
+- 出力先の重なりは、今までどおり `buildOutputs` がエラーにする。排他の条件（認証なし／あり）なら、同じ出力先でも重ならない
+- `templates/profiles/auth/` に、`session`・`app-auth`・`oidc-auth` の枠（`profile.yaml`・`SKILL.md`。`packages` は空、`files` はなし）を置いた。`data/profile-selection.yaml` が、`auth` が `none` 以外のとき `auth/session`、`app`・`both` のとき `auth/app-auth`、`oidc`・`both` のとき `auth/oidc-auth` を選ぶ。認証の依存パッケージは、後続の Issue が各プロファイルの `packages` に置く
+- 整合性チェック `auth-needs-db` は、`auth` が `app`・`oidc`・`both` で DB が `none` のときエラーにする（セッションを DB に保存するため。C-16）。`id` は変えない
+- 要件定義書の「未決定事項」に、独自認証（`app`・`both`）のときだけ4行を差し込む（`auth_undecided_rows`。[generation.md](generation.md)）
+- 認証が `none` の生成結果は、変更の前と同じ（`test/generate/auth-generation.test.ts` が、DB なし・D1・PostgreSQL の3通りのファイルの一覧と指紋を、`test/generate/fixtures/auth-none-baseline.json`（変更の前の記録）と比べる）
+- smoke（`scripts/smoke-generated.ts` の `writeEnvFile`）は、空の `OIDC_ISSUER`・`OIDC_REDIRECT_URI`・`APP_BASE_URL` に架空の値（`https://idp.example.test` など）を、開発・検証の両方の `.env` に入れる
 
 ## `wrangler.jsonc` の組み立て
 
@@ -216,7 +228,7 @@ Docker が使えず `SMOKE_REQUIRE_DOCKER` もないときは、PostgreSQL の�
 | --- | --- |
 | AC-1 | `npm run smoke:generated`（開発サーバーの起動・`/api/health`・`/`・Docker）。`test/generate/skeleton.test.ts`：README の最初の手順、`index.html` が Vite の入口、`vite.config.ts` が Cloudflare の部品を使う |
 | AC-2 | `npm run smoke:generated`（生成したプロジェクトで `npm run check` と `npm run build`。コンテナの中でも実行）。`skeleton.test.ts`：`npm run check` が lint・typecheck・test を含む、`tsconfig.json` が strict |
-| AC-3 | `skeleton.test.ts`：有効な組み合わせ 18 通り、無効な組み合わせのエラー、回答ごとに出るファイル、`wrangler.jsonc` の `d1_databases`・`hyperdrive`・`r2_buckets`、`docker-compose.yml`、`.env.example`、`vitest.config.ts`、drizzle の設定、`package.json` の scripts。`test/generate/profile.test.ts`・`package-json.test.ts`・`plan.test.ts`・`conditional-profile.test.ts`：`files_when` などの読み込みとまとめ方。`test/generate/project.test.ts`：スナップショット |
+| AC-3 | `skeleton.test.ts`：有効な組み合わせ 17 通り、無効な組み合わせのエラー、回答ごとに出るファイル、`wrangler.jsonc` の `d1_databases`・`hyperdrive`・`r2_buckets`、`docker-compose.yml`、`.env.example`、`vitest.config.ts`、drizzle の設定、`package.json` の scripts。`test/generate/profile.test.ts`・`package-json.test.ts`・`plan.test.ts`・`conditional-profile.test.ts`：`files_when` などの読み込みとまとめ方。`test/generate/project.test.ts`：スナップショット |
 | 秘密情報（C-05） | `skeleton.test.ts`：`.env.example` の値が空かプレースホルダだけ、compose に認証情報を直接書かない、実在しうるメールアドレス・ドメインがない |
 | レビュー1-1：画面のヘッダー | `test/generate/skeleton-review1.test.ts`：`public/_headers` が全ての組み合わせで出て、API の `securityHeaders` と同じ値が入る |
 | レビュー1-2：後始末の SQL | `skeleton-review1.test.ts`：`ESCAPE` を使い、DELETE と残数の確認が同じ条件。メモリ上の SQLite で、`testuser_001` は消え、`testuserX001` などは残る |
@@ -247,5 +259,5 @@ Docker が使えず `SMOKE_REQUIRE_DOCKER` もないときは、PostgreSQL の�
 - #57：生成の直後の `npm install` と品質チェック。smoke の手順（`npm install` → `npm run check`）を参考にする
 - #63：CI の実行場所・公開・GitHub による違い、要件定義書のひな形
 - #64：Hyperdrive の本番の `id` などの IaC。E2E の最初のシナリオ
-- #65・#66：認証・アップロードの処理とテスト。`wrangler.jsonc` の R2 のバインディングと、`SESSION_SECRET`・`OIDC_*` の項目はすでにある
+- #73〜#75：認証の処理とテスト（#72 が生成の仕組みを入れた）。#66：アップロードの処理とテスト。`wrangler.jsonc` の R2 のバインディングと、`SESSION_SECRET`・`OIDC_*` の項目はすでにある
 - 例の機能（`/api/sample-users`）は、実際のアプリでは消すか置き換える
