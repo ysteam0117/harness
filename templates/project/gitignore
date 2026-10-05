@@ -20,3 +20,12 @@ test-results
 reports
 .stryker-tmp
 .eslintcache
+
+# Terraform（infra/）。状態ファイルには秘密情報が含まれ得るため Git に入れない（C-39）。
+# .terraform.lock.hcl（プロバイダーの検証値）は、コミットするため除外しない（C-62）
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log
+*.tfplan

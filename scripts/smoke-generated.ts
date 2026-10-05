@@ -10,6 +10,8 @@
 // 環境変数
 //   SMOKE_REQUIRE_DOCKER=1  Docker が使えないときに、PostgreSQL・Docker の確かめを飛ばさずに失敗にする（CI で使う）
 //   SMOKE_CASES=d1,none     実行する通りを絞る（既定はすべて）
+//   SMOKE_REQUIRE_TERRAFORM=1  terraform が使えないときに、terraform validate を飛ばさずに失敗にする（CI で使う）
+//   SMOKE_SKIP_E2E=1        E2E（Playwright。ブラウザの導入が要る）を飛ばす
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
@@ -105,6 +107,29 @@ export function buildLocalGitAnswersYaml(): string {
     auth: "none",
     idp: undefined,
   });
+}
+
+type Env = Record<string, string | undefined>;
+
+/** terraform validate の段階を実行するか。terraform がなければ飛ばす。SMOKE_REQUIRE_TERRAFORM=1 のときは失敗にする */
+export function decideTerraformStep(available: boolean, env: Env): "run" | "skip" {
+  if (available) return "run";
+  if (env["SMOKE_REQUIRE_TERRAFORM"] === "1") {
+    throw new Error("terraform が使えません（SMOKE_REQUIRE_TERRAFORM=1 のため、失敗にします）");
+  }
+  return "skip";
+}
+
+/** E2E の段階を実行するか（SMOKE_SKIP_E2E=1 で飛ばす） */
+export function shouldRunE2e(env: Env): boolean {
+  return env["SMOKE_SKIP_E2E"] !== "1";
+}
+
+/** Playwright のブラウザの導入の引数（npx に渡す）。CI（ubuntu）では、OS の部品も入れる */
+export function playwrightInstallArgs(env: Env): string[] {
+  return env["CI"] === "true"
+    ? ["playwright", "install", "--with-deps", "chromium"]
+    : ["playwright", "install", "chromium"];
 }
 
 /** 実行ごとに一意な、架空のアプリ名（smoke-<乱数>）。英小文字・数字・ハイフンだけ */
@@ -1032,6 +1057,26 @@ async function checkDatabaseLifecycle(
   );
 }
 
+const testDatabases = new WeakSet<CleanupRegistry>();
+
+/** 検証用の PostgreSQL のコンテナを起動して待つ。後始末（down -v）は、通りごとに1回だけ登録する */
+async function startTestDatabase(projectDir: string, registry: CleanupRegistry): Promise<void> {
+  if (!testDatabases.has(registry)) {
+    testDatabases.add(registry);
+    registry.add("検証用 Docker Compose の後始末", () =>
+      runCommand("docker", [...composeArgs(projectDir, "test"), "down", "-v", "--remove-orphans"], {
+        cwd: projectDir,
+        timeoutMs: 180_000,
+      }).then(() => undefined),
+    );
+  }
+  await runCommand("docker", [...composeArgs(projectDir, "test"), "up", "-d", "--wait", "db"], {
+    cwd: projectDir,
+    timeoutMs: 300_000,
+    registry,
+  });
+}
+
 /** 検証環境のAPIを動かし、開発環境に書いた記録が残ることを確かめる。 */
 async function checkTestIsolation(
   c: SmokeCase,
@@ -1057,19 +1102,7 @@ async function checkTestIsolation(
     });
     expectEqual(posted.status, 201, "開発DBの識別用記録の追加");
   });
-  if (c.database === "postgresql") {
-    registry.add("検証用 Docker Compose の後始末", () =>
-      runCommand("docker", [...composeArgs(projectDir, "test"), "down", "-v", "--remove-orphans"], {
-        cwd: projectDir,
-        timeoutMs: 180_000,
-      }).then(() => undefined),
-    );
-    await runCommand("docker", [...composeArgs(projectDir, "test"), "up", "-d", "--wait", "db"], {
-      cwd: projectDir,
-      timeoutMs: 300_000,
-      registry,
-    });
-  }
+  if (c.database === "postgresql") await startTestDatabase(projectDir, registry);
   await npm(["run", "db:migrate:test"], projectDir);
   await npm(["run", "db:seed:test"], projectDir);
   await withDevServer(
@@ -1088,6 +1121,104 @@ async function checkTestIsolation(
     const names = usernamesOf(await getJson(`${server.url}/api/sample-users`), c.database);
     if (!names.includes(marker)) throw new Error("検証操作のあと、開発DBの記録が失われました");
   });
+}
+
+// ---------------------------------------------------------------------------
+// E2E（Playwright）と Terraform（#64）
+// ---------------------------------------------------------------------------
+
+/** E2E の画面のポート（生成物の e2e_port）。Playwright が検証用サーバーをこのポートで起動する */
+const E2E_PORT = 5173;
+
+function portIsFree(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once("error", () => resolve(false));
+    server.listen(port, "127.0.0.1", () => server.close(() => resolve(true)));
+  });
+}
+
+/** E2E のあと、検証用サーバーが止まって、ポートが解放されたことを確かめる */
+async function expectE2ePortReleased(): Promise<void> {
+  for (let i = 0; i < 50; i++) {
+    if (await portIsFree(E2E_PORT)) return;
+    await sleep(200);
+  }
+  throw new Error(`E2E のあと、ポート ${String(E2E_PORT)} が解放されていません`);
+}
+
+/**
+ * 生成物の E2E（npm run test:e2e）。DB ありの通りは、npm run test:e2e の前処理（pretest:e2e）が検証用 DB を初期化するため、
+ * D1 は2回続けて実行して、既存のデータがある状態（2回目）でも初期化とシードの取得が成功することを確かめる。
+ * PostgreSQL は、検証用 DB のコンテナを起動して待ってから実行する。
+ */
+async function e2eStage(
+  c: SmokeCase,
+  projectDir: string,
+  registry: CleanupRegistry,
+): Promise<void> {
+  if (!shouldRunE2e(process.env)) {
+    console.log(`[${c.id}] SMOKE_SKIP_E2E=1 のため、E2E を飛ばしました`);
+    return;
+  }
+  const npm = makeNpm(registry);
+  if (!(await portIsFree(E2E_PORT))) {
+    throw new Error(
+      `ポート ${String(E2E_PORT)} が使われています。E2E の検証用サーバーを起動できません`,
+    );
+  }
+  await runStage(c.id, "E2E：ブラウザ（chromium）の導入", async () => {
+    await npm(
+      ["exec", "--", ...playwrightInstallArgs(process.env)],
+      projectDir,
+      undefined,
+      900_000,
+    );
+  });
+  if (c.database === "postgresql") {
+    await runStage(c.id, "E2E：検証用 PostgreSQL のコンテナの起動", () =>
+      startTestDatabase(projectDir, registry),
+    );
+  }
+  const rounds = c.database === "d1" ? 2 : 1;
+  for (let round = 1; round <= rounds; round++) {
+    await runStage(c.id, `E2E：npm run test:e2e（${String(round)}回目）`, async () => {
+      await npm(["run", "test:e2e"], projectDir, undefined, 900_000);
+      await expectE2ePortReleased();
+    });
+    console.log(`[${c.id}] E2E（npm run test:e2e、${String(round)}回目）に成功しました`);
+  }
+}
+
+/** 生成物の infra/ を、Cloudflare に何も作らずに確かめる（init -backend=false・fmt -check・validate。認証は使わない） */
+async function terraformStage(
+  id: string,
+  projectDir: string,
+  registry: CleanupRegistry,
+): Promise<void> {
+  const available =
+    spawnSync("terraform", ["version"], { stdio: "ignore", windowsHide: true }).status === 0;
+  if (decideTerraformStep(available, process.env) === "skip") {
+    console.log(`[${id}] terraform が使えないため、terraform validate を飛ばしました`);
+    return;
+  }
+  // 認証の情報は渡さない（validate は認証を使わない）
+  const env = { TF_IN_AUTOMATION: "1", CLOUDFLARE_API_TOKEN: "", TF_INPUT: "0" };
+  const terraform = (args: string[]) =>
+    runCommand("terraform", [`-chdir=infra`, ...args], {
+      cwd: projectDir,
+      env,
+      timeoutMs: 600_000,
+      registry,
+    });
+  await runStage(id, "terraform init -backend=false", async () => {
+    await terraform(["init", "-backend=false", "-input=false"]);
+  });
+  await runStage(id, "terraform fmt -check・validate", async () => {
+    await terraform(["fmt", "-check", "-diff", "-recursive"]);
+    await terraform(["validate"]);
+  });
+  console.log(`[${id}] terraform init -backend=false・fmt -check・validate に成功しました`);
 }
 
 // ---------------------------------------------------------------------------
@@ -1272,6 +1403,8 @@ async function runCase(c: SmokeCase, withDocker: boolean, appName: string): Prom
         }
         assertBuildHasNoDummySecret(path.join(projectDir, "dist"));
       });
+      await terraformStage(c.id, projectDir, registry);
+
       // 環境ファイルの後でのみ Docker の資源を登録する。
       if (withDocker) registry.trackCompose(projectDir);
 
@@ -1303,6 +1436,8 @@ async function runCase(c: SmokeCase, withDocker: boolean, appName: string): Prom
       await runStage(c.id, "検証サーバーと開発データの隔離", () =>
         checkTestIsolation(c, projectDir, registry),
       );
+
+      await e2eStage(c, projectDir, registry);
 
       if (withDocker) {
         await dockerStage(c, projectDir, registry, envValues);
@@ -1377,6 +1512,7 @@ async function runLocalGitCase(appName: string): Promise<void> {
       await runStage(id, "npm run check（生成した状態）", async () => {
         await npm(["run", "check"], projectDir);
       });
+      await terraformStage(id, projectDir, registry);
 
       // README の手順と同じ並び
       await runStage(

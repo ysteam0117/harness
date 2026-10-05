@@ -1,4 +1,5 @@
 import type { Profile } from "../generate/profile.js";
+import { terraformVersions } from "../generate/values.js";
 import type { VersionEntry, VersionResult } from "./choose.js";
 
 /** 表のセルに入れる文字列（| と改行を無害にする） */
@@ -45,6 +46,20 @@ export function renderTechStack(
     "- 確認した最新の安定版：調べた日に、登録情報にあった最新の安定版（試験版を除く。範囲の条件があるものは、その範囲の中）",
     "- 未確認：登録情報を取得できず、最新の安定版を調べられなかったもの",
   ];
+
+  const terraform = terraformVersions();
+  lines.push(
+    "",
+    "## インフラ（Terraform、infra/）",
+    "",
+    "| 技術 | 版 | 固定する場所 |",
+    "| --- | --- | --- |",
+    `| Terraform | ${terraform.terraform} 以上 2.0.0 未満 | infra/versions.tf の required_version |`,
+    `| Cloudflare プロバイダー（cloudflare/cloudflare、v5 系） | ${terraform.cloudflareProvider} | infra/versions.tf の required_providers（= で固定）。lock ファイルは README の手順で作ってコミットする |`,
+    "",
+    "- Terraform は npm では入れない。PC に直接入れる（infra/README.md）",
+    "- プロバイダーの版は、ハーネスが、生成した infra/ で terraform init（-backend=false）と terraform validate を実行して確かめた版",
+  );
 
   const major = result.entries.filter((e) => e.majorDiffers);
   if (major.length > 0) {

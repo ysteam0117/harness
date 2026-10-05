@@ -161,6 +161,24 @@ function compatibilityDate(): string {
   return date;
 }
 
+/** Terraform と Cloudflare プロバイダーの版（data/runtimes.yaml）。infra/versions.tf・docs/tech-stack.md に使う */
+export function terraformVersions(): { terraform: string; cloudflareProvider: string } {
+  const doc = readDataYaml("runtimes.yaml");
+  const text = (key: string, shape: RegExp, example: string): string => {
+    const value = isPlainObject(doc) ? doc[key] : undefined;
+    if (typeof value !== "string" || !shape.test(value)) {
+      throw new GenerateError(
+        `data/runtimes.yaml：${key} に、版（例：${example}）を書いてください`,
+      );
+    }
+    return value;
+  };
+  return {
+    terraform: text("terraform_version", /^[0-9]+[.][0-9]+[.][0-9]+$/, "1.15.5"),
+    cloudflareProvider: text("terraform_cloudflare_provider", /^5[.][0-9]+[.][0-9]+$/, "5.26.0"),
+  };
+}
+
 function pentestRequirement(judgment: Judgment): string {
   return judgment.pentestRequired
     ? `初回のリリースの前に必須（${judgment.pentestReasons.join("、")}）`
@@ -262,6 +280,9 @@ export function buildValues(input: BuildValuesInput): Record<string, string> {
   values["knowledge_index"] = knowledgeIndexRows(knowledge);
   values["compatibility_date"] = compatibilityDate();
   values["postgres_image_tag"] = postgresImageTag();
+  const terraform = terraformVersions();
+  values["terraform_version"] = terraform.terraform;
+  values["terraform_cloudflare_version"] = terraform.cloudflareProvider;
   if (input.nodeVersion !== undefined) values["node_version"] = input.nodeVersion;
   values["secrets_table"] = loadEnvItems()
     .filter((item) => whenMatches(item.when, answers))

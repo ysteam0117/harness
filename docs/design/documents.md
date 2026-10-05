@@ -4,7 +4,7 @@
 
 生成するプロジェクトに、要件定義書・ADR・テストの手順書・PR／Issue のテンプレート・CI・LICENSE・プロトタイプ・仮のアイコンを出す。
 
-- 作らないもの：E2E のシナリオと IaC（#64）
+- 作らないもの：E2E のシナリオと IaC（#64 で追加した。[e2e-iac.md](e2e-iac.md)）
 - `.github/`（ワークフローを除く）は、リポジトリの置き場所（`repository`）が `github` のときだけ出す。`local`（手元のGitだけ）のときの出し分けは [local-git.md](local-git.md)（#61）
 
 | 番号 | 内容 |

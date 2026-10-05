@@ -32,6 +32,7 @@ skill_name: test-tools
 files:
   files/playwright.config.ts: playwright.config.ts
   files/console-guard.ts: e2e/console-guard.ts
+  files/health.spec.ts: e2e/health.spec.ts
   files/test-setup.ts: frontend/src/test/setup.ts
   files/test-server.ts: frontend/src/test/server.ts
 # vitest.config.ts は DB の回答で変わる。D1 だけ、マイグレーションを読み込んでテスト用の D1 に適用する
@@ -40,9 +41,13 @@ files_when:
     files:
       files/vitest.d1.config.ts: vitest.config.ts
       files/apply-migrations.ts: backend/test/apply-migrations.ts
+      files/sample-users.spec.ts: e2e/sample-users.spec.ts
+      files/e2e-seed.sql: e2e/seeds/health.sql
   - when: { answer: database, equals: postgresql }
     files:
       files/vitest.pg.config.ts: vitest.config.ts
+      files/sample-users.spec.ts: e2e/sample-users.spec.ts
+      files/e2e-seed.sql: e2e/seeds/health.sql
   - when: { answer: database, equals: none }
     files:
       files/vitest.config.ts: vitest.config.ts
@@ -50,6 +55,23 @@ package_json:
   scripts:
     test: node scripts/run-local.ts test vitest run
     pretest: npm run env:check -- test && npm run types:test
+    # E2E（C-24）。ブラウザが要るため npm run check には入れない（手順は docs/testing/e2e.md）。
+    # 検証用 DB の初期化は、サーバーの起動前に走る pretest:e2e で行う（DB の有無で変わるため package_json_when に書く）
+    test:e2e: node scripts/run-local.ts test playwright test
   # msw のインストール後の処理（ブラウザ用の部品の配置）は使わない（Node.js のテストだけで使うため）
   allowScripts:
     msw: false
+package_json_when:
+  - when: { answer: database, equals: none }
+    package_json:
+      scripts:
+        pretest:e2e: "npm run env:check -- test"
+  # DB ありは、検証用 DB を初期化（マイグレーションと標準のシード）してから、E2E 用のシードを足す
+  - when: { answer: database, equals: d1 }
+    package_json:
+      scripts:
+        pretest:e2e: "npm run env:check -- test && npm run db:reset:test && node scripts/db-local.ts test seed-file e2e/seeds/health.sql"
+  - when: { answer: database, equals: postgresql }
+    package_json:
+      scripts:
+        pretest:e2e: "npm run env:check -- test && npm run db:reset:test && node scripts/db-local.ts test seed-file e2e/seeds/health.sql"

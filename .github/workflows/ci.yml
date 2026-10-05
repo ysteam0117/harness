@@ -27,7 +27,8 @@ jobs:
         run: npm run pack:check
 
   # 生成したプロジェクトが実際に動くことの確認（#56）。時間がかかるため、品質チェックとは別の仕事にして、ubuntu だけで行う。
-  # D1・PostgreSQL・DB なしの3通りを生成し、npm install・npm run check・npm run build・開発サーバー・docker compose を確かめる。
+  # D1・PostgreSQL・DB なしの3通りを生成し、npm install・npm run check・npm run build・開発サーバー・docker compose・
+  # E2E（Playwright）・terraform validate（Cloudflare には何も作らない）を確かめる（#64）。
   smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -38,8 +39,14 @@ jobs:
           node-version-file: .node-version
           cache: npm
       - run: npm ci
-      - name: 生成したプロジェクトの確認（3通りの生成・check・build・開発サーバー・Docker）
+      # Terraform の版は、data/runtimes.yaml の terraform_version と同じにする
+      - uses: hashicorp/setup-terraform@v4.0.1
+        with:
+          terraform_version: 1.15.5
+          terraform_wrapper: false
+      - name: 生成したプロジェクトの確認（3通りの生成・check・build・開発サーバー・E2E・terraform validate・Docker）
         run: npm run smoke:generated
         env:
-          # CI では Docker が使えるはず。使えないときは飛ばさずに失敗にする
+          # CI では Docker・Terraform が使えるはず。使えないときは飛ばさずに失敗にする
           SMOKE_REQUIRE_DOCKER: "1"
+          SMOKE_REQUIRE_TERRAFORM: "1"

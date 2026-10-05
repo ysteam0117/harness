@@ -147,6 +147,26 @@ const TEMPLATE_FILES: {
     when: { answer: "database", equals: "none" },
   },
   { source: "project/README.md", destination: "README.md" },
+  // IaC（C-39）。Terraform で Cloudflare の資源を作る。回答に合う資源のファイルだけを出す
+  ...["versions.tf", "providers.tf", "variables.tf", "outputs.tf", "README.md"].map((name) => ({
+    source: `infra/${name}`,
+    destination: `infra/${name}`,
+  })),
+  {
+    source: "infra/d1.tf",
+    destination: "infra/d1.tf",
+    when: { answer: "database", equals: "d1" },
+  },
+  {
+    source: "infra/hyperdrive.tf",
+    destination: "infra/hyperdrive.tf",
+    when: { answer: "database", equals: "postgresql" },
+  },
+  {
+    source: "infra/r2.tf",
+    destination: "infra/r2.tf",
+    when: { answer: "file_upload", equals: "yes" },
+  },
   {
     source: "project/docker-compose.yml",
     destination: "docker-compose.yml",

@@ -108,13 +108,14 @@ describe("#56 R(レビュー1)-2: 後始末の SQL は、LIKE の _ を文字ど
     it(`#56 R(レビュー1)-2: ${c.label}：cleanup.sql は ESCAPE を使い、DELETE と残数の確認が同じ条件`, async () => {
       const sql = contentOf(await generated(c), "backend/db/seeds/cleanup.sql");
       const likes = [...sql.matchAll(/LIKE\s+'([^']*)'(\s+ESCAPE\s+'(.)')?/gi)];
-      expect(likes.length).toBeGreaterThanOrEqual(2); // DELETE と SELECT
+      expect(likes.length).toBeGreaterThanOrEqual(4); // DELETE と SELECT、それぞれ testuser_ と e2euser_（#64 で e2euser_ を足した）
       for (const m of likes) {
         expect(m[2], `${m[0]} に ESCAPE がありません`).toBeTruthy();
         const esc = m[3] as string;
-        expect(m[1]).toBe(`testuser${esc}_%`);
+        expect([`testuser${esc}_%`, `e2euser${esc}_%`]).toContain(m[1]);
       }
-      expect(new Set(likes.map((m) => m[0])).size).toBe(1);
+      // DELETE と SELECT は同じ条件（識別子は testuser_ と e2euser_ の2つ）
+      expect(new Set(likes.map((m) => m[0])).size).toBe(2);
     });
   }
 
@@ -131,6 +132,8 @@ describe("#56 R(レビュー1)-2: 後始末の SQL は、LIKE の _ を文字ど
         "testuserX001",
         "testuserA",
         "realname",
+        "e2euser_health_001",
+        "e2euserA",
       ]) {
         db.prepare("INSERT INTO sample_users (username) VALUES (?)").run(name);
       }
@@ -146,15 +149,15 @@ describe("#56 R(レビュー1)-2: 後始末の SQL は、LIKE の _ を文字ど
       expect(del).toBeTruthy();
       expect(count).toBeTruthy();
 
-      // 消す前：確認の SQL は、_ を文字どおりに扱って 2 件（testuser_001・testuser_002）だけを数える
-      expect((db.prepare(count).get() as { remaining: number }).remaining).toBe(2);
+      // 消す前：確認の SQL は、_ を文字どおりに扱って 3 件（testuser_001・testuser_002・e2euser_health_001）だけを数える
+      expect((db.prepare(count).get() as { remaining: number }).remaining).toBe(3);
       db.exec(del);
       const left = (
         db.prepare("SELECT username FROM sample_users ORDER BY username").all() as {
           username: string;
         }[]
       ).map((r) => r.username);
-      expect(left).toEqual(["realname", "testuserA", "testuserX001"]);
+      expect(left).toEqual(["e2euserA", "realname", "testuserA", "testuserX001"]);
       expect((db.prepare(count).get() as { remaining: number }).remaining).toBe(0);
     } finally {
       db.close();

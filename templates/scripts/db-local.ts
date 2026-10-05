@@ -72,6 +72,21 @@ async function main(): Promise<void> {
       input,
     );
   if (operation === "generate") return drizzle(generateArgs(options));
+  // E2E 用のシードは、e2e/seeds/ の下の SQL だけを、選択した環境の保存先へ流す
+  if (operation === "seed-file") {
+    const file = seedFile(options);
+    if (postgres) return psql([], readFileSync(file, "utf8"));
+    return wrangler([
+      "d1",
+      "execute",
+      "DB",
+      "--local",
+      "--persist-to",
+      localStatePath(environment as LocalEnvironment),
+      "--file",
+      file,
+    ]);
+  }
   if (options.length)
     throw new LocalEnvironmentError("DB 操作に追加の引数は指定できません。");
   if (postgres) {
@@ -150,6 +165,16 @@ async function main(): Promise<void> {
     }
   }
   throw new Error("DB 操作の名前が不正です。");
+}
+
+function seedFile(options: string[]): string {
+  const file = options[0] ?? "";
+  if (options.length !== 1 || !/^e2e\/seeds\/[A-Za-z0-9_-]+\.sql$/.test(file)) {
+    throw new LocalEnvironmentError(
+      "seed-file は e2e/seeds/ の下の SQL ファイルを1つだけ指定できます。",
+    );
+  }
+  return file;
 }
 
 function generateArgs(options: string[]): string[] {

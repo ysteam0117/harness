@@ -8,6 +8,7 @@ coverage
 playwright-report
 test-results
 reports
+.terraform
 
 # ハーネスが作った文書・AI 向けの設定・記録（書式は、ハーネスが決めたものを保つ）
 .harness

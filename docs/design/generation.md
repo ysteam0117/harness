@@ -103,7 +103,8 @@ flowchart TD
 | `asvs_level`・`pentest_requirement` | `judge` の結果（下の「F-26 の判定」）。レベル3は「3を検討（結果をADRに記録する）」、ペネトレーションテストは必須なら「初回のリリースの前に必須（理由）」、そうでなければ「任意（推奨）」 |
 | `knowledge_index` | 写した知見の表の行（分野・ファイル・最初の見出し）。写すファイルと同じ一覧から作る |
 | `secrets_table` | `data/env-items.yaml` の項目のうち、回答の条件に合うものの表の行。項目の値は説明だけで、実際の値は書かない |
-| `compatibility_date` | `data/runtimes.yaml` |
+| `compatibility_date`・`postgres_image_tag` | `data/runtimes.yaml` |
+| `terraform_version`・`terraform_cloudflare_version` | `data/runtimes.yaml`（`terraform_version`・`terraform_cloudflare_provider`）。確かめ方は [e2e-iac.md](e2e-iac.md) |
 | `claude_model_<役割>`・`codex_model_<役割>`・`codex_effort_<役割>` | `data/role-models.yaml`。選んだAIの分だけ値を持つ（Codex だけのときは Claude の値を求めない） |
 
 `data/template-values.yaml` の書き方は、名前に文字列を書く（常に同じ）か、`- when: {...}` と `value:` の並び（上から順に見て、最初に合うものを使う）である。条件は #32 のルールの `answer` 条件と同じ（`equals`・`in`・`notEquals`）。どの条件にも合わない値は、「最後に `when` のない行を書いてください」というエラーにする。データの書き間違い（知らない項目・知らない質問の id）も、場所を示して `GenerateError` にする。

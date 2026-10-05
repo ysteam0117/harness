@@ -29,9 +29,17 @@ try {
     )
   )
     throw new Error("手元の実行で remote は使えません。");
-  if (!["vite", "vitest", "wrangler", "drizzle-kit"].includes(tool))
+  // 道具の名前 → パッケージ名（名前が違うものだけ。playwright の実体は @playwright/test）
+  const packages: Record<string, string> = {
+    vite: "vite",
+    vitest: "vitest",
+    wrangler: "wrangler",
+    "drizzle-kit": "drizzle-kit",
+    playwright: "@playwright/test",
+  };
+  if (!Object.hasOwn(packages, tool))
     throw new Error("起動する道具が不正です。");
-  const packageDir = path.resolve("node_modules", tool);
+  const packageDir = path.resolve("node_modules", ...packages[tool].split("/"));
   const pkg = JSON.parse(
     readFileSync(path.join(packageDir, "package.json"), "utf8"),
   );

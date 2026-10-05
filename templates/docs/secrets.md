@@ -78,11 +78,21 @@ Cloudflare上に検証の環境を足した場合は、それぞれのコマン�
 
 ## Terraform
 
-- 秘密情報はコードに書かず、環境変数で渡す
+- 秘密情報はコードに書かず、環境変数で渡す。`.env.example` には入れない（`npm run dev` などの手元の実行には要らない。`infra/` で Terraform を使うときだけ、自分のターミナルで設定する）
 
   ```bash
   export TF_VAR_<項目名>="<値>"   # 入力した値がシェルの履歴に残らないよう、履歴の設定に注意する
   ```
+
+- `infra/` で使う項目（値は保管場所から貼り付ける。チャットやファイルに残さない）
+
+| 項目名 | 用途 |
+| --- | --- |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare の API トークン（Terraform の認証。D1・R2・Hyperdrive の編集の権限だけを付ける） |
+| `TF_VAR_account_id` | Cloudflare のアカウント ID |
+| `TF_VAR_hyperdrive_host`・`TF_VAR_hyperdrive_database`・`TF_VAR_hyperdrive_user`・`TF_VAR_hyperdrive_password` | Hyperdrive の接続情報（`infra/hyperdrive.tf` があるときだけ） |
+
+- Terraform の状態ファイル（`terraform.tfstate`）には、これらの値が残ることがある。コミットせず、リモートの状態管理に置く（`infra/README.md`）
 
 ## 設定する項目の一覧
 
