@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -136,5 +136,41 @@ describe("#30 AC-4: 今のリポジトリ全体", () => {
       path.join(rootDir, "templates"),
     );
     expect([...result]).toEqual([]);
+  });
+});
+
+describe("#37: C-81（設計書）と F-24（良い例・悪い例）", () => {
+  it("C-81 が README にあり、テンプレートに割り当てられている", () => {
+    const readme = readFileSync(path.join(rootDir, "docs", "requirements", "README.md"), "utf8");
+    expect(readme).toContain("[C-81](common/workflow.md#c-81)");
+    expect([...collectSpecIds(path.join(rootDir, "templates"))]).toContain("C-81");
+  });
+
+  it("C-34（完了の定義）の関係する文書に設計書があり、C-81 の節に書くことが決まっている", () => {
+    const workflow = readFileSync(
+      path.join(rootDir, "docs", "requirements", "common", "workflow.md"),
+      "utf8",
+    );
+    const done = workflow.slice(workflow.indexOf("## C-34"), workflow.indexOf("## C-35"));
+    expect(done).toContain("設計書");
+    const c81 = workflow.slice(workflow.indexOf("## C-81"), workflow.indexOf("## C-83"));
+    expect(c81).toContain("docs/design/overview.md");
+    expect(c81).toContain("書き写さない");
+    expect(c81).toContain("実装したPRの中で更新する");
+  });
+
+  it("F-24 に、良い例・悪い例の決まり（テストで確かめたものに限る・書き写さない）がある", () => {
+    const functional = readFileSync(
+      path.join(rootDir, "docs", "requirements", "functional.md"),
+      "utf8",
+    );
+    const f24 = functional.slice(
+      functional.indexOf("## F-24"),
+      functional.indexOf("### バージョンの選び方"),
+    );
+    expect(f24).toContain("良い例と悪い例");
+    expect(f24).toContain("テストで動作を確かめたものに限る");
+    expect(f24).toContain("書き写さない");
+    expect(f24).toContain("{{example:");
   });
 });

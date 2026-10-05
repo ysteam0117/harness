@@ -38,7 +38,8 @@ files:
   files/sample-users.service.test.ts: backend/src/services/sample-users.service.test.ts
   files/sample-users.route.ts: backend/src/routes/sample-users.ts
   files/seed.sql: backend/db/seeds/seed.sql
-# DB の種類・認証の有無で変わるファイル。マイグレーション（SQL と meta の journal・snapshot）は、drizzle-kit generate で実際に作ったもの。
+# DB の種類・認証の有無で変わるファイル。例のテスト（backend/src/rules-examples/*.db.test.ts）は、D1 と PostgreSQL で同じ出力先に、DB ごとの中身を出す（Skill が {{example:...}} で差し込む。F-24）。
+# マイグレーション（SQL と meta の journal・snapshot）は、drizzle-kit generate で実際に作ったもの。
 # 認証ありのとき（auth/session。auth が app・oidc・both）は、index.ts・cleanup.sql・drizzle.config.ts・meta/_journal.json を、認証の版（同じ出力先）で出す
 files_when:
   - when: { answer: auth, in: [none, undecided] }
@@ -53,6 +54,11 @@ files_when:
       files/sample-users.route.test.ts: backend/src/routes/sample-users.test.ts
       files/migrations-d1/0000_init.sql: backend/db/migrations/0000_init.sql
       files/migrations-d1/meta/0000_snapshot.json: backend/db/migrations/meta/0000_snapshot.json
+      files/examples/sql-injection.d1.db.test.ts: backend/src/rules-examples/sql-injection.db.test.ts
+      files/examples/n-plus-one.d1.db.test.ts: backend/src/rules-examples/n-plus-one.db.test.ts
+      files/examples/transaction.d1.db.test.ts: backend/src/rules-examples/transaction.db.test.ts
+      files/examples/optimistic-lock.d1.db.test.ts: backend/src/rules-examples/optimistic-lock.db.test.ts
+      files/examples/raw-sql-validation.d1.db.test.ts: backend/src/rules-examples/raw-sql-validation.db.test.ts
   - when:
       all:
         - { answer: database, equals: d1 }
@@ -66,6 +72,12 @@ files_when:
       files/schema.pg.ts: backend/db/schema.ts
       files/migrations-pg/0000_init.sql: backend/db/migrations/0000_init.sql
       files/migrations-pg/meta/0000_snapshot.json: backend/db/migrations/meta/0000_snapshot.json
+      files/examples/sql-injection.pg.db.test.ts: backend/src/rules-examples/sql-injection.db.test.ts
+      files/examples/n-plus-one.pg.db.test.ts: backend/src/rules-examples/n-plus-one.db.test.ts
+      files/examples/transaction.pg.db.test.ts: backend/src/rules-examples/transaction.db.test.ts
+      files/examples/optimistic-lock.pg.db.test.ts: backend/src/rules-examples/optimistic-lock.db.test.ts
+      files/examples/raw-sql-validation.pg.db.test.ts: backend/src/rules-examples/raw-sql-validation.db.test.ts
+      files/examples/test-database.pg.ts: backend/src/rules-examples/test-database.ts
   - when:
       all:
         - { answer: database, equals: postgresql }

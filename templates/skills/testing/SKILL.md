@@ -81,6 +81,7 @@ description: テストの作成・実行のルール。テストの必須範囲�
 - 環境別の起動は `npm run test` と `npm run dev:test` を使う。手元の `.env.test` と `APP_ENV=test` が選ばれ、親プロセスの接続設定は引き継がれない
 - PostgreSQLの検証DBはループバック上の接続先かつ名前が `_test` で終わるものを使う。D1/R2のローカル状態は開発用から分離される。これは任意の外部接続やOS権限を含む安全保証ではない
 - テスト用PostgreSQL/Composeの起動・停止は `npm run docker:up:test`・`npm run docker:down:test`、DB操作は `db:*:test` のscriptsを使う。Vitest WorkersのD1は一時的な隔離状態を使う
+- PostgreSQLのプロジェクトでは、品質チェック（`npm run check`）の`npm test`の後に、`posttest`が`npm run test:db`（Skillの良い例・悪い例のテスト`backend/src/rules-examples/*.db.test.ts`。Node.jsの別の設定`vitest.db.config.ts`）を実行する。検証用DBが起動していないと失敗するため、先に`npm run docker:up:test`で起動する。このテストは、その接続だけの一時的な表（`CREATE TEMP TABLE`）だけを使い、マイグレーション・シード・既存のデータには触れない。開発用のコンテナの中には検証用のDBがないため、コンテナの中で実行するときは、検証用のコンテナの中で行う
 
 - 手順は`docs/testing/`に、テストの種類ごとに書いてある（必要なもの・構築の手順・確認の方法・実行方法・後始末・よくある失敗と対処）
 - 構築はスクリプトで1つのコマンドで行い、CIでも同じスクリプトを使う

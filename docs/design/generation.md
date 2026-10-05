@@ -163,6 +163,25 @@ Codex のモデル名は、設定（`model = "..."`）にそのまま書ける�
 - 「3を検討」は、ASVS レベル3を採るかを検討する意味で、検討の結果はADRに記録する。ADR への記録は利用者の作業であり、ハーネスが自動で作るものではない
 - 判定の結果は `.harness/config.yaml` に記録し、要件定義書のひな形（`docs/requirements.md`）にも書き込む（#63。[documents.md](documents.md)）
 
+### 例の差し込み（`{{example:...}}`、#37・F-24）
+
+技術プロファイルの `SKILL.md` に、テストで確かめた良い例・悪い例を、書き写さずに差し込む。
+
+- 書き方：`{{example:<生成したプロジェクトでの出力先のパス>#<範囲の名前>}}`（例：`{{example:backend/src/rules-examples/sql-injection.db.test.ts#parameterized}}`）。コードのファイルの `// #region example:<名前>` 〜 `// #endregion` の範囲だけを切り出す
+- 切り出し：範囲の行（region・endregion）を除き、共通の字下げをそろえ、前後の空行を落として、` ```ts ` のコードブロックにする（`expandExamples`、`src/generate/template.ts`）
+- 展開の時機：`buildOutputs`（`src/generate/plan.ts`）で、AI 向けの出力とプロファイルの `files`・`files_when` の選択が終わった後に、出力の一覧から探して差し込む。引用先は生成物の出力先のパスのため、**その生成で出るファイルの例だけ**が差し込める。出さない通り（例：DB なしの Drizzle の例）の指示は、生成の誤りとして止める
+- D1 と PostgreSQL は、同じ出力先（`backend/src/rules-examples/<名前>.db.test.ts`）に、DB ごとの中身を `files_when` で出す。`SKILL.md` は 1 つの書き方のまま、選んだ DB の例が入る（値による切り替えは使わない）
+- エラー（`GenerateError`）：書き方の誤り（パスに `..`・`#` がない）、出力にないパス、範囲がない、同じ名前の範囲が 2 つ、範囲が閉じていない・入れ子
+- 差し込んだコードの中の `{{ }}` は展開しない（元のファイルは、`{{名前}}` の置き換えの後のため）。指示は 1 回だけ置き換える
+- 対象は、出力の `SKILL.md`（`.claude/skills/`・`.agents/skills/`）だけ。例のファイルは、`backend/src/rules-examples/` に置き、ハーネスが管理する（`isManagedPath`）
+- 守ること（`test/generate/skill-examples.test.ts`）：未展開の指示が残らない、例のファイルのすべての範囲がどこかの Skill で使われる、悪い例（範囲の名前が `-bad`）は関数名が `Bad` で終わり、例のファイルの中で呼ばれて、「悪い例の問題」のテストがある、Drizzle・Hono の Skill に「良い例」「悪い例」の見出しがある
+
+### PostgreSQL の例のテスト（`test:db`、#37）
+
+GitHub Actions でも検証用 DB が必要になるため、`workflow_test_db_step`（`data/template-values.yaml`）は `database` が `postgresql` のときだけ `npm run docker:up:test -- --wait db` のステップを返す。それ以外は空文字を返す。`check.yml` は `.env.test` の作成後・`npm run check` の前にこの値を差し込み、検証用 PostgreSQL の healthcheck の成功を待つ（[documents.md](documents.md)）。
+
+`pg` は Workers のテストの中で読めないため、PostgreSQL の例（`*.db.test.ts`）は、既定の設定（`vitest.config.ts`）から外し、Node.js の設定（`vitest.db.config.ts`）で動かす。`package_json_when`（PostgreSQL のとき）で `test:db`・`pretest:db`（`env:check` だけ）・`posttest`（`npm run test:db`）を足し、`npm test` の後に自動で動かす（共通の `check` は変えない）。例のテストは、`.env.test` の `DATABASE_URL` に直接つなぎ、その接続だけの一時的な表（`CREATE TEMP TABLE`）を使う。つなぐ前に、接続先が手元で DB の名前が `_test` で終わることを確かめる。つながらないときは「検証用 DB を起動してください（npm run docker:up:test）」と表示して失敗する。開発用のコンテナの `db` には検証用の DB がないため、コンテナの中での `npm run check` は、検証用のコンテナの中で行う（smoke もそうする）。
+
 ## `package.json` の組み立て
 
 `buildPackageJson` が組み立てる。キーの並びは固定で、同じ入力なら同じ中身になる。
@@ -210,8 +229,8 @@ F-18 により、知見は選んだ技術に**関係するものだけ**を写�
 
 | 区分 | ファイル |
 | --- | --- |
-| ハーネスが管理する | `AGENTS.md`・`CLAUDE.md`、Skill（`.claude/skills/`・`.agents/skills/`。知見の写しを含む）、エージェントの定義（`.claude/agents/`・`.codex/agents/`）、AI の権限の設定（`.claude/settings.json`・`.codex/rules/default.rules`）、`.github/ISSUE_TEMPLATE/`・`.github/pull_request_template.md`、`scripts/env-check.mjs`、`docs/secrets.md`、GitHub を使わない場合の `.githooks/pre-commit`・`scripts/merge-check.mjs`・`docs/issues/_template.md`・`docs/harness-feedback/README.md`（[local-git.md](local-git.md)） |
-| プロジェクトのもの | プロファイルの `files`（アプリのコード・`wrangler.jsonc`・`vite.config.ts`・`vitest.config.ts`・`playwright.config.ts`・`eslint.config.mjs` など）、`package.json`、`.node-version`、`docs/tech-stack.md`、`docs/project-rules.md`、`docs/requirements.md`、`docs/adr/`、`docs/testing/`、`.github/workflows/`、`LICENSE`、`prototype/`、`public/` の仮のアイコン、`.harness/config.yaml` |
+| ハーネスが管理する | `AGENTS.md`・`CLAUDE.md`、Skill（`.claude/skills/`・`.agents/skills/`。知見の写しを含む）、エージェントの定義（`.claude/agents/`・`.codex/agents/`）、AI の権限の設定（`.claude/settings.json`・`.codex/rules/default.rules`）、`.github/ISSUE_TEMPLATE/`・`.github/pull_request_template.md`、`backend/src/rules-examples/`（Skill の良い例・悪い例のテスト。#37）、`scripts/env-check.mjs`、`docs/secrets.md`、GitHub を使わない場合の `.githooks/pre-commit`・`scripts/merge-check.mjs`・`docs/issues/_template.md`・`docs/harness-feedback/README.md`（[local-git.md](local-git.md)） |
+| プロジェクトのもの | プロファイルの `files`（アプリのコード・`wrangler.jsonc`・`vite.config.ts`・`vitest.config.ts`・`playwright.config.ts`・`eslint.config.mjs` など）、`package.json`、`.node-version`、`docs/tech-stack.md`、`docs/project-rules.md`、`docs/requirements.md`、`docs/design/`（設計書のひな形。C-81）、`docs/adr/`、`docs/testing/`、`.github/workflows/`、`LICENSE`、`prototype/`、`public/` の仮のアイコン、`.harness/config.yaml` |
 
 プロジェクトのものは、利用者が育てる前提のため、指紋を取らない。#56 で PR のテンプレートなどを足すときは、管理するファイルの側に加える。
 
@@ -309,6 +328,8 @@ Windows では、ウイルス対策ソフトなどの影響で `rename` が一�
 | R7：判定 | `judgment.test.ts`：各条件を単独で満たす表、条件の重なり、`enabled_rules` の昇順、未定は安全側 |
 | R8：承知した警告の ADR | `project.test.ts`：警告があるときだけ出る、C-35 の項目・警告の id が記録される |
 | 値 | `values.test.ts`：DB なし・D1・PostgreSQL で値が変わる、未定義の値はエラー、Codex だけで Claude の値を求めない |
+| 例の差し込み（#37） | `template.test.ts`（範囲の切り出し・region の行が残らない・字下げ・範囲なし・2つ・ファイルなし・`..` のエラー・再展開しない）、`example-includes.test.ts`（出力の一覧からの差し込み。D1・PostgreSQL で同じ SKILL.md に DB の例が入る・出力にないパスはエラー）、`skill-examples.test.ts`（4通りで未展開が残らない・すべての範囲が使われる・悪い例の問題のテスト・管理するファイル・`test:db` の出し分け）。例の中身のテストは、生成したプロジェクトの `npm run check`（PostgreSQL は `posttest` の `test:db`）で動く |
+| 設計書（C-81） | `documents.test.ts`（AGENTS.md・doc-writer・実装の進め方・`docs/design/overview.md`）、`spec-coverage.test.ts`（C-81・F-24） |
 | 配布物 | `scripts/pack-check.ts`：配布物をインストールし、一時的なフォルダに生成して `.harness/config.yaml` と `AGENTS.md` ができることを確かめる（`data/`・`knowledge/` が配布物に入っていることの確認になる）。`test/package.test.ts`：`files` に `knowledge` がある |
 
 テストの値・名前はすべて架空のもの。生成先は一時的なフォルダで、テストの後に消す。

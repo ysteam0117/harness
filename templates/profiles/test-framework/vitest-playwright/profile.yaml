@@ -43,9 +43,11 @@ files_when:
       files/apply-migrations.ts: backend/test/apply-migrations.ts
       files/sample-users.spec.ts: e2e/sample-users.spec.ts
       files/e2e-seed.sql: e2e/seeds/health.sql
+  # PostgreSQL の例のテスト（backend/src/rules-examples/*.db.test.ts）は、pg を読めない Workers のテストから外し、Node.js の設定（vitest.db.config.ts）で動かす
   - when: { answer: database, equals: postgresql }
     files:
       files/vitest.pg.config.ts: vitest.config.ts
+      files/vitest.db.config.ts: vitest.db.config.ts
       files/sample-users.spec.ts: e2e/sample-users.spec.ts
       files/e2e-seed.sql: e2e/seeds/health.sql
   - when: { answer: database, equals: none }
@@ -62,6 +64,14 @@ package_json:
   allowScripts:
     msw: false
 package_json_when:
+  # PostgreSQL の例のテストは、npm test の後（posttest）に自動で動く。npm run check は npm test を通るため、失敗は check の失敗になる。
+  # 一時的な表だけを使い、マイグレーション・シード・既存の表には触れない。検証用 DB（npm run docker:up:test）が要る
+  - when: { answer: database, equals: postgresql }
+    package_json:
+      scripts:
+        test:db: node scripts/run-local.ts test vitest run --config vitest.db.config.ts
+        pretest:db: npm run env:check -- test
+        posttest: npm run test:db
   - when: { answer: database, equals: none }
     package_json:
       scripts:

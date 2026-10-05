@@ -30,6 +30,9 @@ files:
   files/security.ts: backend/src/lib/security.ts
   files/validation.ts: backend/src/lib/validation.ts
   files/security.test.ts: backend/src/lib/security.test.ts
+  # Skill が {{example:...}} で差し込む、良い例・悪い例（F-24）。テストで動作を確かめてある
+  files/examples/controller.test.ts: backend/src/rules-examples/controller.test.ts
+  files/examples/error-handling.test.ts: backend/src/rules-examples/error-handling.test.ts
 # 回答に合うときだけ足す wrangler.jsonc の設定（F-20：非公開の保存先は Cloudflare R2）
 wrangler_when:
   - when: { answer: file_upload, equals: "yes" }

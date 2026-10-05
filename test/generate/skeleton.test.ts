@@ -362,16 +362,21 @@ describe.each(combos)("#56 AC-3: 生成の結果（$label）", (c) => {
     );
   });
 
-  it("#56 R2: pg を読み込むのは backend/src/db/ の下だけ（PostgreSQL 以外では、どこにも出ない）", async () => {
+  it("#56 R2: pg を読み込むのは backend/src/db/ の下と、Node.js で動かす例のテストだけ（PostgreSQL 以外では、どこにも出ない）", async () => {
     const files = await generated(c);
     const importsPg = /from\s+["']pg["']|require\(\s*["']pg["']\s*\)|import\(\s*["']pg["']\s*\)/;
     for (const f of files) {
       if (!/\.(ts|tsx|mts|cts|js|mjs|cjs)$/.test(f.path)) continue;
       if (!importsPg.test(f.content)) continue;
       expect(c.database, `${f.path} が pg を読み込んでいます`).toBe("postgresql");
-      expect(f.path.startsWith("backend/src/db/"), `${f.path} は Repository の層の外です`).toBe(
-        true,
-      );
+      // 例のテスト（*.db.test.ts）は、Workers のテストから外し、Node.js の別の設定で動かす（#37）
+      const nodeOnlyExample =
+        f.path.startsWith("backend/src/rules-examples/") &&
+        (f.path.endsWith(".db.test.ts") || f.path.endsWith("/test-database.ts"));
+      expect(
+        f.path.startsWith("backend/src/db/") || nodeOnlyExample,
+        `${f.path} は Repository の層の外です`,
+      ).toBe(true);
     }
   });
 

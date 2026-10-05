@@ -59,8 +59,79 @@ description: Drizzle ORMでDBにアクセスするときのルール。スキー
 - ローカルの開発では、Hyperdriveの接続先を環境変数`CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_<バインディング名>`で渡す。接続先（パスワードを含む）を`wrangler.jsonc`に書かない
 - `@cloudflare/vitest-pool-workers`の中では`pg`を読み込めない（2026-09-30時点）。Workers＋PostgreSQLの結合テストは、`wrangler dev`で起動したアプリのAPIに対して行う（API層のテスト）。`pg`を使う処理そのものの結合テストは、Node.js上でテスト用のPostgreSQLのコンテナに対して行う
 
+## 良い例・悪い例
+
+書くときは、良い例の形に合わせる。例は`backend/src/rules-examples/`のテスト（`*.db.test.ts`）にあり、このプロジェクトのDB（{{database}}）で動作を確かめてある。悪い例も、問題が起きることをテスト（「悪い例の問題」）で確かめてある。このフォルダは、ハーネスが管理するため、消さない。
+
+### SQLインジェクション：値はパラメータで渡し、並び替えの列は許可リストで決める
+
+#### 良い例
+
+{{example:backend/src/rules-examples/sql-injection.db.test.ts#parameterized}}
+
+{{example:backend/src/rules-examples/sql-injection.db.test.ts#order-by-allowlist}}
+
+#### 悪い例
+
+{{example:backend/src/rules-examples/sql-injection.db.test.ts#string-concat-bad}}
+
+- 問題：入力を文字列でつなげると、細工した入力（`' OR 1=1 --`）で、条件が無効になり、全件が返る
+
+### N+1：一覧は、まとめて取る
+
+#### 良い例
+
+{{example:backend/src/rules-examples/n-plus-one.db.test.ts#batch-fetch}}
+
+#### 悪い例
+
+{{example:backend/src/rules-examples/n-plus-one.db.test.ts#loop-query-bad}}
+
+- 問題：件数に比例してクエリが増える（1 + 件数）。良い例は、件数が増えても、クエリの数が変わらない
+
+### トランザクション：途中で失敗したら、全体を取り消す
+
+D1は`db.batch`、PostgreSQLは`db.transaction`で書く。次の例は、このプロジェクトのDB（{{database}}）の書き方。
+
+#### 良い例
+
+{{example:backend/src/rules-examples/transaction.db.test.ts#transaction}}
+
+#### 悪い例
+
+{{example:backend/src/rules-examples/transaction.db.test.ts#sequential-writes-bad}}
+
+- 問題：文を1つずつ実行すると、途中で失敗しても、先に実行した書き込みが残る（例では、お金が増える）
+
+### 楽観的ロック：更新した件数が0なら、衝突（409）
+
+#### 良い例
+
+{{example:backend/src/rules-examples/optimistic-lock.db.test.ts#optimistic-lock}}
+
+#### 悪い例
+
+{{example:backend/src/rules-examples/optimistic-lock.db.test.ts#no-version-check-bad}}
+
+- 問題：版を確かめない更新は、古い画面からの更新で、ほかの人の変更を黙って上書きする
+
+### 生SQL（DAO）：戻り値をZodで検証する
+
+#### 良い例
+
+{{example:backend/src/rules-examples/raw-sql-validation.db.test.ts#validate-raw-result}}
+
+#### 悪い例
+
+{{example:backend/src/rules-examples/raw-sql-validation.db.test.ts#unchecked-raw-result-bad}}
+
+- 問題：検証せずに型を宣言すると、想定と違う行（例では`total`が`null`）が、そのまま通り、後の処理で壊れる
+
 ## テスト
 
+- 例のテスト（`backend/src/rules-examples/*.db.test.ts`）は、`npm run check`で毎回動く。例を書き換えたら、テストも通す
+  - D1：`npm test`（Workersのテスト）の中で、Vitest専用の一時D1に対して動く
+  - PostgreSQL：`pg`をWorkersのテストの中で読めないため、Node.jsの別の設定（`vitest.db.config.ts`）で動かす。`npm test`の後に自動で`npm run test:db`が実行される。検証用DBのコンテナ（`npm run docker:up:test`）の起動が要る。接続先は`.env.test`の`DATABASE_URL`で、手元の`_test`で終わるDBだけを許す。表はその接続だけの一時的なもの（`CREATE TEMP TABLE`）で、マイグレーション・シード・既存のデータには触れない。コンテナの中で実行するときは、検証用のコンテナ（`npm run docker:up:test`）の中で行う
 - 結合テストは`@cloudflare/vitest-pool-workers`（`cloudflareTest`の設定）で、Workersと同じ実行エンジンで行う。ローカルのD1（またはテスト用のPostgreSQLのコンテナ）に、マイグレーションとシードを適用してから行う
 - `wrangler.jsonc`の`compatibility_date`は、テストの道具に同梱された実行エンジンが対応する日付以下にする（新しすぎると起動しない）
 - 実行計画は`EXPLAIN QUERY PLAN <SQL>`で取得し、インデックスが使われているか（`USING INDEX`）を確かめる

@@ -30,6 +30,7 @@
 - ワークフローは、プロジェクトが CI を足したり変えたりするため、プロジェクトのものにする
 - 結合テストの手順書は、DB の回答で内容が変わる。変わる部分は値（`integration_tools`・`integration_setup`・`integration_verify`・`integration_cleanup`。`data/template-values.yaml`）にし、ひな形に条件の分岐を入れない（F-28）
 - CI の検証用の環境変数は、リポジトリの Secrets の `ENV_TEST` に `.env.test` の中身を登録して渡す。ワークフローに値は書かない
+- PostgreSQL のワークフローは、`.env.test` の作成後・`npm run check` の前に `npm run docker:up:test -- --wait db` を実行する。既存の `compose-local.ts` が `.env.test` と検証用の Compose プロジェクトを選び、DB の healthcheck の成功を待つ。ステップは `data/template-values.yaml` の `workflow_test_db_step` で選び、D1・なし・未定では空文字にする（F-28）。ひな形には値だけを差し込み、空でも YAML のステップの並びを保つ。`test/generate/documents.test.ts` で生成結果を YAML として読み、起動ステップの有無と順序を確かめる。DB の質問には未定の選択肢がないため、未定は値の条件判定とひな形の展開を直接テストする
 
 ## 要件定義書に書き込む値
 

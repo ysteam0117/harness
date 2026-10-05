@@ -27,6 +27,47 @@ description: HonoでバックエンドのAPIを作るときのルール。ルー
 - **MUST**：許可する送信元（`ALLOWED_ORIGINS`）は、環境ごとに環境変数で持つ
 - **MUST**：CSPに外部のサービスを追加する場合は、`security.ts`を直し、理由をADRに記録する
 
+## 良い例・悪い例
+
+書くときは、良い例の形に合わせる。例は`backend/src/rules-examples/`のテストにあり、動作を確かめてある。悪い例も、問題が起きることをテスト（「悪い例の問題」）で確かめてある。このフォルダは、ハーネスが管理するため、消さない。
+
+### Controller は入力の受け取りと応答だけ、業務のルールは Service
+
+#### 良い例
+
+{{example:backend/src/rules-examples/controller.test.ts#controller-service}}
+
+- 入力は`validate()`で確かめる。失敗は、決めた形式（`VALIDATION_ERROR`と、誤った項目の名前`fields`）の`422`で返る
+- 業務のルール（重複の禁止など）はServiceに書く。ルートを通らない入口（バッチなど）でも、同じルールが効く
+
+#### 悪い例
+
+{{example:backend/src/rules-examples/controller.test.ts#logic-in-controller-bad}}
+
+- 問題：業務のルールをControllerに書くと、ルートでは効いても、ほかの入口（バッチなど）では効かず、重複を通してしまう
+
+### 入力の検証は`validate()`を使う
+
+#### 悪い例
+
+{{example:backend/src/rules-examples/controller.test.ts#zvalidator-direct-bad}}
+
+- 問題：`zValidator`を直接使うと、失敗の応答が決めた形（`code`・`fields`）にならず、Zodの詳しいエラーが利用者に返る。良い例は上の「Controller は入力の受け取りと応答だけ」の`validate("json", スキーマ)`
+
+### エラーは`AppError`で投げ、各層で`try`〜`catch`して500にしない
+
+#### 良い例
+
+{{example:backend/src/rules-examples/error-handling.test.ts#throw-app-error}}
+
+- `AppError`は、エラーハンドラで、HTTPステータス（例：`CONFLICT`は`409`）とエラーコード（`code`）に変わる
+
+#### 悪い例
+
+{{example:backend/src/rules-examples/error-handling.test.ts#swallow-error-bad}}
+
+- 問題：各層で`try`〜`catch`して自分で500を返すと、`409`のはずの重複が`500`になり、エラーコード（`code`）も失われる
+
 ## Cloudflare Workersでのバッチ処理
 
 | 役割 | 使うもの |

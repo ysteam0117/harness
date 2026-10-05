@@ -11,7 +11,7 @@
 //   ): string;                                // 差し込んだ後の文字列（改行は LF）
 import { afterAll, describe, expect, it } from "vitest";
 import { GenerateError } from "../../src/generate/errors.js";
-import { renderTemplate } from "../../src/generate/template.js";
+import { expandExamples, listExampleRegions, renderTemplate } from "../../src/generate/template.js";
 import { cleanupTemplates, fixturesDir, makeTemplates } from "./helpers.js";
 
 afterAll(cleanupTemplates);
@@ -176,5 +176,100 @@ describe("#31: 差し込みは決まった結果を返す", () => {
     const run = () =>
       renderTemplate("{{include:lib/_shared}}\n{{app_name}}", { app_name: "testapp_001" }, opts);
     expect(run()).toBe(run());
+  });
+});
+
+// #37：{{example:<出力先のパス>#<名前>}}（生成物のテストのファイルから、良い例・悪い例の範囲を差し込む）
+const EXAMPLE_FILE = [
+  "// ファイルの先頭の説明",
+  "import { x } from 'y';",
+  "",
+  "// #region example:good",
+  "export function good() {",
+  "  return 1;",
+  "}",
+  "// #endregion",
+  "",
+  "describe('テスト', () => {",
+  "  // #region example:bad",
+  "  function bad() {",
+  "    return '{{x}}';",
+  "  }",
+  "  // #endregion",
+  "});",
+  "",
+].join("\n");
+
+const outputs = [{ path: "backend/src/rules-examples/a.test.ts", content: EXAMPLE_FILE }];
+const exampleOpts = { fileName: "SKILL.md" };
+
+function expandOne(spec: string, files = outputs): string {
+  return expandExamples(`前\n{{example:${spec}}}\n後`, files, exampleOpts.fileName);
+}
+
+describe("#37: 例の差し込み（expandExamples）", () => {
+  it("指定した範囲だけが、```ts のコードブロックで入り、region の行は残らない", () => {
+    const out = expandOne("backend/src/rules-examples/a.test.ts#good");
+    expect(out).toBe("前\n```ts\nexport function good() {\n  return 1;\n}\n```\n後");
+    expect(out).not.toContain("#region");
+    expect(out).not.toContain("#endregion");
+    expect(out).not.toContain("import { x }");
+  });
+
+  it("字下げをそろえる（共通の字下げだけを除く）", () => {
+    const out = expandOne("backend/src/rules-examples/a.test.ts#bad");
+    expect(out).toBe("前\n```ts\nfunction bad() {\n  return '{{x}}';\n}\n```\n後");
+  });
+
+  it("差し込んだコードの中の {{名前}} は、再び展開しない", () => {
+    const out = expandOne("backend/src/rules-examples/a.test.ts#bad");
+    expect(out).toContain("{{x}}");
+  });
+
+  it("指示のない文章は、そのまま", () => {
+    expect(expandExamples("例はありません {{x}}", outputs, "SKILL.md")).toBe(
+      "例はありません {{x}}",
+    );
+  });
+
+  it("出力にないパスは、ファイル名とパスを示してエラーになる", () => {
+    let error: unknown;
+    try {
+      expandOne("backend/src/rules-examples/none.test.ts#good");
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeInstanceOf(GenerateError);
+    expect((error as Error).message).toContain("SKILL.md");
+    expect((error as Error).message).toContain("backend/src/rules-examples/none.test.ts");
+  });
+
+  it("範囲の名前がないときは、エラーになる", () => {
+    expect(() => expandOne("backend/src/rules-examples/a.test.ts#missing")).toThrow(GenerateError);
+  });
+
+  it("同じ名前の範囲が2つあるときは、エラーになる", () => {
+    const twice = [
+      {
+        path: "a.ts",
+        content:
+          "// #region example:dup\n1\n// #endregion\n// #region example:dup\n2\n// #endregion\n",
+      },
+    ];
+    expect(() => expandOne("a.ts#dup", twice)).toThrow(GenerateError);
+  });
+
+  it("閉じていない範囲は、エラーになる", () => {
+    const open = [{ path: "a.ts", content: "// #region example:open\n1\n" }];
+    expect(() => expandOne("a.ts#open", open)).toThrow(GenerateError);
+  });
+
+  it("パスに .. を含む・書き方が誤っているときは、エラーになる", () => {
+    expect(() => expandOne("../a.test.ts#good")).toThrow(GenerateError);
+    expect(() => expandOne("backend/src/rules-examples/a.test.ts")).toThrow(GenerateError);
+  });
+
+  it("listExampleRegions：ファイルの範囲の名前を、すべて返す", () => {
+    expect(listExampleRegions(EXAMPLE_FILE)).toEqual(["good", "bad"]);
   });
 });

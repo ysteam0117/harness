@@ -1478,9 +1478,36 @@ async function dockerStage(
   await runStage(c.id, "Docker：画面（/）と API の応答", async () => {
     await checkServer(base, c.database);
   });
-  await runStage(c.id, "Docker：コンテナの中の npm run check", async () => {
-    await docker(["exec", "-T", "backend", "npm", "run", "check"], 900_000);
-  });
+  if (c.database === "postgresql") {
+    // 例のテスト（test:db）は、検証用の DB につなぐ。開発用のコンテナの db には検証用の DB がないため、
+    // 検証用のプロジェクト（npm run docker:up:test と同じ。db は検証用の DB）のコンテナの中で、npm run check を行う（#37）
+    await runStage(
+      c.id,
+      "Docker：検証用コンテナの中の npm run check（test:db を含む）",
+      async () => {
+        await startTestDatabase(projectDir, registry);
+        await runCommand(
+          "docker",
+          [
+            ...composeArgs(projectDir, "test"),
+            "run",
+            "--rm",
+            "-T",
+            "--no-deps",
+            "backend",
+            "sh",
+            "-c",
+            "npm install && npm run check",
+          ],
+          { cwd: projectDir, timeoutMs: 1_200_000, registry },
+        );
+      },
+    );
+  } else {
+    await runStage(c.id, "Docker：コンテナの中の npm run check", async () => {
+      await docker(["exec", "-T", "backend", "npm", "run", "check"], 900_000);
+    });
+  }
   if (c.database === "d1") {
     await runStage(c.id, "Docker：D1（コンテナの中のデータ）を API で確かめる", async () => {
       const exec = (script: string) =>
@@ -1613,6 +1640,13 @@ async function runCase(c: SmokeCase, withDocker: boolean, appName: string): Prom
         APP_ENV: "test",
         VITE_SECRET: "dummy_private_51",
       });
+      // PostgreSQL は、npm test の後（posttest）に、例のテスト（npm run test:db）が検証用 DB につなぐ（#37）。
+      // npm run check の前に、検証用 DB のコンテナを起動する
+      if (c.database === "postgresql") {
+        await runStage(c.id, "検証用 PostgreSQL のコンテナの起動（例のテストのため）", () =>
+          startTestDatabase(projectDir, registry),
+        );
+      }
       await runStage(c.id, "npm run check", async () => {
         await npm(["run", "check"], projectDir);
       });

@@ -1,12 +1,13 @@
 import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import {
   applyLocalEnvironment,
   loadLocalEnvironment,
 } from "./scripts/local-env.ts";
 
 // pg は Workers のテスト内で読み込めない。DB 自体の確認はテスト用起動への API テストで行う。
+// pg を使う例のテスト（*.db.test.ts）は、Node.js で動かす別の設定（vitest.db.config.ts。npm run test:db）で行うため、ここから外す。
 const values = loadLocalEnvironment("test");
 applyLocalEnvironment(values);
 
@@ -25,6 +26,7 @@ export default defineConfig({
         test: {
           name: "backend",
           include: ["backend/**/*.test.ts"],
+          exclude: [...configDefaults.exclude, "**/*.db.test.ts"],
         },
       },
       {

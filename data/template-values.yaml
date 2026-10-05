@@ -15,6 +15,12 @@
 
 check_command: npm run check
 
+# check.yml の .env.test 作成後に差し込むステップ。2行目はワークフローの字下げを含む。
+workflow_test_db_step:
+  - when: { answer: database, equals: postgresql }
+    value: "- name: 検証用の PostgreSQL を起動して待つ\n        run: npm run docker:up:test -- --wait db"
+  - value: ""
+
 error_handler: Honoの`app.onError`（`backend/src/lib/error-handler.ts`）
 
 # テストの道具の画面のURL（Vite の開発サーバーの標準のポート）
@@ -77,6 +83,12 @@ data_access_rule_row:
     value: "| DB・クエリ・マイグレーション | `backend`・`data-access-drizzle` |"
   - value: "| DB・クエリ・マイグレーション | このプロジェクトは DB を使わない。DB を使うことになったら、要件定義に戻る |"
 
+# 共通の Skill（バックエンド・エラー応答・セキュリティ）が案内する、良い例・悪い例を載せたライブラリの Skill（#37）。DB がないときは Drizzle の Skill は出ないため、書かない
+example_skills:
+  - when: { answer: database, notEquals: none }
+    value: "APIの書き方は`backend-hono`、DBアクセスは`data-access-drizzle`"
+  - value: "APIの書き方は`backend-hono`"
+
 # Skill「バックエンド」の、データアクセスの案内の行（DBがないときは、DBを使わない旨だけを書く）
 data_access_guide:
   - when: { answer: database, notEquals: none }
@@ -94,7 +106,7 @@ readme_db_setup:
       1. DB（手元の D1）を用意する：`.env.example`を`.env.development`へコピーして`APP_ENV=development`を設定し、`npm run db:migrate:local`でテーブルを作り、`npm run db:seed:local`で開発用の架空のデータを入れる
   - when: { answer: database, equals: postgresql }
     value: |-
-      1. DB（PostgreSQL）を用意する：`.env.example`を`.env.development`へコピーし、`APP_ENV=development`と手元の`POSTGRES_*`・`DATABASE_URL`・`CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE`を設定する（接続先・ポート・資格情報を整合させる）。`npm run docker:up:local`でDBを起動し、`npm run db:migrate`でテーブルを作り、`npm run db:seed:local`で開発用の架空のデータを入れる
+      1. DB（PostgreSQL）を用意する：`.env.example`を`.env.development`へコピーし、`APP_ENV=development`と手元の`POSTGRES_*`・`DATABASE_URL`・`CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE`を設定する（接続先・ポート・資格情報を整合させる）。`npm run docker:up:local`でDBを起動し、`npm run db:migrate`でテーブルを作り、`npm run db:seed:local`で開発用の架空のデータを入れる。品質チェック（`npm run check`）には、PostgreSQL の例のテスト（`npm run test:db`）が含まれるため、`.env.test`も用意し、`npm run docker:up:test`で検証用のDBを起動してから実行する
   - value: |-
       1. DB：使いません（足すときは、利用者と相談して技術を選び、理由を ADR に記録します）
 
@@ -116,6 +128,7 @@ readme_db_commands:
       | `npm run db:seed:local` | 開発用の架空のデータを入れる（手元の DB のコンテナに、`docker compose exec` で流す） |
       | `npm run db:reset:local` | 手元の DB を作り直す（マイグレーションとシードを、もう一度適用する） |
       | `npm run db:cleanup` | テストデータ（`testuser_` で始まるもの）だけを消す |
+      | `npm run test:db` | PostgreSQL の例のテスト（`backend/src/rules-examples/*.db.test.ts`）。`npm test`の後に自動で動く。検証用DB（`npm run docker:up:test`）の起動が要る。その接続だけの一時的な表を使い、既存のデータには触れない |
   - value: ""
 
 # README.md の「Docker で動かす」に足す、DB の説明（箇条書きの行。DBがないときは何も足さない）

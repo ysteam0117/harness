@@ -264,6 +264,8 @@ describe("#31 AC-4: 実際の templates/ での結合", () => {
         "test-framework/vitest-playwright",
       ],
       values: fakeValues(),
+      // Skill の例（{{example:...}}）は、DB ごとに出るファイルから差し込む。DB の回答がないと、Drizzle の例の出力先がなく、エラーになる（#37）
+      answers: { database: "d1" },
     });
     const paths = files.map((f) => f.path);
     expect(new Set(paths).size).toBe(paths.length);

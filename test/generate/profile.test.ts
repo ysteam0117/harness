@@ -84,7 +84,8 @@ describe("#31 AC-4: プロファイルの読み込み", () => {
       source: "files/error-handler.ts",
       destination: "backend/src/lib/error-handler.ts",
     });
-    expect(hono.files).toHaveLength(5);
+    // 共通の部品 5 つに、Skill の良い例・悪い例のテスト 2 つ（#37）
+    expect(hono.files).toHaveLength(7);
   });
 
   it("#31 AC-4: includes・optional_packages・package_json が読める（$zod はそのまま残す）", () => {

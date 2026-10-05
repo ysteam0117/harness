@@ -6,7 +6,7 @@ import { GenerateError } from "./errors.js";
 import { checkOutputPaths } from "./paths.js";
 import type { Answers } from "../questions/answers.js";
 import { mergePackageJson, resolveProfiles, selectProfileFiles } from "./profile.js";
-import { normalizeNewlines, renderTemplate } from "./template.js";
+import { expandExamples, normalizeNewlines, renderTemplate } from "./template.js";
 
 export type BuildOutputsInput = {
   templatesDir: string;
@@ -62,6 +62,15 @@ export function buildOutputs(input: BuildOutputsInput): BuildOutputsResult {
   }
   // AI向けの出力とプロファイルの files をまとめて、出力先の重なりを1か所で調べる
   checkOutputPaths(outputs.map((f) => f.path));
+
+  // Skill の {{example:<出力先のパス>#<名前>}} は、ファイルの選択が終わった出力の一覧から差し込む（F-24）。
+  // 出力の一覧にないファイルの例は差し込めない（出さない通りの例が、Skill に残らないようにする）
+  const examples = outputs.filter((f) => !f.path.endsWith("/SKILL.md"));
+  for (const file of outputs) {
+    if (file.path.endsWith("/SKILL.md")) {
+      file.content = expandExamples(file.content, examples, file.path);
+    }
+  }
 
   const files = outputs.sort((a, b) => compare(a.path, b.path));
   return { files, packageJson: mergePackageJson(sortedProfiles, answers) };

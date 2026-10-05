@@ -74,6 +74,8 @@ const TEMPLATE_FILES: {
   { source: "docs/requirements.md", destination: "docs/requirements.md" },
   { source: "docs/adr/README.md", destination: "docs/adr/README.md" },
   { source: "docs/adr/0000-template.md", destination: "docs/adr/0000-template.md" },
+  // 設計書のひな形（C-81）。プロジェクトのもの（managed ではない）。実装したPRの中で、書いて更新する
+  { source: "docs/design/overview.md", destination: "docs/design/overview.md" },
   ...["README", "quality", "unit", "integration", "e2e", "mutation"].map((name) => ({
     source: `docs/testing/${name}.md`,
     destination: `docs/testing/${name}.md`,
@@ -194,6 +196,8 @@ export function isManagedPath(p: string): boolean {
     p === ".codex/rules/default.rules" ||
     p.startsWith(".github/ISSUE_TEMPLATE/") ||
     p === ".github/pull_request_template.md" ||
+    // Skill の書き方の例（良い例・悪い例のテスト）。Skill が差し込むため、ハーネスの更新で置き換える（F-24）
+    p.startsWith("backend/src/rules-examples/") ||
     [
       "env-check.mjs",
       "local-env.ts",

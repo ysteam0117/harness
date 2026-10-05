@@ -15,8 +15,11 @@
 //     .github/workflows/check.yml：品質チェックの実行場所が github_actions・both のときだけ（F-16）。プロジェクトのもの
 //     LICENSE（MIT）：公開のときだけ
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { parse } from "yaml";
 import { buildProject, type ProjectFile } from "../../src/generate/project.js";
+import { renderTemplate } from "../../src/generate/template.js";
+import { whenMatches } from "../../src/generate/conditions.js";
 import { contentOf, pathsOf, projectInput } from "./project-helpers.js";
 
 async function generate(over: Record<string, unknown> = {}): Promise<ProjectFile[]> {
@@ -136,6 +139,53 @@ describe("ADR・テストの手順書（C-35・C-69）", () => {
 });
 
 describe("GitHub のファイル（F-16・F-18・C-07）", () => {
+  it.each(["postgresql", "d1", "none", "undecided"] as const)(
+    "DB が %s のワークフローは YAML として読め、PostgreSQL のときだけ品質チェックの前に検証用 DB を起動する",
+    async (database) => {
+      // DB の質問には未定の選択肢がないため、未定のケースの生成には DB なしを使う。
+      const input = await projectInput({
+        database: database === "undecided" ? "none" : database,
+        postgres_provider: "neon",
+        auth: "none",
+        check_location: "github_actions",
+      });
+      const files = buildProject(input).files;
+      let text = contentOf(files, ".github/workflows/check.yml");
+      if (database === "undecided") {
+        // DB の未定は生成器の受理する回答ではないため、値の条件とひな形の展開を確かめる。
+        const data = parse(readFileSync("data/template-values.yaml", "utf8")) as {
+          workflow_test_db_step: { when?: Parameters<typeof whenMatches>[0]; value: string }[];
+        };
+        const value = data.workflow_test_db_step.find((item) =>
+          whenMatches(item.when, { ...input.answers, database }),
+        )?.value;
+        expect(value).toBe("");
+        text = renderTemplate(
+          readFileSync("templates/.github/workflows/check.yml", "utf8"),
+          { workflow_test_db_step: value ?? "" },
+          { templatesDir: "templates", fileName: ".github/workflows/check.yml" },
+        );
+      }
+      const wf = parse(text) as {
+        jobs: { check: { steps: { run?: string }[] } };
+      };
+      const runs = wf.jobs.check.steps.map((step) => step.run ?? "");
+      const envIndex = runs.findIndex((run) => run.includes("> .env.test"));
+      const checkIndex = runs.indexOf("npm run check");
+      expect(envIndex).toBeGreaterThanOrEqual(0);
+      expect(checkIndex).toBeGreaterThan(envIndex);
+      if (database === "postgresql") {
+        const dbIndex = runs.indexOf("npm run docker:up:test -- --wait db");
+        expect(dbIndex).toBeGreaterThan(envIndex);
+        expect(dbIndex).toBeLessThan(checkIndex);
+        expect(runs.filter((run) => run.includes("docker:up:test"))).toHaveLength(1);
+      } else {
+        expect(text).not.toContain("docker:up:test");
+        expect(text).not.toContain("検証用の PostgreSQL");
+      }
+    },
+  );
+
   it("PR のテンプレートに「知見」の欄があり、Issue のテンプレートと一緒に管理するファイルになる", async () => {
     const files = await generate();
     expect(contentOf(files, ".github/pull_request_template.md")).toContain("## 知見");
@@ -257,5 +307,34 @@ describe("仮のアイコン（C-55）", () => {
     expect(readme).toContain("仮のアイコン");
     expect(readme).toContain("replace-icons");
     expect(readme).toContain("ブランチの保護");
+  });
+});
+
+describe("設計書（C-81）", () => {
+  it("AGENTS.md の完了の定義と文書の場所に、設計書（docs/design/）がある", async () => {
+    const agents = contentOf(await generate(), "AGENTS.md");
+    const done = agents.slice(agents.indexOf("## 完了の定義"), agents.indexOf("## Skillの一覧"));
+    expect(done).toContain("設計書（`docs/design/`）");
+    expect(done).toContain("ファイル名・関数名で指す");
+    const places = agents.slice(agents.indexOf("## 文書の場所"));
+    expect(places).toContain("`docs/design/`");
+    expect(places).toContain("docs/design/overview.md");
+  });
+
+  it("doc-writer と実装の進め方に、設計書の更新と書き方がある（コードは書き写さない）", async () => {
+    const files = await generate();
+    const doc = contentOf(files, ".claude/agents/doc-writer.md");
+    expect(doc).toContain("docs/design/");
+    expect(doc).toContain("書き写さない");
+    const process = contentOf(files, ".claude/skills/implementation-process/SKILL.md");
+    expect(process).toContain("docs/design/");
+  });
+
+  it("docs/design/overview.md を、プロジェクトのもの（managed ではない）として出す", async () => {
+    const f = fileOf(await generate(), "docs/design/overview.md");
+    expect(f.managed).toBe(false);
+    expect(f.content).toContain("書き写さない");
+    expect(f.content).toContain("機能ごとの設計書");
+    expect(f.content).not.toContain("もとになった共通仕様");
   });
 });

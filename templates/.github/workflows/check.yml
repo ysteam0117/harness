@@ -26,4 +26,5 @@ jobs:
         env:
           ENV_TEST: ${{ secrets.ENV_TEST }}
         run: printf '%s\n' "$ENV_TEST" > .env.test
+      {{workflow_test_db_step}}
       - run: npm run check
