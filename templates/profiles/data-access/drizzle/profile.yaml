@@ -37,29 +37,42 @@ files:
   files/sample-users.service.ts: backend/src/services/sample-users.service.ts
   files/sample-users.service.test.ts: backend/src/services/sample-users.service.test.ts
   files/sample-users.route.ts: backend/src/routes/sample-users.ts
-  files/index.ts: backend/src/index.ts
   files/seed.sql: backend/db/seeds/seed.sql
-  files/cleanup.sql: backend/db/seeds/cleanup.sql
-# DB の種類で変わるファイル。マイグレーション（SQL と meta の journal・snapshot）は、drizzle-kit generate で実際に作ったもの
+# DB の種類・認証の有無で変わるファイル。マイグレーション（SQL と meta の journal・snapshot）は、drizzle-kit generate で実際に作ったもの。
+# 認証ありのとき（auth/session）は、index.ts・cleanup.sql・drizzle.config.ts・meta/_journal.json を、認証の版（同じ出力先）で出す
 files_when:
+  - when: { answer: auth, equals: none }
+    files:
+      files/index.ts: backend/src/index.ts
+      files/cleanup.sql: backend/db/seeds/cleanup.sql
   - when: { answer: database, equals: d1 }
     files:
       files/database.d1.ts: backend/src/db/database.ts
       files/schema.d1.ts: backend/db/schema.ts
-      files/drizzle.d1.config.ts: drizzle.config.ts
       files/sample-user.repository.test.ts: backend/src/db/sample-user.repository.test.ts
       files/sample-users.route.test.ts: backend/src/routes/sample-users.test.ts
       files/migrations-d1/0000_init.sql: backend/db/migrations/0000_init.sql
-      files/migrations-d1/meta/_journal.json: backend/db/migrations/meta/_journal.json
       files/migrations-d1/meta/0000_snapshot.json: backend/db/migrations/meta/0000_snapshot.json
+  - when:
+      all:
+        - { answer: database, equals: d1 }
+        - { answer: auth, equals: none }
+    files:
+      files/drizzle.d1.config.ts: drizzle.config.ts
+      files/migrations-d1/meta/_journal.json: backend/db/migrations/meta/_journal.json
   - when: { answer: database, equals: postgresql }
     files:
       files/database.pg.ts: backend/src/db/database.ts
       files/schema.pg.ts: backend/db/schema.ts
-      files/drizzle.pg.config.ts: drizzle.config.ts
       files/migrations-pg/0000_init.sql: backend/db/migrations/0000_init.sql
-      files/migrations-pg/meta/_journal.json: backend/db/migrations/meta/_journal.json
       files/migrations-pg/meta/0000_snapshot.json: backend/db/migrations/meta/0000_snapshot.json
+  - when:
+      all:
+        - { answer: database, equals: postgresql }
+        - { answer: auth, equals: none }
+    files:
+      files/drizzle.pg.config.ts: drizzle.config.ts
+      files/migrations-pg/meta/_journal.json: backend/db/migrations/meta/_journal.json
 # wrangler.jsonc に足す設定。D1 は migrations_dir まで。PostgreSQL は Hyperdrive の名前だけ（手元の接続先は環境変数で渡す。ここに書かない）
 wrangler_when:
   - when: { answer: database, equals: d1 }

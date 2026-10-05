@@ -361,7 +361,7 @@ describe("#34 AC-3: .harness/config.yaml", () => {
 describe("#34 R5: 管理するファイルの分類", () => {
   const combos: [string, Record<string, unknown>][] = [
     ["両方の AI・D1", { ...BOTH, database: "d1" }],
-    ["Claude だけ・DB なし", { ais: ["claude"], database: "none" }],
+    ["Claude だけ・DB なし", { ais: ["claude"], database: "none", auth: "none", idp: undefined }],
     [
       "Codex だけ・PostgreSQL",
       { ais: ["codex"], database: "postgresql", postgres_provider: "neon" },
@@ -463,7 +463,9 @@ describe("#34 R4: 知見の写し", () => {
   });
 
   it("#34 R4: DB なしでは、db の知見が写らず、索引（Skill「知見」の表）にも行がない", async () => {
-    const { files } = buildProject(await projectInput({ ...BOTH, database: "none" }));
+    const { files } = buildProject(
+      await projectInput({ ...BOTH, database: "none", auth: "none", idp: undefined }),
+    );
     const refs = pathsOf(files).filter((p) => p.includes("/skills/knowledge/references/"));
     expect(refs.length).toBeGreaterThan(0);
     expect(refs.filter((p) => p.includes("/references/db/"))).toEqual([]);
@@ -498,7 +500,7 @@ describe("#34 R6: DB なしのときの案内（AI × DB の9通り）", () => {
     ["両方", ["claude", "codex"]],
   ];
   const dbs: [string, Record<string, unknown>][] = [
-    ["DB なし", { database: "none" }],
+    ["DB なし", { database: "none", auth: "none", idp: undefined }],
     ["D1", { database: "d1" }],
     ["PostgreSQL", { database: "postgresql", postgres_provider: "neon" }],
   ];

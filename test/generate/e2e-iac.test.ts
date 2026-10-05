@@ -164,7 +164,9 @@ describe("#64 AC-1: E2E のシード（DB あり）", () => {
 
   it.each(dbCombos)("#64 R4: %j は globalSetup のファイルを出さない", async (c) => {
     const paths = pathsOf(await generated(c));
+    // 認証あり（#73）は、未認証のシナリオ（auth-session.spec.ts）が加わる。globalSetup のファイルは出さない
     expect(paths.filter((p) => p.startsWith("e2e/")).sort()).toEqual([
+      ...(c.auth === "none" ? [] : ["e2e/auth-session.spec.ts"]),
       "e2e/console-guard.ts",
       "e2e/health.spec.ts",
       "e2e/sample-users.spec.ts",

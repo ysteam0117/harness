@@ -1,7 +1,74 @@
-# 技術プロファイル：認証のセッション（共通）（F-24。#72 は枠だけ。中身（files・packages）は #73 で作る）
+# 技術プロファイル：認証のセッション（共通）（F-24）。認証の方式（app・oidc・both）に関係なく、認証ありのときに必ず選ぶ（#73）
 id: session
 category: auth
 name: 認証のセッション（共通）
 languages: [typescript]
-packages: []   # ライブラリは #73 で足す
+packages: []   # 新しいライブラリは使わない（ハッシュは Web 標準の暗号（WebCrypto）の HMAC-SHA-256）
+# 認証の処理が使う、バックエンド・画面・テストの部品（いつも選ばれるもの）。
+# DB（data-access/drizzle）も必要だが、requires には書かない（DB なしの認証あり、は整合性チェックの auth-needs-db がエラーにするため）
+requires:
+  - backend-framework/hono
+  - http-client/axios
+  - frontend-state/tanstack-query-rhf-zod
+  - frontend-build/vite-react-router
+  - test-framework/vitest-playwright
 skill_name: auth-session
+# 認証ありのとき、認証なし用の次のファイルは出さず、ここの版を同じ出力先に出す：
+#   data-access/drizzle の backend/src/index.ts・cleanup.sql・drizzle.config.ts・マイグレーションの meta/_journal.json
+#   frontend-build/vite-react-router の frontend/src/App.tsx
+files:
+  # バックエンド：セッション・認可・API
+  files/session.ts: backend/src/lib/session.ts
+  files/session.test.ts: backend/src/lib/session.test.ts
+  files/auth-config.ts: backend/src/lib/auth-config.ts
+  files/auth-config.test.ts: backend/src/lib/auth-config.test.ts
+  files/auth-middleware.ts: backend/src/lib/auth-middleware.ts
+  files/auth-middleware.test.ts: backend/src/lib/auth-middleware.test.ts
+  files/session.service.ts: backend/src/services/session.service.ts
+  files/session.service.test.ts: backend/src/services/session.service.test.ts
+  files/session.repository.ts: backend/src/db/session.repository.ts
+  files/auth-session.ts: backend/src/routes/auth-session.ts
+  files/auth-session.test.ts: backend/src/routes/auth-session.test.ts
+  files/index.ts: backend/src/index.ts
+  # テストの共通の準備（メモリ上の Repository。D1・PostgreSQL のどちらでも動く）
+  files/fake-session-repository.ts: backend/test/fake-session-repository.ts
+  files/auth-test-app.ts: backend/test/auth-test-app.ts
+  # 後始末（認証の表のテストデータも消す）
+  files/cleanup.auth.sql: backend/db/seeds/cleanup.sql
+  # フロントエンド：認証の状態・ガード・ログアウト
+  files/auth-api.ts: frontend/src/features/auth/api/auth.ts
+  files/useMe.ts: frontend/src/features/auth/useMe.ts
+  files/AuthGuard.tsx: frontend/src/features/auth/AuthGuard.tsx
+  files/AuthGuard.test.tsx: frontend/src/features/auth/AuthGuard.test.tsx
+  files/LogoutButton.tsx: frontend/src/features/auth/LogoutButton.tsx
+  files/LogoutButton.test.tsx: frontend/src/features/auth/LogoutButton.test.tsx
+  files/AccountInfo.tsx: frontend/src/features/auth/AccountInfo.tsx
+  files/LoginRequiredPage.tsx: frontend/src/pages/LoginRequiredPage.tsx
+  files/AccountPage.tsx: frontend/src/pages/AccountPage.tsx
+  files/App.tsx: frontend/src/App.tsx
+  # E2E：未認証のシナリオ
+  files/auth-session.spec.ts: e2e/auth-session.spec.ts
+# DB の種類で変わるファイル。マイグレーション（0001_auth.sql と、0000 と 0001 を含む meta）は、drizzle-kit generate で実際に作ったもの
+files_when:
+  - when:
+      all:
+        - { answer: auth, notEquals: none }
+        - { answer: database, equals: d1 }
+    files:
+      files/auth-schema.d1.ts: backend/db/auth-schema.ts
+      files/drizzle.d1.config.ts: drizzle.config.ts
+      files/migrations-d1/0001_auth.sql: backend/db/migrations/0001_auth.sql
+      files/migrations-d1/meta/_journal.json: backend/db/migrations/meta/_journal.json
+      files/migrations-d1/meta/0001_snapshot.json: backend/db/migrations/meta/0001_snapshot.json
+      files/session.repository.test.ts: backend/src/db/session.repository.test.ts
+      files/auth-session.d1.test.ts: backend/src/routes/auth-session.d1.test.ts
+  - when:
+      all:
+        - { answer: auth, notEquals: none }
+        - { answer: database, equals: postgresql }
+    files:
+      files/auth-schema.pg.ts: backend/db/auth-schema.ts
+      files/drizzle.pg.config.ts: drizzle.config.ts
+      files/migrations-pg/0001_auth.sql: backend/db/migrations/0001_auth.sql
+      files/migrations-pg/meta/_journal.json: backend/db/migrations/meta/_journal.json
+      files/migrations-pg/meta/0001_snapshot.json: backend/db/migrations/meta/0001_snapshot.json

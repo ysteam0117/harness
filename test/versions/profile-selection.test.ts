@@ -150,8 +150,16 @@ describe("#72 認証のプロファイルの選択（auth/session・auth/app-aut
       const p = loadProfile(realTemplatesDir, key);
       expect(p.category).toBe("auth");
       expect(p.packages).toEqual([]);
-      expect(p.files).toEqual([]);
     }
+  });
+
+  it("#72 AC-1・#73: 方式ごとのプロファイル（app-auth・oidc-auth）は枠だけ（files なし）。共通の auth/session には中身がある", () => {
+    for (const key of ["auth/app-auth", "auth/oidc-auth"]) {
+      expect(loadProfile(realTemplatesDir, key).files).toEqual([]);
+    }
+    const session = loadProfile(realTemplatesDir, "auth/session");
+    expect(session.files.length).toBeGreaterThan(0);
+    expect(session.filesWhen.length).toBe(2); // D1・PostgreSQL
   });
 
   it("#72 AC-1: プロファイルの選択でも all が使える", () => {

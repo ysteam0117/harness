@@ -22,7 +22,7 @@ AC-3 は「設定のファイルの違い」までを対象にする。認証・
 | #57 | 生成の直後の `npm install` と品質チェック | #56 は、`npm run smoke:generated` で生成物の動作を確かめる（ハーネス側の確認）。`harness create` が生成の直後に実行する処理は #57 |
 | #63 | 文書と GitHub のファイル（要件定義書・ADR・テストの手順書・PR／Issue のテンプレート・CI・LICENSE など） | CI の実行場所・公開・GitHub による違いは #63 |
 | #64 | E2E と IaC | 本番の Hyperdrive の id などの本物の値は IaC で決める。#56 の値は手元の開発用の仮の値 |
-| #65（#72〜#75） | 認証の処理とテスト | #56 は認証の回答に応じた環境変数の項目（`SESSION_SECRET`・`OIDC_*`）まで。#72 は生成の仕組み（`all`・認証のプロファイルの枠・整合性ルール・環境変数・未決定事項）まで。処理は #73〜#75 |
+| #65（#72〜#75） | 認証の処理とテスト | #56 は認証の回答に応じた環境変数の項目（`SESSION_SECRET`・`OIDC_*`）まで。#72 は生成の仕組み（`all`・認証のプロファイルの枠・整合性ルール・環境変数・未決定事項）まで。#73 は共通のセッションと認可。ログイン（独自認証・OIDC）の処理は #74・#75 |
 | #66 | アップロードの処理とテスト | #56 は R2 のバインディングを `wrangler.jsonc` に足すところまで |
 
 ## 生成されるプロジェクトの構成
@@ -92,7 +92,7 @@ C-03 の層構成「Controller → Service → Repository」に合わせる。
 | PostgreSQL | 上記の PostgreSQL 版（`pg` を使う）、`vitest.config.ts` は PostgreSQL 版、`wrangler.jsonc` に `hyperdrive`（バインディング名 `HYPERDRIVE`）と `compatibility_flags: [nodejs_compat]`、`db:*` の scripts（`drizzle-kit`・`docker compose exec ... psql`）、`docker-compose.yml` は `db` と backend、`.env.example` に `POSTGRES_*`・`DATABASE_URL`・Hyperdrive の手元の接続先 |
 | DB なし | `index.ts` は `createApp()` だけ（`index.none.ts`）。サンプルの利用者のファイル・スキーマ・マイグレーション・`drizzle.config.ts`・`db:*` の scripts は出ない。`vitest.config.ts` は DB なし版。`/api/sample-users` は 404 |
 | アップロードあり | `wrangler.jsonc` に `r2_buckets`（バインディング名 `UPLOADS`、バケット名 `<アプリ名>-uploads`）。処理とテストは #66 |
-| 認証あり（oidc・app・both） | `.env.example` に `SESSION_SECRET`。oidc・both は `OIDC_CLIENT_ID`・`OIDC_CLIENT_SECRET`・`OIDC_ISSUER`・`OIDC_REDIRECT_URI`・`APP_BASE_URL` も（`data/env-items.yaml` の `when`。#72）。認証のプロファイル（`auth/session`・`auth/app-auth`・`auth/oidc-auth`）の枠が選ばれ、Skill が出る。処理とテストは #73〜#75 |
+| 認証あり（oidc・app・both） | `.env.example` に `SESSION_SECRET`。oidc・both は `OIDC_CLIENT_ID`・`OIDC_CLIENT_SECRET`・`OIDC_ISSUER`・`OIDC_REDIRECT_URI`・`APP_BASE_URL` も（`data/env-items.yaml` の `when`。#72）。認証のプロファイル（`auth/session`・`auth/app-auth`・`auth/oidc-auth`）が選ばれ、Skill が出る。`auth/session`（#73）は、共通のセッション・認可・認証の表・マイグレーション・画面のガード・テストを出す（下の「認証：共通のセッションと認可（#73）」）。独自認証・OIDC のログインの処理は #74・#75 |
 
 無効な組み合わせ（DB なしの認証あり（app・oidc・both。#72 で oidc を追加）・DB なしのアップロード）は、整合性チェックがエラーにする。有効な組み合わせは 17 通りである（`test/generate/skeleton.test.ts`）。
 
@@ -108,15 +108,63 @@ C-03 の層構成「Controller → Service → Repository」に合わせる。
 
 ## 認証のための生成の仕組み（#72）
 
-認証の処理とテストは #73〜#75 で作る。#72 は、そのための生成の仕組みだけを入れた。
+認証の処理とテストは #73〜#75 で作る。#72 は、そのための生成の仕組みだけを入れた。#73 が、この仕組みを使って共通の部分を作った。
 
-- `files_when` などの条件に、`all`（条件の組み合わせ）を書ける（[generation.md](generation.md)）。認証ありのとき、drizzle の `migrations/meta`・`backend/src/index.ts`・`frontend/src/App.tsx` を認証のプロファイル側の版で出したい。後続の Issue は、元のプロファイル（`data-access/drizzle`・`frontend-build/vite-react-router`）の該当ファイルを `files` から `files_when` へ移し、`when: { answer: auth, equals: none }`（DB の種類と組み合わせるときは `all`）で「認証なしのときだけ」出すようにして、認証側の版を同じ出力先で `when: { answer: auth, notEquals: none }` に置く。`files` から `files_when` へ移しても、認証なしの出力が変わらないことは `conditional-profile.test.ts` で確かめた。**#72 の時点では、認証ありでも元のファイルを出す**（差し替えは後続の Issue）
+- `files_when` などの条件に、`all`（条件の組み合わせ）を書ける（[generation.md](generation.md)）。認証ありのとき、drizzle の `migrations/meta`・`backend/src/index.ts`・`frontend/src/App.tsx` を認証のプロファイル側の版で出したい。後続の Issue は、元のプロファイル（`data-access/drizzle`・`frontend-build/vite-react-router`）の該当ファイルを `files` から `files_when` へ移し、`when: { answer: auth, equals: none }`（DB の種類と組み合わせるときは `all`）で「認証なしのときだけ」出すようにして、認証側の版を同じ出力先で `when: { answer: auth, notEquals: none }` に置く。`files` から `files_when` へ移しても、認証なしの出力が変わらないことは `conditional-profile.test.ts` で確かめた。**#73 で差し替えた**（`index.ts`・`cleanup.sql`・`drizzle.config.ts`・`meta/_journal.json`・`App.tsx` は、認証なしのときだけ元のファイルを出し、認証ありは `auth/session` の版を出す）
 - 出力先の重なりは、今までどおり `buildOutputs` がエラーにする。排他の条件（認証なし／あり）なら、同じ出力先でも重ならない
 - `templates/profiles/auth/` に、`session`・`app-auth`・`oidc-auth` の枠（`profile.yaml`・`SKILL.md`。`packages` は空、`files` はなし）を置いた。`data/profile-selection.yaml` が、`auth` が `none` 以外のとき `auth/session`、`app`・`both` のとき `auth/app-auth`、`oidc`・`both` のとき `auth/oidc-auth` を選ぶ。認証の依存パッケージは、後続の Issue が各プロファイルの `packages` に置く
 - 整合性チェック `auth-needs-db` は、`auth` が `app`・`oidc`・`both` で DB が `none` のときエラーにする（セッションを DB に保存するため。C-16）。`id` は変えない
 - 要件定義書の「未決定事項」に、独自認証（`app`・`both`）のときだけ4行を差し込む（`auth_undecided_rows`。[generation.md](generation.md)）
 - 認証が `none` の生成結果は、変更の前と同じ（`test/generate/auth-generation.test.ts` が、DB なし・D1・PostgreSQL の3通りのファイルの一覧と指紋を、`test/generate/fixtures/auth-none-baseline.json`（変更の前の記録）と比べる）
 - smoke（`scripts/smoke-generated.ts` の `writeEnvFile`）は、空の `OIDC_ISSUER`・`OIDC_REDIRECT_URI`・`APP_BASE_URL` に架空の値（`https://idp.example.test` など）を、開発・検証の両方の `.env` に入れる
+
+## 認証：共通のセッションと認可（#73）
+
+認証の方式（`app`・`oidc`・`both`）に関係なく、ログインの状態を **サーバー側のセッション**で持つ共通の部分を、`auth/session` が出す。ログインそのもの（パスワード・OIDC）は #74・#75。新しい npm の依存は足さない（ハッシュは WebCrypto の HMAC-SHA-256）。認証が `none` のときは何も出さない（AC-2。`auth-none-baseline.json` と一致）。
+
+### 受け入れ条件
+
+| 番号 | 受け入れ条件 | 確かめ方 |
+| --- | --- | --- |
+| AC-1 | 未認証の保護 API が 401、期限切れ・改ざん・ログアウト後の Cookie が 401、DB に生の識別子がない | 生成したプロジェクトのテスト（下の表）。実 DB（D1・PostgreSQL）は `npm run smoke:generated` |
+| AC-2 | 認証が none の場合は何も生成しない | `test/generate/auth-session.test.ts`・`auth-generation.test.ts`（基準との一致） |
+
+### 出すもの
+
+| 区分 | ファイル（生成先） | 内容 |
+| --- | --- | --- |
+| DB | `backend/db/auth-schema.ts`（D1・PostgreSQL で別の版） | 6つの表：`users`・`user_identities`・`sessions`・`password_reset_tokens`・`login_attempts`・`oidc_states`。外部キーは `users` に向け、削除で連鎖する。日時は Date で読み書きする（D1 はミリ秒の整数、PostgreSQL は timestamptz）。`user_identities` は (`issuer`, `subject`) を主キーにして一意にする |
+| DB | `drizzle.config.ts`（認証ありの版） | スキーマに `schema.ts` と `auth-schema.ts` の両方を指す |
+| DB | `backend/db/migrations/0001_auth.sql`・`meta/_journal.json`（0000 と 0001）・`meta/0001_snapshot.json` | **手で書かず**、生成したプロジェクトで `drizzle-kit generate --name auth` を実際に実行して作ったものを `auth/session` に置く（D1・PostgreSQL の2組）。`0000_init.sql`・`0000_snapshot.json` は共通のまま |
+| DB | `backend/db/seeds/cleanup.sql`（認証ありの版） | `users` の `testuser_`・`e2euser_` の行と、その利用者の `sessions` などを消し、残りの件数が 0 になることを確かめる。`seed.sql` は変えない（認証の表のテストデータは、テストの中で作る） |
+| バックエンド | `lib/session.ts` | 識別子（32 バイトの乱数の base64url）・ハッシュ（`SESSION_SECRET` を鍵にした HMAC-SHA-256 の16進数）・Cookie の名前と属性・期限の定数（絶対 7 日・アイドル 24 時間） |
+| バックエンド | `lib/auth-config.ts` | `SESSION_SECRET`（必須・16 文字以上）と本番かどうか。共通の `config.ts` は変えない（認証なしの生成物は `SESSION_SECRET` を要求しない）。足りなければ、値を表示せずにエラーにする |
+| バックエンド | `db/session.repository.ts`・`services/session.service.ts` | Drizzle で D1・PostgreSQL の両方に動く書き方。作成・検証（期限・アイドル。最後に使った時刻の更新は 1 分に 1 回まで）・削除・利用者の全セッションの削除。時計を注入できる |
+| バックエンド | `lib/auth-middleware.ts` | `requireAuth`（C-13）・`apiGuard`（`/api/*` の入口）・公開 API の許可リスト・`currentUser` |
+| バックエンド | `routes/auth-session.ts` | `GET /api/auth/me`（`{ id, email }`。保護する API の見本）・`POST /api/auth/logout`（DB の行を消し、Cookie を消す。204。`originCheck` を通る。IdP はログアウトしない。C-16）・`authRoutes`（組み立て） |
+| バックエンド | `index.ts`（認証ありの版） | `authRoutes` を `routes` の先頭に置く |
+| フロントエンド | `features/auth/`（`api/auth.ts`・`useMe.ts`・`AuthGuard.tsx`・`LogoutButton.tsx`・`AccountInfo.tsx`）・`pages/LoginRequiredPage.tsx`・`pages/AccountPage.tsx`・`App.tsx`（認証ありの版） | 未認証（401）なら `/login` へ移す。`/login` の画面は、#74・#75 でログイン画面に置き換える（#73 は「ログインが必要です」の案内の画面）。`/account` が保護された画面の見本 |
+| E2E | `e2e/auth-session.spec.ts` | 未認証の `/api/auth/me` が 401（no-store）、`/account` を開くとログインの案内に移る |
+| Skill | `auth-session` | セッションの仕組み・保護する API の足し方（既定で拒否）・ログアウトの範囲（C-16）・トークン方式（JWT 等）を使わない理由（C-16・C-17）・使わない表は消してよいこと |
+
+### 判断
+
+- **認可は既定で拒否（C-13）**：`app.ts`（共通）は変えず、`authRoutes` が返す先頭の `/api` の入口（`apiGuard`）が、後ろに足したルートも含めて保護する。Hono は、先に登録した `use` の入口が、後ろのルートにも掛かる。許可リスト（`PUBLIC_API_PATHS`）は、名前そのものと、その下のパスだけが対象で、似た名前の別の API は保護される
+- **`/api/sample-users` は保護せず、許可リストに理由つきで公開する**。動作確認の見本（E2E・smoke の確認が未認証のまま動く）で、実際の業務の API は `requireAuth` で保護する。保護する API の見本は `/api/auth/me`
+- **`Cache-Control: no-store`（C-58）**：許可リストの外のすべての API（`/api/auth/*` を含む）に付ける。`security.ts` の `noStore` は、後続が例外（401 の AppError）を投げるとヘッダーを付けないため、`apiGuard` は `try / finally` で付ける（401 にも付く。テストで確かめている）
+- **トークン方式を使わない**：すぐに無効にできる（C-16・C-17）・トークンのライフサイクルを作らなくてよい・同じドメインの構成で `HttpOnly` の Cookie が使える・IdP のトークンを使い回さない
+- **PostgreSQL の結合テスト**：`pg` は vitest-pool-workers の中で読めないため、DB に触れるテスト（`session.repository.test.ts`・`auth-session.d1.test.ts`）は D1 の生成物だけに出す。`session.service`・`auth-middleware`・`auth-session` のテストは、メモリ上の Repository（`backend/test/fake-session-repository.ts`）で動かし、D1・PostgreSQL の両方で同じテストを出す。PostgreSQL の実際の DB は smoke が確かめる
+- `requires` に `data-access/drizzle` を書かない：DB なしの認証ありは、整合性チェック `auth-needs-db` がエラーにする（プロファイルの不足のエラーで先に止めない）
+- テストの利用者は `testuser_*`・`e2euser_*` の `@example.com`。`SESSION_SECRET` はテストの中で毎回生成する（実値をファイルに書かない）
+
+### smoke：実 DB のセッションの確認（R2。認証ありの通り：d1+oidc・postgresql+app）
+
+検証用の DB とサーバー（`npm run dev:test`）に対して行う（`checkTestIsolation` の中。`checkSessionAgainstRealDb`）。
+
+1. smoke は `SESSION_SECRET` の架空の値（`.env.test` に書いた値）を知っているので、固定の架空の識別子（`smoke-session-0001` を 32 バイトにそろえて base64url にしたもの）の HMAC を計算し、`users`（`e2euser_session_001`）と `sessions`（有効・期限切れの2行）を、一時的な SQL（`e2e/seeds/` の下に作り、流した後に消す。`db-local.ts` の `seed-file` の規則は変えない）で入れる
+2. `GET /api/auth/me` が 200（`id`・`email`・`Cache-Control: no-store`）、期限切れの Cookie が 401（行は検証のときに消える）、Cookie なしが 401
+3. `POST /api/auth/logout`（`Origin` 付き）が 204、同じ Cookie で `/me` が 401、DB の `sessions` の行が消えている
+4. `npm run db:cleanup:test` で `e2euser_` の行を消し、残りが 0 件
 
 ## `wrangler.jsonc` の組み立て
 
@@ -238,6 +286,7 @@ Docker が使えず `SMOKE_REQUIRE_DOCKER` もないときは、PostgreSQL の�
 | レビュー1-6：両方の失敗 | `smoke-generated-review1.test.ts`：確かめと後始末の両方が失敗したとき、両方の原因が出る |
 | レビュー1-7：README | `skeleton-review1.test.ts`：D1 の Docker の手順 |
 | レビュー2-2：重複 | `skeleton-review1.test.ts`：service が Repository の重複の知らせを CONFLICT にする。結合テストに 409 と 101 件より多い既存データのケース。smoke で 409 を D1・PostgreSQL の両方で確かめる |
+| #73 認証：共通のセッションと認可 | `test/generate/auth-session.test.ts`（出るファイル・認証なしで出ない・マイグレーション・依存を足さない・秘密情報）、`test/scripts/smoke-generated-session.test.ts`（実 DB の確認の部品）。AC-1 の本体は、生成したプロジェクトの中のテストと smoke（下の「認証：共通のセッションと認可（#73）」） |
 | smoke の部品 | `test/scripts/smoke-generated.test.ts`：回答の YAML、ポートの待ち合わせ、プロセスの停止、失敗の通り・段階の表示、接続先が手元であることの確認 |
 | 共通仕様 | `skeleton.test.ts`：C-36 の書き直しの確認 |
 
@@ -259,5 +308,5 @@ Docker が使えず `SMOKE_REQUIRE_DOCKER` もないときは、PostgreSQL の�
 - #57：生成の直後の `npm install` と品質チェック。smoke の手順（`npm install` → `npm run check`）を参考にする
 - #63：CI の実行場所・公開・GitHub による違い、要件定義書のひな形
 - #64：Hyperdrive の本番の `id` などの IaC。E2E の最初のシナリオ
-- #73〜#75：認証の処理とテスト（#72 が生成の仕組みを入れた）。#66：アップロードの処理とテスト。`wrangler.jsonc` の R2 のバインディングと、`SESSION_SECRET`・`OIDC_*` の項目はすでにある
+- #74・#75：独自認証・OIDC のログインの処理とテスト（#72 が生成の仕組みを、#73 が共通のセッションと認可を入れた）。#66：アップロードの処理とテスト。`wrangler.jsonc` の R2 のバインディングと、`SESSION_SECRET`・`OIDC_*` の項目はすでにある
 - 例の機能（`/api/sample-users`）は、実際のアプリでは消すか置き換える

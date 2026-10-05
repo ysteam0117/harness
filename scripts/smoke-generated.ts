@@ -13,7 +13,7 @@
 //   SMOKE_REQUIRE_TERRAFORM=1  terraform が使えないときに、terraform validate を飛ばさずに失敗にする（CI で使う）
 //   SMOKE_SKIP_E2E=1        E2E（Playwright。ブラウザの導入が要る）を飛ばす
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -746,6 +746,19 @@ const OIDC_ENDPOINT_DUMMIES: Readonly<Record<string, string>> = {
   APP_BASE_URL: "http://localhost:5173",
 };
 
+/** 空の項目（SESSION_SECRET など）に入れる、架空の値（環境ごとに別の値） */
+function smokeDummyValue(environment: "development" | "test", name: string): string {
+  return `dummy_smoke_${environment}_${name.toLowerCase()}`;
+}
+
+/**
+ * SESSION_SECRET の架空の値（writeEnvFile が補う値と同じ）。実 DB のセッションの確認（R2）は、この値でハッシュを計算して、
+ * 検証用の DB に行を入れる。実際の秘密情報ではない
+ */
+export function smokeSessionSecret(environment: "development" | "test"): string {
+  return smokeDummyValue(environment, "SESSION_SECRET");
+}
+
 /** .env.example の項目に、値を重ねて環境別の .env を作る（架空の値だけ）。 */
 export function writeEnvFile(
   projectDir: string,
@@ -764,7 +777,7 @@ export function writeEnvFile(
       line.slice(eq + 1) === "" &&
       ["SESSION_SECRET", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET"].includes(name)
     ) {
-      return `${name}=dummy_smoke_${environment}_${name.toLowerCase()}`;
+      return `${name}=${smokeDummyValue(environment, name)}`;
     }
     const endpoint = OIDC_ENDPOINT_DUMMIES[name];
     if (line.slice(eq + 1) === "" && endpoint !== undefined) return `${name}=${endpoint}`;
@@ -932,6 +945,176 @@ async function expectSeeded(base: string, database: string, what: string): Promi
       `${what}：シードしたデータ（testuser_001）が一覧にありません（${names.join("、")}）`,
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// 認証ありの通り：実際の DB（D1・PostgreSQL）でのセッションの確認（#73 R2）
+// ---------------------------------------------------------------------------
+
+/** 確認に使う、架空の利用者（C-05：e2euser_ で始め、cleanup.sql で識別して消す） */
+export const SMOKE_SESSION_USER = {
+  id: "e2euser_session_001",
+  email: "e2euser_session_001@example.com",
+} as const;
+
+/** 固定の架空の識別子（smoke-session-<番号> を 32 バイトにそろえて base64url にした 43 文字。生成物の識別子と同じ形） */
+export function smokeSessionId(n: number): string {
+  return Buffer.from(`smoke-session-${String(n).padStart(4, "0")}`.padEnd(32, "_")).toString(
+    "base64url",
+  );
+}
+
+/** DB に保存される値。生成物の hashSessionId（HMAC-SHA-256・16 進数）と同じ計算 */
+export function hashSmokeSessionId(id: string, secret: string): string {
+  return createHmac("sha256", secret).update(id).digest("hex");
+}
+
+export type SessionSeed = {
+  /** 検証用の DB に流す SQL（利用者1人と、有効・期限切れのセッション1つずつ） */
+  sql: string;
+  valid: { id: string; hash: string };
+  expired: { id: string; hash: string };
+};
+
+/** 実 DB に入れる行の SQL。D1 の日時はミリ秒の整数、PostgreSQL は timestamptz。期限切れは、期限もアイドルも過去 */
+export function buildSessionSeed(
+  database: "d1" | "postgresql",
+  now: Date,
+  secret: string,
+): SessionSeed {
+  const valid = { id: smokeSessionId(1), hash: "" };
+  const expired = { id: smokeSessionId(2), hash: "" };
+  valid.hash = hashSmokeSessionId(valid.id, secret);
+  expired.hash = hashSmokeSessionId(expired.id, secret);
+  const HOUR = 60 * 60 * 1000;
+  const at = (ms: number): string =>
+    database === "d1" ? String(ms) : `to_timestamp(${String(ms / 1000)})`;
+  const t = now.getTime();
+  const row = (hash: string, createdAt: number, lastSeenAt: number, expiresAt: number): string =>
+    `('${hash}', '${SMOKE_SESSION_USER.id}', ${at(createdAt)}, ${at(lastSeenAt)}, ${at(expiresAt)})`;
+  const sql = [
+    "-- smoke（実 DB のセッションの確認）用の架空のデータ。後始末（cleanup.sql）で、e2euser_ の利用者ごと消える",
+    `INSERT INTO users (id, email, created_at) VALUES ('${SMOKE_SESSION_USER.id}', '${SMOKE_SESSION_USER.email}', ${at(t)}) ON CONFLICT (id) DO NOTHING;`,
+    "INSERT INTO sessions (id_hash, user_id, created_at, last_seen_at, expires_at) VALUES",
+    `${row(valid.hash, t, t, t + HOUR)},`,
+    `${row(expired.hash, t - 48 * HOUR, t - 48 * HOUR, t - HOUR)};`,
+    "",
+  ].join("\n");
+  return { sql, valid, expired };
+}
+
+/** 数を数える SQL（結果の列の名前は alias） */
+export function buildCountSql(table: "sessions" | "users", where: string, alias: string): string {
+  return `SELECT COUNT(*) AS ${alias} FROM ${table} WHERE ${where};\n`;
+}
+
+/** wrangler（JSON・表）・psql（表）のどの出力からでも、列 alias の件数を読む。読めなければ Error */
+export function parseCount(output: string, alias: string): number {
+  const match = new RegExp(String.raw`${alias}\D+(\d+)`).exec(output);
+  if (match === null) {
+    throw new Error(`SQL の結果から ${alias} の件数を読めません：${output.trim().slice(-300)}`);
+  }
+  return Number(match[1]);
+}
+
+/** e2e/seeds/ の下に一時的な SQL を作り、検証用 DB に流して、出力を返す（流した後は消す。db-local の seed-file の規則は変えない） */
+async function runSeedSql(
+  projectDir: string,
+  registry: CleanupRegistry,
+  name: string,
+  sql: string,
+): Promise<string> {
+  const file = `e2e/seeds/${name}.sql`;
+  writeFileSync(path.join(projectDir, file), sql);
+  try {
+    return await runCommand(process.execPath, ["scripts/db-local.ts", "test", "seed-file", file], {
+      cwd: projectDir,
+      timeoutMs: 300_000,
+      registry,
+    });
+  } finally {
+    rmSync(path.join(projectDir, file), { force: true });
+  }
+}
+
+/**
+ * 実 DB のセッションの確認。検証用の DB に、有効・期限切れのセッションの行を入れ、検証用のサーバー（dev:test）に対して
+ * GET /api/auth/me（200・期限切れの 401・Cookie なしの 401）→ POST /api/auth/logout（204）→ 同じ Cookie の 401 → DB の行が消えたこと、
+ * の順に確かめる。最後に、cleanup で架空の利用者を消し、残りが 0 件になることを確かめる。
+ */
+async function checkSessionAgainstRealDb(
+  database: "d1" | "postgresql",
+  projectDir: string,
+  server: DevServer,
+  registry: CleanupRegistry,
+): Promise<void> {
+  const npm = makeNpm(registry);
+  const seed = buildSessionSeed(database, new Date(), smokeSessionSecret("test"));
+  await runSeedSql(projectDir, registry, "session-smoke", seed.sql);
+  const rows = async (hash: string): Promise<number> =>
+    parseCount(
+      await runSeedSql(
+        projectDir,
+        registry,
+        "session-count",
+        buildCountSql("sessions", `id_hash = '${hash}'`, "session_rows"),
+      ),
+      "session_rows",
+    );
+  const me = (id?: string) =>
+    fetch(`${server.url}/api/auth/me`, {
+      headers: id === undefined ? {} : { Cookie: `session=${id}` },
+      signal: AbortSignal.timeout(15_000),
+    });
+  const noStore = (response: Response, what: string): void =>
+    expectEqual(response.headers.get("cache-control"), "no-store", `${what} の Cache-Control`);
+
+  expectEqual(await rows(seed.valid.hash), 1, "シードした有効なセッションの行数");
+  const ok = await me(seed.valid.id);
+  expectEqual(ok.status, 200, "有効なセッションの /api/auth/me の状態コード");
+  expectEqual(
+    await ok.json(),
+    { id: SMOKE_SESSION_USER.id, email: SMOKE_SESSION_USER.email },
+    "/api/auth/me の本文",
+  );
+  noStore(ok, "/api/auth/me（200）");
+
+  const expired = await me(seed.expired.id);
+  expectEqual(expired.status, 401, "期限切れのセッションの /api/auth/me の状態コード");
+  noStore(expired, "/api/auth/me（期限切れの 401）");
+  expectEqual(await rows(seed.expired.hash), 0, "期限切れの行（検証のときに消える）の行数");
+  expectEqual((await me()).status, 401, "Cookie なしの /api/auth/me の状態コード");
+
+  const logout = await fetch(`${server.url}/api/auth/logout`, {
+    method: "POST",
+    headers: { Cookie: `session=${seed.valid.id}`, Origin: ALLOWED_ORIGIN },
+    signal: AbortSignal.timeout(15_000),
+  });
+  expectEqual(logout.status, 204, "POST /api/auth/logout の状態コード");
+  expectEqual((await me(seed.valid.id)).status, 401, "ログアウトの後の、同じ Cookie の状態コード");
+  expectEqual(
+    await rows(seed.valid.hash),
+    0,
+    "ログアウトの後の、セッションの行数（サーバー側の無効化）",
+  );
+
+  await npm(["run", "db:cleanup:test"], projectDir);
+  expectEqual(
+    parseCount(
+      await runSeedSql(
+        projectDir,
+        registry,
+        "session-count",
+        buildCountSql("users", "email LIKE 'e2euser!_%' ESCAPE '!'", "user_rows"),
+      ),
+      "user_rows",
+    ),
+    0,
+    "後始末（db:cleanup:test）の後の、架空の利用者の行数",
+  );
+  console.log(
+    `[${database}] 実 DB のセッションの確認（/api/auth/me の 200・期限切れの 401・ログアウト・行の削除・後始末）に成功しました`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -1111,7 +1294,8 @@ async function checkTestIsolation(
     });
     expectEqual(posted.status, 201, "開発DBの識別用記録の追加");
   });
-  if (c.database === "postgresql") await startTestDatabase(projectDir, registry);
+  const database = c.database;
+  if (database === "postgresql") await startTestDatabase(projectDir, registry);
   await npm(["run", "db:migrate:test"], projectDir);
   await npm(["run", "db:seed:test"], projectDir);
   await withDevServer(
@@ -1122,6 +1306,12 @@ async function checkTestIsolation(
       await expectSeeded(server.url, c.database, "検証DB");
       const names = usernamesOf(await getJson(`${server.url}/api/sample-users`), c.database);
       if (names.includes(marker)) throw new Error("検証DBに開発DBの記録が混入しました");
+      // 認証ありの通りは、実際の DB でセッションを確かめる（#73 R2）
+      if (c.auth !== "none") {
+        await runStage(c.id, "実 DB のセッション（/api/auth/me・期限切れ・ログアウト）", () =>
+          checkSessionAgainstRealDb(database, projectDir, server, registry),
+        );
+      }
     },
     "test",
   );

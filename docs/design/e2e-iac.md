@@ -16,6 +16,7 @@
 | `playwright.config.ts` | 常に | `webServer` で `npm run dev:test`（検証用の開発サーバー）を必ず起動する。`reuseExistingServer` は `false` で、接続先の切り替え（`E2E_BASE_URL`）は作らない（`local-env.ts` が親の環境変数を消す方針に合わせ、検証を別のサーバーに向けないため） |
 | `e2e/health.spec.ts` | 常に | 画面を開いて「サーバーの状態：ok」「環境：test」が見え、`/api/health` が 200 を返す。コンソールのエラーは `console-guard` が失敗にする |
 | `e2e/sample-users.spec.ts` | DB あり | シードした `e2euser_health_001` を `/api/sample-users` から読める。シードの保存先と、検証用サーバーの読み先が同じことの確認を兼ねる |
+| `e2e/auth-session.spec.ts` | 認証あり（#73） | 未認証の `/api/auth/me` が 401（`Cache-Control: no-store`）で、保護された画面（`/account`）を開くとログインの案内（`/login`）に移る。ブラウザが出す 401 のコンソールの出力は、理由を付けて許可する |
 | `e2e/seeds/health.sql` | DB あり | 架空のシード（`e2euser_` で始まる。`ON CONFLICT DO NOTHING` で何回流しても同じ） |
 
 - 検証用 DB の初期化は、`globalSetup` ではなく、npm の前処理 `pretest:e2e` で行う。Playwright は `webServer` を起動した**あとに** `globalSetup` を実行するため、サーバーが DB を開いたあとに DB を消してしまう（D1 のファイルを消す）から
