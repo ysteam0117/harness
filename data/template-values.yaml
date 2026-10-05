@@ -71,6 +71,12 @@ data_access_skill:
     value: data-access-drizzle
   - value: 使わない
 
+# AGENTS.md の「コードを書く前に、ルールを読んで従う」の表の、DB の行（#80）
+data_access_rule_row:
+  - when: { answer: database, notEquals: none }
+    value: "| DB・クエリ・マイグレーション | `backend`・`data-access-drizzle` |"
+  - value: "| DB・クエリ・マイグレーション | このプロジェクトは DB を使わない。DB を使うことになったら、要件定義に戻る |"
+
 # Skill「バックエンド」の、データアクセスの案内の行（DBがないときは、DBを使わない旨だけを書く）
 data_access_guide:
   - when: { answer: database, notEquals: none }

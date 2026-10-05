@@ -104,6 +104,7 @@ export function fakeValues(): Record<string, string> {
     "auth_method",
     "allowed_origins",
     "data_access_guide",
+    "data_access_rule_row",
     // リポジトリの置き場所で変わる値（#61）
     "issue_and_pr",
     "issue_or_pr_record",
