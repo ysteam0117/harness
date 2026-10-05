@@ -25,6 +25,10 @@ import { projectInput } from "./project-helpers.js";
 const gitAvailable = spawnSync("git", ["--version"], { windowsHide: true }).status === 0;
 
 const APP = "testapp-001";
+
+// 実際の git を使うテストは、CI の macOS・Windows で、まれに git が一時ファイルを作れない・フォルダを消せない
+// といった環境の要因で失敗する（#77。原因は調査中）。テストの中身の失敗を隠さないよう、やり直しは2回までにする
+const GIT_TEST_OPTIONS = { timeout: 60_000, retry: 2 };
 const ISSUE_1 = "docs/issues/0001-replace-icons.md";
 
 let baseRoot = "";
@@ -303,7 +307,7 @@ function setupRepo(options: { initialCommit?: boolean; fakeCheck?: string } = {}
   return repo;
 }
 
-describe.skipIf(!gitAvailable)("#61 AC-2: pre-commit のフック", { timeout: 60_000 }, () => {
+describe.skipIf(!gitAvailable)("#61 AC-2: pre-commit のフック", GIT_TEST_OPTIONS, () => {
   it("#61 AC-2: 最初のコミットは、main の上でも、HEAD がないので通る", () => {
     const repo = setupRepo();
     expect(repo.branch()).toBe("main");
@@ -404,7 +408,7 @@ describe.skipIf(!gitAvailable)("#61 AC-2: pre-commit のフック", { timeout: 6
 
 describe.skipIf(!gitAvailable)(
   "#61 AC-2: 取り込みのコマンド（merge-check）",
-  { timeout: 60_000 },
+  GIT_TEST_OPTIONS,
   () => {
     it("依存のファイルが変わらないと、インストールせず check だけを実行する", () => {
       const repo = setupRepo();
@@ -694,7 +698,7 @@ describe.skipIf(!gitAvailable)(
 
 describe.skipIf(!gitAvailable)(
   "#61 AC-2: 複数の作業ツリー（git worktree）",
-  { timeout: 60_000 },
+  GIT_TEST_OPTIONS,
   () => {
     /** 主の作業ツリーと、linked worktree（feature/3-wt の作業のブランチ付き）を作る */
     function setupWorktrees(): { repo: Repo; linked: string } {
