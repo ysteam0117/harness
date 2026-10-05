@@ -28,3 +28,19 @@ logger.audit("権限の変更", `user:${targetUserId}`, "success");
 - **MUST**：ログイン・ログアウト・パスワードや認証要素の変更・権限の変更・認可の拒否・試行制限の発動・管理者の操作は、`audit`で記録する
 - 伏せ字にする項目名は`logger.ts`の`REDACT_KEYS`にある。新しく秘密情報・個人情報の項目を扱う場合は、ここに加え、`logger.test.ts`にも確かめるテストを加える
 - 利用者はログ上で利用者IDで表し、メールアドレスや氏名を書かない
+
+## 良い例・悪い例
+
+例は、テスト（`backend/src/rules-examples/logger.test.ts`）で動作を確かめてある。悪い例は、問題が起きることもテストで確かめてある。コードを書く前に読み、良い例の書き方に合わせる。
+
+### 共通ロガーを使い、`console.log`で秘密の値を出さない
+
+#### 良い例
+
+{{example:backend/src/rules-examples/logger.test.ts#use-logger}}
+
+#### 悪い例
+
+{{example:backend/src/rules-examples/logger.test.ts#console-log-bad}}
+
+- 問題：`console.log`でそのまま出すと、`token`・`password`などの秘密の値が、ログにそのまま残る

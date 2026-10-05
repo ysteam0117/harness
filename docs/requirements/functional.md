@@ -462,10 +462,10 @@ templates/profiles/
   - 書き方：`{{example:<生成するプロジェクトでの出力先のパス>#<名前>}}`（例：`{{example:backend/src/rules-examples/sql-injection.db.test.ts#parameterized}}`）。範囲の行を除いて、`ts`のコードブロックにする
   - 差し込みは、プロファイルの`files`・`files_when`の選択が終わった出力の一覧から行う。DBの種類で変わる例（D1の`db.batch`・PostgreSQLの`db.transaction`）は、同じ出力先に、DBごとの中身を`files_when`で出し、`SKILL.md`は1つの書き方のまま、選んだDBの例が入る
   - 出力にないパス・範囲がない・範囲が2つある場合は、生成を止める（出さない通りの例は差し込めない）。差し込んだコードの中の`{{ }}`は、展開しない
-- 例のファイルは、生成するプロジェクトの`backend/src/rules-examples/`に置く。ハーネスが管理するファイル（[F-27](#f-27)）で、消さない。例のテストは、毎回の品質チェック（`npm run check`）で動き、例が壊れないようにする
+- 例のファイルは、生成するプロジェクトの`backend/src/rules-examples/`・`frontend/src/rules-examples/`に置く。ハーネスが管理するファイル（[F-27](#f-27)）で、消さない。例のテストは、毎回の品質チェック（`npm run check`）で動き、例が壊れないようにする
   - PostgreSQLの例は、実際のDBで確かめる。`pg`はWorkersのテストの中で読み込めないため、Node.jsの別の設定（`vitest.db.config.ts`）で動かす。`npm test`の後（`posttest`）に`npm run test:db`が自動で動き、検証用のDBにつなぐ。例のテストは、その接続だけの一時的な表だけを使い、マイグレーション・シード・既存のデータには触れない
 - 共通のSkill（`backend`・`error-api`・`security`）には例を置かず、「書き方の例は、選んだライブラリのSkillを読む」という案内だけを書く
-- 初回に載せる例：Drizzle（SQLインジェクション・N+1・トランザクション・楽観的ロック・生SQLの検証）、Hono（Controller と Service の役割・入力の検証・エラーの投げ方）。フロントエンド（Axios・状態とフォーム）の例は、別のIssue（#85）で追加する
+- 初回に載せる例：Drizzle（SQLインジェクション・N+1・トランザクション・楽観的ロック・生SQLの検証）、Hono（Controller と Service の役割・入力の検証・エラーの投げ方）。フロントエンド：状態とフォーム（サーバーのデータをコピーしない・更新後の取り直し・4つの状態・入力エラーの表示と多重送信の防止）、Axios（`apiClient`だけを使う・失敗をもみ消さない）、ロガー（`console.log`で秘密の値を出さない）（#85）
 
 ### バージョンの選び方
 

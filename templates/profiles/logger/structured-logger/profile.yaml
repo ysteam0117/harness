@@ -8,3 +8,5 @@ skill_name: logger
 files:
   files/logger.ts: backend/src/lib/logger/logger.ts
   files/logger.test.ts: backend/src/lib/logger/logger.test.ts
+  # Skill が {{example:...}} で差し込む、良い例・悪い例（F-24）。テストで動作を確かめてある
+  files/examples/logger.test.ts: backend/src/rules-examples/logger.test.ts

@@ -173,8 +173,9 @@ Codex のモデル名は、設定（`model = "..."`）にそのまま書ける�
 - D1 と PostgreSQL は、同じ出力先（`backend/src/rules-examples/<名前>.db.test.ts`）に、DB ごとの中身を `files_when` で出す。`SKILL.md` は 1 つの書き方のまま、選んだ DB の例が入る（値による切り替えは使わない）
 - エラー（`GenerateError`）：書き方の誤り（パスに `..`・`#` がない）、出力にないパス、範囲がない、同じ名前の範囲が 2 つ、範囲が閉じていない・入れ子
 - 差し込んだコードの中の `{{ }}` は展開しない（元のファイルは、`{{名前}}` の置き換えの後のため）。指示は 1 回だけ置き換える
-- 対象は、出力の `SKILL.md`（`.claude/skills/`・`.agents/skills/`）だけ。例のファイルは、`backend/src/rules-examples/` に置き、ハーネスが管理する（`isManagedPath`）
-- 守ること（`test/generate/skill-examples.test.ts`）：未展開の指示が残らない、例のファイルのすべての範囲がどこかの Skill で使われる、悪い例（範囲の名前が `-bad`）は関数名が `Bad` で終わり、例のファイルの中で呼ばれて、「悪い例の問題」のテストがある、Drizzle・Hono の Skill に「良い例」「悪い例」の見出しがある
+- 対象は、出力の `SKILL.md`（`.claude/skills/`・`.agents/skills/`）だけ。例のファイルは、`backend/src/rules-examples/`・`frontend/src/rules-examples/` に置き、ハーネスが管理する（`isManagedPath`）
+- フロントエンドの例（#85）：状態・フォーム（`frontend-state`：`server-state.test.tsx`・`form.test.tsx`）と API 通信（`http-client-axios`：`http-client.test.tsx`）は `frontend/src/rules-examples/` に、ロガー（`logger`：`logger.test.ts`）は `backend/src/rules-examples/` に置く。これらのプロファイルは常に選ばれ、DB・認証によらず出る。フロントエンドの例は jsdom の既存のテスト設定（`frontend` のプロジェクト）で動き、MSW（`frontend/src/test/server.ts`）で通信を差し替える。例が使う部品（`apiClient`・ロガー）は、生成物の既存のコードを使う
+- 守ること（`test/generate/skill-examples.test.ts`）：未展開の指示が残らない、例のファイルのすべての範囲がどこかの Skill で使われる、悪い例（範囲の名前が `-bad`）は関数名が `Bad` で終わり、例のファイルの中で呼ばれて、「悪い例の問題」のテストがある、Drizzle・Hono・`frontend-state`・`http-client-axios`・`logger` の Skill に「良い例」「悪い例」の見出しがある、悪い例の数だけ「悪い例の問題」のテストがある、共通の Skill「フロントエンド」には例を置かず案内だけがある
 
 ### PostgreSQL の例のテスト（`test:db`、#37）
 
@@ -229,7 +230,7 @@ F-18 により、知見は選んだ技術に**関係するものだけ**を写�
 
 | 区分 | ファイル |
 | --- | --- |
-| ハーネスが管理する | `AGENTS.md`・`CLAUDE.md`、Skill（`.claude/skills/`・`.agents/skills/`。知見の写しを含む）、エージェントの定義（`.claude/agents/`・`.codex/agents/`）、AI の権限の設定（`.claude/settings.json`・`.codex/rules/default.rules`）、`.github/ISSUE_TEMPLATE/`・`.github/pull_request_template.md`、`backend/src/rules-examples/`（Skill の良い例・悪い例のテスト。#37）、`scripts/env-check.mjs`、`docs/secrets.md`、GitHub を使わない場合の `.githooks/pre-commit`・`scripts/merge-check.mjs`・`docs/issues/_template.md`・`docs/harness-feedback/README.md`（[local-git.md](local-git.md)） |
+| ハーネスが管理する | `AGENTS.md`・`CLAUDE.md`、Skill（`.claude/skills/`・`.agents/skills/`。知見の写しを含む）、エージェントの定義（`.claude/agents/`・`.codex/agents/`）、AI の権限の設定（`.claude/settings.json`・`.codex/rules/default.rules`）、`.github/ISSUE_TEMPLATE/`・`.github/pull_request_template.md`、`backend/src/rules-examples/`・`frontend/src/rules-examples/`（Skill の良い例・悪い例のテスト。#37・#85）、`scripts/env-check.mjs`、`docs/secrets.md`、GitHub を使わない場合の `.githooks/pre-commit`・`scripts/merge-check.mjs`・`docs/issues/_template.md`・`docs/harness-feedback/README.md`（[local-git.md](local-git.md)） |
 | プロジェクトのもの | プロファイルの `files`（アプリのコード・`wrangler.jsonc`・`vite.config.ts`・`vitest.config.ts`・`playwright.config.ts`・`eslint.config.mjs` など）、`package.json`、`.node-version`、`docs/tech-stack.md`、`docs/project-rules.md`、`docs/requirements.md`、`docs/design/`（設計書のひな形。C-81）、`docs/adr/`、`docs/testing/`、`.github/workflows/`、`LICENSE`、`prototype/`、`public/` の仮のアイコン、`.harness/config.yaml` |
 
 プロジェクトのものは、利用者が育てる前提のため、指紋を取らない。#56 で PR のテンプレートなどを足すときは、管理するファイルの側に加える。

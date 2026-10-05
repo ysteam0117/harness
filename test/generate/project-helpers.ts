@@ -134,6 +134,7 @@ export function expectedManaged(p: string): boolean {
     p.startsWith(".github/ISSUE_TEMPLATE/") ||
     p === ".github/pull_request_template.md" ||
     p.startsWith("backend/src/rules-examples/") ||
+    p.startsWith("frontend/src/rules-examples/") ||
     [
       "scripts/env-check.mjs",
       "scripts/local-env.ts",

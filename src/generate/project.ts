@@ -198,6 +198,7 @@ export function isManagedPath(p: string): boolean {
     p === ".github/pull_request_template.md" ||
     // Skill の書き方の例（良い例・悪い例のテスト）。Skill が差し込むため、ハーネスの更新で置き換える（F-24）
     p.startsWith("backend/src/rules-examples/") ||
+    p.startsWith("frontend/src/rules-examples/") ||
     [
       "env-check.mjs",
       "local-env.ts",

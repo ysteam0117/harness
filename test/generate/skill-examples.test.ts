@@ -1,13 +1,14 @@
 // #37 F-24：技術プロファイルの Skill に、テストで確かめた良い例・悪い例を載せる
 //
-// 例は、生成するプロジェクトの backend/src/rules-examples/ のテストのファイルに書き、
-// Skill の {{example:<出力先のパス>#<範囲の名前>}} で差し込む（書き写さない）。
+// 例は、生成するプロジェクトの backend/src/rules-examples/・frontend/src/rules-examples/ のテストのファイルに書き、
+// Skill の {{example:<出力先のパス>#<範囲の名前>}} で差し込む（書き写さない）。#85 で、フロントエンド・ロガーの例を追加した。
 import { describe, expect, it } from "vitest";
 import { buildProject, type ProjectFile } from "../../src/generate/project.js";
 import { expandExamples, listExampleRegions } from "../../src/generate/template.js";
 import { projectInput } from "./project-helpers.js";
 
 const EXAMPLES_DIR = "backend/src/rules-examples/";
+const EXAMPLE_DIRS = [EXAMPLES_DIR, "frontend/src/rules-examples/"];
 const CASES: { name: string; answers: Record<string, unknown> }[] = [
   { name: "d1", answers: { database: "d1", auth: "none" } },
   {
@@ -25,7 +26,7 @@ async function generate(answers: Record<string, unknown>): Promise<ProjectFile[]
 const skillsOf = (files: ProjectFile[]): ProjectFile[] =>
   files.filter((f) => f.path.endsWith("/SKILL.md"));
 const examplesOf = (files: ProjectFile[]): ProjectFile[] =>
-  files.filter((f) => f.path.startsWith(EXAMPLES_DIR) && f.path.endsWith(".ts"));
+  files.filter((f) => EXAMPLE_DIRS.some((dir) => f.path.startsWith(dir)) && /\.tsx?$/.test(f.path));
 
 /** 範囲の中の、export している関数・定数の名前（最初のもの） */
 function exportedName(body: string): string | undefined {
@@ -75,6 +76,10 @@ describe.each(CASES)("#37 F-24：Skill の例（$name）", ({ answers }) => {
         expect(outside, `${file.path}#${name} を呼ぶ確かめ`).toMatch(new RegExp(`${fn ?? ""}\\b`));
         expect(file.content).toContain("悪い例の問題");
       }
+      // 悪い例ごとに、問題を示すテスト（it の題が「悪い例の問題」）が 1 つはある
+      const badCount = Object.keys(bodies).filter((n) => n.endsWith("-bad")).length;
+      const proofs = file.content.match(/it\(\s*"悪い例の問題/g)?.length ?? 0;
+      expect(proofs, `${file.path} の、悪い例の問題を示すテスト`).toBeGreaterThanOrEqual(badCount);
     }
   });
 
@@ -192,5 +197,81 @@ describe("#37 R5：PostgreSQL の例のテスト（test:db）", () => {
     expect(helper).toContain("_test$");
     expect(helper).toContain("localhost");
     expect(helper).toContain("npm run docker:up:test");
+  });
+});
+
+// #85：フロントエンド（状態・フォーム・API通信）とロガーの例
+const FRONTEND_EXAMPLES: Record<string, { skill: string; bad: string[]; good: string[] }> = {
+  "frontend/src/rules-examples/server-state.test.tsx": {
+    skill: "frontend-state",
+    good: ["server-data-as-is", "invalidate-after-update", "four-states"],
+    bad: ["state-copy-bad", "no-invalidate-bad", "no-error-state-bad"],
+  },
+  "frontend/src/rules-examples/form.test.tsx": {
+    skill: "frontend-state",
+    good: ["form-field-errors"],
+    bad: ["form-error-toast-bad", "form-double-submit-bad"],
+  },
+  "frontend/src/rules-examples/http-client.test.tsx": {
+    skill: "http-client-axios",
+    good: ["use-api-client"],
+    bad: ["direct-axios-bad", "swallow-error-bad"],
+  },
+  "backend/src/rules-examples/logger.test.ts": {
+    skill: "logger",
+    good: ["use-logger"],
+    bad: ["console-log-bad"],
+  },
+};
+
+describe.each(CASES)("#85 F-24：フロントエンド・ロガーの例（$name）", ({ answers }) => {
+  it("例のファイルが出て、決めた名前の良い例・悪い例の範囲がある（DB・認証の通りによらない）", async () => {
+    const files = await generate(answers);
+    for (const [path, expected] of Object.entries(FRONTEND_EXAMPLES)) {
+      const file = files.find((f) => f.path === path);
+      expect(file, path).toBeDefined();
+      expect(listExampleRegions(file?.content ?? "").sort(), path).toEqual(
+        [...expected.good, ...expected.bad].sort(),
+      );
+    }
+  });
+
+  it("例は、対応する Skill に差し込まれ、Skill に「良い例」「悪い例」の見出しとコードがある", async () => {
+    const files = await generate(answers);
+    for (const [path, expected] of Object.entries(FRONTEND_EXAMPLES)) {
+      const skill = files.find((f) => f.path === `.claude/skills/${expected.skill}/SKILL.md`);
+      expect(skill, expected.skill).toBeDefined();
+      expect(skill?.content, expected.skill).toMatch(/^#{2,4} .*良い例/m);
+      expect(skill?.content, expected.skill).toMatch(/^#{2,4} .*悪い例/m);
+      for (const name of [...expected.good, ...expected.bad]) {
+        const code = expandExamples(`{{example:${path}#${name}}}`, files, "確認");
+        expect(skill?.content, `${expected.skill} に ${name}`).toContain(code);
+      }
+    }
+  });
+
+  it("共通の Skill「フロントエンド」には例を置かず、選んだライブラリの Skill を読むよう案内する", async () => {
+    const files = await generate(answers);
+    const skill = files.find((f) => f.path === ".claude/skills/frontend/SKILL.md");
+    expect(skill?.content).not.toContain("```ts");
+    for (const name of ["frontend-state", "http-client-axios", "logger"]) {
+      expect(skill?.content, name).toContain(name);
+    }
+    expect(skill?.content).toContain("rules-examples");
+  });
+
+  it("例が使う部品（apiClient・ロガー・MSW のサーバー・テストの準備）が、同じ生成で出る", async () => {
+    const files = await generate(answers);
+    for (const path of [
+      "frontend/src/services/api-client.ts",
+      "frontend/src/test/server.ts",
+      "frontend/src/test/setup.ts",
+      "backend/src/lib/logger/logger.ts",
+    ]) {
+      expect(
+        files.some((f) => f.path === path),
+        path,
+      ).toBe(true);
+    }
   });
 });

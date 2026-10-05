@@ -18,3 +18,7 @@ package_json:
     "@typeschema/zod":
       zod: "$zod"
 skill_name: frontend-state
+files:
+  # Skill が {{example:...}} で差し込む、良い例・悪い例（F-24）。テストで動作を確かめてある
+  files/examples/server-state.test.tsx: frontend/src/rules-examples/server-state.test.tsx
+  files/examples/form.test.tsx: frontend/src/rules-examples/form.test.tsx
