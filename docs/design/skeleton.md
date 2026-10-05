@@ -232,7 +232,7 @@ API の応答には `securityHeaders` で CSP などが付くが、画面（HTML
 
 ## `npm run smoke:generated`（生成したプロジェクトの確認）
 
-`scripts/smoke-generated.ts`。回答の YAML（架空の値）で 3 通り（D1・PostgreSQL・DB なし）のプロジェクトを、一時的なフォルダに生成し、実際に動かして確かめる。時間がかかるため `npm run check` には入れない。手元では `npm run smoke:generated` で、CI では別の仕事（`smoke`）で実行する。
+`scripts/smoke-generated.ts`。回答の YAML（架空の値）で 3 通り（D1・PostgreSQL・DB なし）のプロジェクトを、一時的なフォルダに生成し、実際に動かして確かめる。時間がかかるため `npm run check` には入れない。手元では `npm run smoke:generated` で、CI では手動で実行するワークフロー（`.github/workflows/smoke.yml`）で実行する（#82）。
 
 ### 確かめの内容（通りごと）
 
@@ -268,7 +268,7 @@ Docker が使えず `SMOKE_REQUIRE_DOCKER` もないときは、PostgreSQL の�
 
 ## CI の smoke の仕事
 
-`.github/workflows/ci.yml` の `smoke`。品質チェックの仕事（`check`、Windows・macOS・Linux）とは別にして、`ubuntu-latest` だけで行う（`timeout-minutes: 60`）。`npm ci` の後に `npm run smoke:generated` を実行し、環境変数 `SMOKE_REQUIRE_DOCKER` に `1` を渡す。CI では Docker が使えるはずなので、使えないときは飛ばさず失敗にする。
+`.github/workflows/smoke.yml` の `smoke`。push・PR では動かさず、手動（`workflow_dispatch`。Actions の画面の「Run workflow」）で実行する（#82。時間がかかり環境に左右されるため、最終的な完成の前に通す）。`ubuntu-latest` だけで行う（`timeout-minutes: 60`）。`npm ci` の後に、smoke のスクリプトの単体テスト（`npm run test:smoke`。`test/scripts/smoke-generated*.test.ts`。`npm run check` からは外している）と `npm run smoke:generated` を実行し、環境変数 `SMOKE_REQUIRE_DOCKER`・`SMOKE_REQUIRE_TERRAFORM` に `1` を渡す。CI では Docker・Terraform が使えるはずなので、使えないときは飛ばさず失敗にする。
 
 ## テストと受け入れ条件の対応
 

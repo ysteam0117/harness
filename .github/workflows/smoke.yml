@@ -1,0 +1,36 @@
+# 生成したプロジェクトが実際に動くことの確認（#56・#64）。時間がかかり環境に左右されるため、
+# push・PR では動かさず、手動（Actions の画面の「Run workflow」）で実行する（#82）。最終的な完成の前に通す。
+# 回答の通りごとに生成し、npm install・npm run check・npm run build・開発サーバー・Docker・E2E（Playwright）・
+# terraform validate（Cloudflare には何も作らない）を確かめる。
+name: smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - name: smoke のスクリプトの単体テスト
+        run: npm run test:smoke
+      # Terraform の版は、data/runtimes.yaml の terraform_version と同じにする
+      - uses: hashicorp/setup-terraform@v4.0.1
+        with:
+          terraform_version: 1.15.5
+          terraform_wrapper: false
+      - name: 生成したプロジェクトの確認（全通りの生成・check・build・開発サーバー・E2E・terraform validate・Docker）
+        run: npm run smoke:generated
+        env:
+          # CI では Docker・Terraform が使えるはず。使えないときは飛ばさずに失敗にする
+          SMOKE_REQUIRE_DOCKER: "1"
+          SMOKE_REQUIRE_TERRAFORM: "1"
