@@ -38,8 +38,12 @@ export function makeWorkDir(): string {
   return dir;
 }
 
+// Windows では、止めた子プロセスがフォルダを手放すまで時間がかかり、削除が EPERM・EBUSY になることがあるため、
+// 間を空けてやり直す（最大でおよそ 10 秒。#77）
 export function cleanupWorkDirs(): void {
-  for (const dir of made.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of made.splice(0)) {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 40, retryDelay: 250 });
+  }
 }
 
 /** 小さな node のスクリプトを書く（CommonJS）。パスを返す */

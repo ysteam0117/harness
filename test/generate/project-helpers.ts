@@ -101,7 +101,7 @@ export function makeWorkDir(): string {
 
 export function cleanupProjectTmp(): void {
   for (const dir of tmpRoots.splice(0)) {
-    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    rmSync(dir, { recursive: true, force: true, maxRetries: 40, retryDelay: 250 });
   }
 }
 
