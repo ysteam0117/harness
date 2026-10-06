@@ -13,7 +13,8 @@
     "dist",
     "templates",
     "data",
-    "knowledge"
+    "knowledge",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

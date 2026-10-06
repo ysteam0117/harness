@@ -75,16 +75,36 @@ describe("#30 AC-1: harness --help", () => {
   });
 });
 
-describe("#30 AC-1: 未実装のコマンド", () => {
-  // create は #32 で実装された（動きは下の「#32 R5」で確かめる）
-  for (const name of ["update", "status"]) {
-    it(`#30 AC-1: ${name} は標準エラーに「未実装」の文言を出し、終了コードが1になる`, async () => {
-      const { err, out } = await run([name]);
-      expect(err).toContain("未実装");
-      expect(out).not.toContain("未実装");
-      expect(process.exitCode).toBe(1);
+// update・status は #35 で実装された（動きは test/commands/update.test.ts・status.test.ts で確かめる）。
+// ここでは、入口がつながっていて、「未実装」と表示しないことだけを確かめる（一時フォルダで、gh は差し替える）
+describe("#35: update・status の入口", () => {
+  it("#35: update は、プロジェクトでないフォルダでは、config.yaml の案内を標準エラーに出して終了コード1（未実装とは出さない）", async () => {
+    const tmp = makeTmp();
+    const errs: string[] = [];
+    const { err } = await run(["update", "--yes"], {
+      cwd: tmp.cwd,
+      stderr: (s) => errs.push(s),
+      prompter: new FakePrompter(),
+      interactive: false,
     });
-  }
+    expect(errs.join("") + err).toContain(".harness/config.yaml");
+    expect(errs.join("") + err).not.toContain("未実装");
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("#35: status は、プロジェクトでないフォルダでも、ハーネスの情報を標準出力に出して終了コード0", async () => {
+    const tmp = makeTmp();
+    const outs: string[] = [];
+    await run(["status"], {
+      cwd: tmp.cwd,
+      stdout: (s) => outs.push(s),
+      runGh: async () => ({ code: null, stdout: "", stderr: "gh がありません（テスト）" }),
+      repository: () => "testowner/harness",
+    });
+    expect(outs.join("")).toContain("インストール済みのバージョン");
+    expect(outs.join("")).not.toContain("未実装");
+    expect(process.exitCode ?? 0).toBe(0);
+  });
 });
 
 describe("#30 AC-1: 知らないコマンド", () => {

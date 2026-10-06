@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { Command, Help } from "commander";
 import { createCommand, type CreateDeps } from "./commands/create.js";
-import { statusCommand } from "./commands/status.js";
-import { updateCommand } from "./commands/update.js";
+import { statusCommand, type StatusDeps } from "./commands/status.js";
+import { updateCommand, type UpdateDeps } from "./commands/update.js";
 
 function readVersion(): string {
   const packageJson = new URL("../package.json", import.meta.url);
@@ -27,7 +27,10 @@ function translatePlaceholders(text: string): string {
   return text.replaceAll("[options]", "[オプション]").replaceAll("[command]", "[コマンド]");
 }
 
-export function createProgram(deps: Partial<CreateDeps> = {}): Command {
+/** 各コマンドの差し込み口（テスト用）。同じ名前の口（prompter・cwd・stderr など）は、型が同じ */
+export type ProgramDeps = Partial<CreateDeps> & Partial<UpdateDeps> & Partial<StatusDeps>;
+
+export function createProgram(deps: ProgramDeps = {}): Command {
   const program = new Command("harness");
   program
     .description("AI 開発ハーネスを作成・更新するコマンド")
@@ -61,7 +64,7 @@ export function createProgram(deps: Partial<CreateDeps> = {}): Command {
     subcommand.copyInheritedSettings(root);
   });
   program.addCommand(createCommand(deps));
-  program.addCommand(updateCommand());
-  program.addCommand(statusCommand());
+  program.addCommand(updateCommand(deps));
+  program.addCommand(statusCommand(deps));
   return program;
 }

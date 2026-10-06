@@ -63,3 +63,12 @@ describe("#34 AC-3: 配布物に、生成に使うものが入る", () => {
     }
   });
 });
+
+describe("#35: 配布物に、変更履歴（status が読む）が入る", () => {
+  it("#35 AC-5: package.json の files に CHANGELOG.md がある（ファイル自体は #36 で作る。無ければ status は「変更履歴がありません」と表示する）", () => {
+    const files = (
+      JSON.parse(readFileSync(path.join(rootDir, "package.json"), "utf8")) as { files: string[] }
+    ).files;
+    expect(files).toContain("CHANGELOG.md");
+  });
+});

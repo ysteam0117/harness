@@ -230,12 +230,19 @@ function readTemplate(templatesDir: string, rel: string): string {
 const cell = (text: string): string => text.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
 
 /** 承知した警告の ADR（C-35：背景・選択肢・決定・理由・影響） */
-function buildAdr(warnings: AcceptedWarning[], day: string): string {
+export function buildAdr(
+  warnings: AcceptedWarning[],
+  day: string,
+  options: { number?: string; update?: boolean } = {},
+): string {
+  const number = options.number ?? "0001";
   const rows = warnings.map(
     (w) => `| ${cell(w.id)} | ${cell(w.message)} | ${cell(w.reason)} | ${day} |`,
   );
   return `${[
-    "# 0001：警告を承知して、プロジェクトを生成した",
+    options.update === true
+      ? `# ${number}：ハーネスの更新で、新しい警告を承知した`
+      : `# ${number}：警告を承知して、プロジェクトを生成した`,
     "",
     "- 状態：採用",
     `- 日付：${day}`,
@@ -243,7 +250,9 @@ function buildAdr(warnings: AcceptedWarning[], day: string): string {
     "",
     "## 背景",
     "",
-    "プロジェクトを生成する前の整合性チェックで、次の警告が見つかった。警告は、成り立つが推奨しない組み合わせである。利用者は、内容と理由を確認したうえで、承知して続けることを選んだ。",
+    options.update === true
+      ? "ハーネスの更新（harness update）のときの整合性チェックで、次の新しい警告が見つかった。警告は、成り立つが推奨しない組み合わせである。利用者は、内容と理由を確認したうえで、承知して続けることを選んだ。"
+      : "プロジェクトを生成する前の整合性チェックで、次の警告が見つかった。警告は、成り立つが推奨しない組み合わせである。利用者は、内容と理由を確認したうえで、承知して続けることを選んだ。",
     "",
     "| ルールの id | 内容 | 理由 | 承知した日 |",
     "| --- | --- | --- | --- |",

@@ -42,7 +42,15 @@ export function makeWorkDir(): string {
 // 間を空けてやり直す（最大でおよそ 10 秒。#77）
 export function cleanupWorkDirs(): void {
   for (const dir of made.splice(0)) {
-    rmSync(dir, { recursive: true, force: true, maxRetries: 40, retryDelay: 250 });
+    try {
+      rmSync(dir, { recursive: true, force: true, maxRetries: 40, retryDelay: 250 });
+    } catch (e) {
+      // 一時フォルダの後始末の失敗は、テストの対象（runner の動き）の失敗ではないため、
+      // テストを失敗にせず、残ったフォルダを知らせる（Windows の CI で、止めた子プロセスがフォルダを手放すのが遅れる。#77）
+      console.warn(
+        `一時フォルダを消せませんでした（後で消してください）：${dir}（${(e as NodeJS.ErrnoException).code ?? "不明"}）`,
+      );
+    }
   }
 }
 

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { stringify as stringifyYaml } from "yaml";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type { AcceptedWarning } from "../checks/review.js";
 import type { Answers } from "../questions/answers.js";
 import { questionDefinitions } from "../questions/definitions.js";
@@ -105,5 +105,42 @@ export function buildConfigText(input: BuildConfigInput): string {
     roles: input.roles,
     managed_files: managedFiles,
   };
+  return HEADER + stringifyYaml(doc, { lineWidth: 0 });
+}
+
+export interface UpdateConfigInput {
+  /** 最初に生成した日（引き継ぐ） */
+  generatedOn: string;
+  /** 更新した日 */
+  updatedOn: string;
+  /** 実際に残る中身の指紋（パス → 指紋） */
+  managedFiles: Record<string, string>;
+  /** 利用者が消したままにした管理ファイルのパス */
+  removedFiles: string[];
+}
+
+/** 新しいハーネスで作った config.yaml の中身を、更新の記録に直す */
+export function toUpdateConfigText(createdText: string, input: UpdateConfigInput): string {
+  const created = parseYaml(createdText) as Record<string, unknown>;
+  const sorted = (paths: string[]): string[] => [...paths].sort((a, b) => (a < b ? -1 : 1));
+  const managedFiles: Record<string, string> = {};
+  for (const p of sorted(Object.keys(input.managedFiles))) {
+    managedFiles[p] = input.managedFiles[p] as string;
+  }
+  const doc: Record<string, unknown> = {
+    harness_version: created["harness_version"],
+    generated_on: input.generatedOn,
+    updated_on: input.updatedOn,
+    mode: "update",
+  };
+  for (const [key, value] of Object.entries(created)) {
+    if (key in doc) continue;
+    if (key === "managed_files") {
+      doc[key] = managedFiles;
+      if (input.removedFiles.length > 0) doc["removed_files"] = sorted(input.removedFiles);
+    } else {
+      doc[key] = value;
+    }
+  }
   return HEADER + stringifyYaml(doc, { lineWidth: 0 });
 }

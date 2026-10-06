@@ -72,7 +72,7 @@ function messageOf(e: unknown): string {
 }
 
 /** 出力先の相対パスの形を確かめる（出力先の外へ出るパスは使えない） */
-function checkRelative(p: string): void {
+export function checkRelative(p: string): void {
   const bad =
     p === "" ||
     p.startsWith("/") ||
