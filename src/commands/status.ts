@@ -20,7 +20,7 @@ export interface StatusDeps {
   stderr: (text: string) => void;
   /** gh の実行の差し替え（テスト用）。既定は本物 */
   runGh?: RunGh;
-  /** 最新の版を調べる GitHub リポジトリ（持ち主/名前）の差し替え。既定は、ハーネスの package.json の repository */
+  /** 最新の版を調べる GitHub リポジトリ（持ち主/名前）の差し替え。既定は、環境変数 HARNESS_REPOSITORY */
   repository?: () => string | undefined;
   /** 同梱の CHANGELOG.md の差し替え */
   changelog?: () => string | undefined;

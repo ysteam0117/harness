@@ -30,7 +30,7 @@
 | `src/update/apply.ts` | 原子的な書き込み（入れ替え・復元） |
 | `src/update/fs.ts` | ファイル操作の窓口（テストで差し替える） |
 | `src/update/diff.ts` | 差分の表示（`diff` の `createTwoFilesPatch`）と、管理しない設定の変化の通知 |
-| `src/update/latest.ts` | 最新のバージョン（`gh release view`）。リポジトリは、ハーネスの `package.json` の `repository` から読む |
+| `src/update/latest.ts` | 最新のバージョン（`gh release view`）。リポジトリは、環境変数 `HARNESS_REPOSITORY`（「持ち主/harness」）から読む |
 | `src/update/changelog.ts` | `CHANGELOG.md` を `## x.y.z` で分け、プロジェクトより新しい項目を取り出す |
 | `src/generate/config.ts` | `toUpdateConfigText`：新しい `config.yaml` の書き方（`mode: update`・`updated_on`・`removed_files`） |
 
@@ -99,7 +99,7 @@ SIGINT（Ctrl+C）を受けたときは、書いた分を戻して止める（�
 
 - プロジェクトのバージョン（`config.yaml`）・インストール済みのバージョン・最新のバージョン・主な変更点（同梱の `CHANGELOG.md` の、プロジェクトのバージョンより新しい項目）・書き換え済みの管理ファイルの件数（指紋の比較）。消えている管理ファイルは別に数える。何も書かない
 - `config.yaml` がないフォルダでは、ハーネス（CLI）の情報だけを表示する
-- 最新のバージョンは、`gh release view --repo <持ち主>/<名前> --json tagName`（時間切れ5秒）で取る。持ち主・名前は、インストールしたハーネスの `package.json` の `repository` から読む（アカウント名をコードに書かない）。`gh` がない・ログインしていない・つながらない・Release がない・`repository` がない場合は、「取得できません」と理由を表示し、終了コードは0
+- 最新のバージョンは、`gh release view --repo <持ち主>/<名前> --json tagName`（時間切れ5秒）で取る。持ち主・名前は、環境変数 `HARNESS_REPOSITORY` から読む（利用者の判断。アカウント名をコード・package.json・手順書に書かない）。`gh` がない・ログインしていない・つながらない・Release がない・`HARNESS_REPOSITORY` がない場合は、「取得できません」と理由を表示し、終了コードは0
 - `CHANGELOG.md` がなければ「変更履歴がありません」。`package.json` の `files` に `CHANGELOG.md` を含める（ファイル自体は #36 で作る）
 
 ## 残す危険（利用者の判断で、これ以上は対策しない）

@@ -4,7 +4,12 @@ import { parse, stringify } from "yaml";
 import { fingerprint, toUpdateConfigText } from "../../src/generate/config.js";
 import { parseChangelog, changesSince } from "../../src/update/changelog.js";
 import { formatDiff, settingChangeNotes } from "../../src/update/diff.js";
-import { fetchLatestVersion, repositoryOf, type RunGh } from "../../src/update/latest.js";
+import {
+  fetchLatestVersion,
+  readOwnRepository,
+  repositoryOf,
+  type RunGh,
+} from "../../src/update/latest.js";
 
 describe("#35 差分の表示", () => {
   it("#35 AC-2: 現在の中身と新しい内容の差分（行ごと）を出す。改行の違いだけでは差分にしない", () => {
@@ -78,6 +83,18 @@ describe("#35 リポジトリの読み取り", () => {
     expect(repositoryOf({})).toBeUndefined();
     expect(repositoryOf("a b/c; rm -rf")).toBeUndefined();
     expect(repositoryOf("--repo=x/y")).toBeUndefined();
+  });
+
+  it("#36 リポジトリは環境変数 HARNESS_REPOSITORY から読む（架空の名前）。無い・空・形が違うときは undefined", () => {
+    expect(readOwnRepository({ HARNESS_REPOSITORY: "testowner/harness" })).toBe(
+      "testowner/harness",
+    );
+    expect(readOwnRepository({ HARNESS_REPOSITORY: " testowner/harness " })).toBe(
+      "testowner/harness",
+    );
+    expect(readOwnRepository({})).toBeUndefined();
+    expect(readOwnRepository({ HARNESS_REPOSITORY: "" })).toBeUndefined();
+    expect(readOwnRepository({ HARNESS_REPOSITORY: "a b/c; rm -rf" })).toBeUndefined();
   });
 });
 

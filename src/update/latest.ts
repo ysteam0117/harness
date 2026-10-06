@@ -1,6 +1,4 @@
 import { execFile } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { valid } from "semver";
 
 export interface GhResult {
@@ -20,7 +18,7 @@ const NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
 const URL_FORM =
   /^(?:git\+)?(?:https?:\/\/(?:www\.)?github\.com\/|ssh:\/\/git@github\.com\/|git@github\.com:|github:)?([^/\s:]+)\/([^/\s]+?)(?:\.git)?\/?$/;
 
-/** package.json の repository（文字列・{ url }）から「持ち主/名前」を取り出す。読めない・怪しい文字を含むときは undefined */
+/** リポジトリの書き方（「持ち主/名前」・GitHub の URL・{ url }）から「持ち主/名前」を取り出す。読めない・怪しい文字を含むときは undefined */
 export function repositoryOf(repository: unknown): string | undefined {
   const raw =
     typeof repository === "string"
@@ -39,15 +37,13 @@ export function repositoryOf(repository: unknown): string | undefined {
   return `${owner}/${name}`;
 }
 
-/** インストールしたハーネス自身の package.json の repository */
-export function readOwnRepository(): string | undefined {
-  try {
-    const file = fileURLToPath(new URL("../../package.json", import.meta.url));
-    const pkg = JSON.parse(readFileSync(file, "utf8")) as { repository?: unknown };
-    return repositoryOf(pkg.repository);
-  } catch {
-    return undefined;
-  }
+/**
+ * ハーネスの GitHub リポジトリ（「持ち主/名前」）。環境変数 HARNESS_REPOSITORY で渡す（利用者の判断。
+ * 個人のアカウント名をコード・package.json・手順書に書かないため）。無い・形が違うときは undefined
+ */
+export function readOwnRepository(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const value = env["HARNESS_REPOSITORY"];
+  return value === undefined || value.trim() === "" ? undefined : repositoryOf(value.trim());
 }
 
 /** 本物の gh を実行する（時間切れつき）。実行できなければ code: null */
@@ -86,7 +82,7 @@ export async function fetchLatestVersion(
     return {
       ok: false,
       reason:
-        "ハーネスの GitHub リポジトリが分かりません（package.json の repository がありません）",
+        "ハーネスの GitHub リポジトリが分かりません（環境変数 HARNESS_REPOSITORY に「持ち主/harness」を設定すると調べられます）",
     };
   }
   let result: GhResult;
