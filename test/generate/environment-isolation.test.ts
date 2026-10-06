@@ -399,7 +399,8 @@ describe("#51 生成する設定", () => {
       expect(contentOf(files, "scripts/local-env.ts")).toContain("loadLocalEnvironment");
       expect(pkg.scripts.test).toContain("test");
       expect(pkg.scripts.dev).toContain("development");
-      expect(pkg.scripts.check).toContain("test:safety");
+      // #42 R1：これまでの check の中身は check:app に移った（check は check:app と security をつなぐ）
+      expect(pkg.scripts["check:app"]).toContain("test:safety");
       expect(contentOf(files, "vitest.config.ts")).toContain("loadLocalEnvironment");
       expectIsolatedViteEnvDirectory(contentOf(files, "vite.config.ts"), 2);
       expect(parseWranglerJsonc(contentOf(files, "wrangler.jsonc"))["vars"]).toMatchObject({
@@ -444,7 +445,7 @@ describe("#51 生成する設定", () => {
       ).toBe(true);
       expect(pkg.scripts.predev).toContain("env:check");
       expect(pkg.scripts.pretest).toContain("env:check");
-      expect(pkg.scripts.check).toMatch(/^npm run test:safety/);
+      expect(pkg.scripts["check:app"]).toMatch(/^npm run test:safety/);
       expect(pkg.scripts.build).toMatch(/run-local|env:check/);
       expect(pkg.scripts.dev).toMatch(/run-local|env:check/);
       expect(pkg.scripts.test).toMatch(/run-local|env:check/);

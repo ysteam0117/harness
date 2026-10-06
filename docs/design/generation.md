@@ -319,7 +319,7 @@ Windows では、ウイルス対策ソフトなどの影響で `rename` が一�
 ### 流れと終了コード
 
 - 確かめるか：`--verify` なら聞かずに確かめる。対話（端末・`--yes` なし）では `verify_after_generate` を聞く（既定は「いいえ」）。`--yes` だけ・端末でないときは確かめない。この質問の Ctrl+C は、生成物を残して終了コード130（生成前のキャンセルとは別）
-- 順序：Docker の確認（PostgreSQL のときだけ。`docker info`。使えなければ npm を呼ばずに飛ばす）→ 環境ファイルの用意 → `npm install` → （PostgreSQL）検証用 DB の起動（`npm run docker:up:test -- --wait db`）→ `npm run check` → （PostgreSQL）`npm run docker:down:test`。`docker:up/down` は node_modules が要るため install の後。install が失敗したら DB は起動しない。停止は起動の前に登録し、成功・失敗・例外・中断のどれでも1回実行する。停止には中断の合図を渡さず、停止用の時間切れ（2分）だけで実行する
+- 順序：Docker の確認（DB に関係なく。`docker info`。使えなければ npm を呼ばずに飛ばす。品質チェックのセキュリティのテストが Docker で動くため。#42）→ 環境ファイルの用意 → `npm install` → （PostgreSQL）検証用 DB の起動（`npm run docker:up:test -- --wait db`）→ `npm run check` → （PostgreSQL）`npm run docker:down:test`。`docker:up/down` は node_modules が要るため install の後。install が失敗したら DB は起動しない。停止は起動の前に登録し、成功・失敗・例外・中断のどれでも1回実行する。停止には中断の合図を渡さず、停止用の時間切れ（2分）だけで実行する
 - 時間切れ：install・check はそれぞれ10分
 - 終了コード：通った・飛ばした・対話で「はい」を選んで失敗は0、`--verify` を付けて失敗は1、中断（SIGINT・SIGTERM）は130。中断しても生成物は残す
 - 通ったとき、検証済みより新しい版を採用していれば、C-78 の提案（プロファイルの `verified_versions` の更新）を表示する（何も書き込まない）

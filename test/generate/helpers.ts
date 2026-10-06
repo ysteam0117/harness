@@ -129,6 +129,7 @@ export function fakeValues(): Record<string, string> {
     "commit_merge_step",
     "prev_merged_check",
     "dependency_update_row",
+    "security_dependabot_section",
   ];
   for (const name of others) values[name] = `dummy-${name.replaceAll("_", "-")}`;
   return values;

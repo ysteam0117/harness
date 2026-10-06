@@ -248,10 +248,10 @@ API の応答には `securityHeaders` で CSP などが付くが、画面（HTML
 
 | 変数 | 内容 |
 | --- | --- |
-| `SMOKE_REQUIRE_DOCKER=1` | Docker が使えないときに、PostgreSQL・Docker の確かめを飛ばさず失敗にする（CI で使う） |
+| `SMOKE_REQUIRE_DOCKER=1` | Docker が使えないときに、全部の通りを飛ばさず失敗にする（CI で使う）。Docker は D1・DB なしにも要る（#42） |
 | `SMOKE_CASES=d1,none` | 実行する通りを絞る（既定はすべて） |
 
-Docker が使えず `SMOKE_REQUIRE_DOCKER` もないときは、PostgreSQL の通りを飛ばし、ほかの通りの Docker の確かめを飛ばす。
+Docker が使えず `SMOKE_REQUIRE_DOCKER` もないときは、全部の通り（D1・DB なし・verify・local を含む）を飛ばす。生成したプロジェクトの `npm run check` が、Docker で動くセキュリティのテストを含むため（#42）。コンテナの中の品質チェックは、Docker を使わない `npm run check:app`。
 
 ### 実行ごとに一意のアプリ名
 

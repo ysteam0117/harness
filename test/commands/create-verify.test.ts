@@ -349,21 +349,35 @@ describe("#57：PostgreSQL と Docker", () => {
     expect(s.techStack()).not.toContain("動作確認");
   });
 
-  it("D1 では、Docker を確かめない", async () => {
+  // #42：品質チェック（npm run check）に、Docker で動くセキュリティのテストが入ったため、DB に関係なく Docker が要る
+  it("D1 でも、Docker を確かめる。使えなければ、npm を呼ばず、理由を表示して飛ばす（終了コード0）", async () => {
     const s = setup({ docker: false });
     const out = await s.run({ yes: true, verify: true });
-    expect(s.dockerChecks()).toBe(0);
+    expect(s.dockerChecks()).toBe(1);
+    expect(s.calls).toHaveLength(0);
+    expect(out.exitCode).toBe(0);
+    expect(out.verification?.status).toBe("skipped");
+    expect(s.notes()).toContain("Docker");
+    expect(s.notes()).toContain("セキュリティのテスト");
+  });
+
+  it("D1 で Docker が使えれば、install → check の順に実行する", async () => {
+    const s = setup({ docker: true });
+    const out = await s.run({ yes: true, verify: true });
+    expect(s.dockerChecks()).toBe(1);
+    expect(s.keys()).toEqual(["install", "run check"]);
     expect(out.verification?.status).toBe("passed");
   });
 
-  it("DB なしでも、Docker を確かめない", async () => {
+  it("DB なしでも、Docker を確かめる。使えなければ飛ばす", async () => {
     const s = setup({ docker: false });
     const out = await s.run(
       { yes: true, verify: true },
       { ...baseAnswers({ database: "none", auth: "none" }), idp: undefined },
     );
-    expect(s.dockerChecks()).toBe(0);
-    expect(out.verification?.status).toBe("passed");
+    expect(s.dockerChecks()).toBe(1);
+    expect(s.calls).toHaveLength(0);
+    expect(out.verification?.status).toBe("skipped");
   });
 
   it("check が失敗しても down を呼ぶ（--verify なので終了コード1）", async () => {

@@ -27,6 +27,7 @@ skill_name: backend-hono
 files:
   files/app-error.ts: backend/src/lib/app-error.ts
   files/error-handler.ts: backend/src/lib/error-handler.ts
+  files/error-handler.test.ts: backend/src/lib/error-handler.test.ts
   files/security.ts: backend/src/lib/security.ts
   files/validation.ts: backend/src/lib/validation.ts
   files/security.test.ts: backend/src/lib/security.test.ts

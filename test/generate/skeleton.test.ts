@@ -558,9 +558,11 @@ describe("#56 AC-1・AC-2: README の最初の手順と、動かすための設�
     const pkg = JSON.parse(contentOf(await generated(c), "package.json")) as {
       scripts: Record<string, string>;
     };
-    expect(pkg.scripts["check"]).toContain("lint");
-    expect(pkg.scripts["check"]).toContain("typecheck");
-    expect(pkg.scripts["check"]).toMatch(/npm (run )?test/);
+    // #42 R1：これまでの check の中身は check:app に移った。check は check:app と security をつなぐ
+    expect(pkg.scripts["check"]).toContain("check:app");
+    expect(pkg.scripts["check:app"]).toContain("lint");
+    expect(pkg.scripts["check:app"]).toContain("typecheck");
+    expect(pkg.scripts["check:app"]).toMatch(/npm (run )?test/);
   });
 
   it("#56 AC-1: index.html は Vite の入口（frontend/src/main.tsx を読む）で、vite.config.ts は Cloudflare の部品を使う", async () => {

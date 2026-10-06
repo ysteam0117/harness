@@ -85,7 +85,8 @@ describe("#31 AC-4: プロファイルの読み込み", () => {
       destination: "backend/src/lib/error-handler.ts",
     });
     // 共通の部品 5 つに、Skill の良い例・悪い例のテスト 2 つ（#37）
-    expect(hono.files).toHaveLength(7);
+    // #42：error-handler.test.ts を足した（壊れた JSON の本文を 500 にしない）
+    expect(hono.files).toHaveLength(8);
   });
 
   it("#31 AC-4: includes・optional_packages・package_json が読める（$zod はそのまま残す）", () => {
@@ -370,7 +371,8 @@ describe("#31 AC-4: mergePackageJson", () => {
         "frontend-state/tanstack-query-rhf-zod",
       ]),
     ) as { scripts: Record<string, string>; overrides: Record<string, unknown> };
-    expect(merged.scripts["check"]).toContain("npm run lint");
+    // #42 R1：これまでの check の中身は check:app に移った
+    expect(merged.scripts["check:app"]).toContain("npm run lint");
     expect(merged.overrides["@typeschema/zod"]).toEqual({ zod: "$zod" });
   });
 });

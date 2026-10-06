@@ -1,0 +1,24 @@
+# もとになった共通仕様：C-62・C-82
+# 依存ライブラリの更新の通知と、更新の PR（Dependabot、C-82）。
+# 更新の PR は、取り込む前に品質チェック（npm run check）を通し、C-62 の手順（バージョンを固定したまま、動作を確かめる）で確かめる。
+# Semgrep・gitleaks・OSV-Scanner・Schemathesis の Docker イメージ（scripts/security-check.mjs・docs/testing/）は、Dependabot の対象外。手で更新する（docs/testing/security.md）。
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      # 本番の依存は、1つの PR にまとめる。開発用の依存は、別にまとめる
+      production-dependencies:
+        dependency-type: production
+      development-dependencies:
+        dependency-type: development
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly

@@ -1,0 +1,85 @@
+{
+  "paths": {
+    "/api/sample-users": {
+      "get": {
+        "operationId": "listSampleUsers",
+        "summary": "サンプルの利用者の一覧（ユーザー名の昇順、100件まで）",
+        "responses": {
+          "200": {
+            "description": "一覧",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["users"],
+                  "properties": {
+                    "users": {
+                      "type": "array",
+                      "maxItems": 100,
+                      "items": { "$ref": "#/components/schemas/SampleUser" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "addSampleUser",
+        "summary": "サンプルの利用者を1件追加する",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SampleUserInput" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "追加した",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SampleUser" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/ForbiddenOrigin" },
+          "409": {
+            "description": "同じユーザー名がすでにある（CONFLICT）",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "422": { "$ref": "#/components/responses/ValidationError" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "SampleUser": {
+        "type": "object",
+        "required": ["username"],
+        "properties": { "username": { "type": "string" } }
+      },
+      "SampleUserInput": {
+        "type": "object",
+        "required": ["username"],
+        "additionalProperties": true,
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50,
+            "pattern": "^[A-Za-z0-9_]+$",
+            "description": "英数字と _ だけ（backend/src/routes/sample-users.ts の zod の検証と同じ）"
+          }
+        }
+      }
+    }
+  }
+}

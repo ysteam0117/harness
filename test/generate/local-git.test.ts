@@ -404,6 +404,75 @@ describe.skipIf(!gitAvailable)("#61 AC-2: pre-commit のフック", GIT_TEST_OPT
     expect(r.status).toBe(0);
     expect(r.stderr).toContain("警告：gitleaks が入っていない");
   });
+
+  // #42 R2：Git に追加された秘密のファイルは、gitleaks の有無に関係なく止める（値は表示しない）
+  it.each([
+    [".env"],
+    [".env.development"],
+    [".env.test"],
+    ["config/.env.production"],
+    [".dev.vars"],
+    [".dev.vars.local"],
+  ])(
+    "#42 R2: 秘密のファイル %s を（強制で）ステージすると、gitleaks がなくても止まり、名前だけを表示する",
+    (name) => {
+      const repo = setupRepo();
+      repo.mustGit(["switch", "-c", "feature/1-sample"]);
+      repo.write(name, "KEY_NAME=DUMMY_VALUE_NOT_SHOWN_001\n");
+      repo.mustGit(["add", "-f", name]);
+      const head = repo.head();
+      const r = repo.git(["commit", "-m", "feat: 秘密のファイル"]);
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toContain("秘密のファイル");
+      expect(r.stderr).toContain(name);
+      expect(r.stderr + r.stdout).not.toContain("DUMMY_VALUE_NOT_SHOWN_001");
+      expect(repo.head()).toBe(head);
+    },
+  );
+
+  it("#42 R2: .env.example（項目の例だけ）のコミットは止めない", () => {
+    const repo = setupRepo();
+    repo.mustGit(["switch", "-c", "feature/1-sample"]);
+    repo.write(".env.example", "# 例\nNEW_ITEM=\n");
+    expect(repo.commit("feat: 項目を足す").status).toBe(0);
+  });
+
+  it("#42 R2: 秘密のファイルを削除するコミットは止めない（Git から外す）", () => {
+    const repo = setupRepo();
+    repo.mustGit(["switch", "-c", "feature/1-sample"]);
+    repo.write(".env", "KEY_NAME=DUMMY_VALUE_NOT_SHOWN_001\n");
+    repo.mustGit(["add", "-f", ".env"]);
+    repo.mustGit(["rm", "-f", "--cached", ".env"]);
+    repo.write("notes.txt", "メモ\n");
+    expect(repo.commit("feat: メモ").status).toBe(0);
+  });
+
+  it("#42 R2: pre-commit の gitleaks は、パスの除外のない設定（標準のルール＋値の目印だけ）で実行する", () => {
+    const repo = setupRepo();
+    repo.useFakeGitleaks(true);
+    // 設定を記録する偽の gitleaks
+    const record = path.join(repo.home, "gitleaks-config.txt");
+    repo.write(
+      "../fake-bin/gitleaks",
+      [
+        "#!/bin/sh",
+        'if [ "$1" = "git" ] && [ "$2" = "--help" ]; then echo "Usage: gitleaks git --pre-commit --staged"; exit 0; fi',
+        `printf '%s' "$GITLEAKS_CONFIG_TOML" > "${record.split(path.sep).join("/")}"`,
+        "exit 0",
+        "",
+      ].join("\n"),
+      path.join(repo.home, "x"),
+    );
+    chmodSync(path.join(repo.home, "fake-bin", "gitleaks"), 0o755);
+    repo.mustGit(["switch", "-c", "feature/1-sample"]);
+    repo.write("notes.txt", "メモ\n");
+    expect(repo.commit("feat: メモ").status).toBe(0);
+    const config = readFileSync(record, "utf8");
+    expect(config).toContain("useDefault = true");
+    expect(config).toContain("FAKE_SECRET_FOR_TEST");
+    expect(config).not.toMatch(/paths\s*=/);
+    expect(config).not.toContain(".env");
+  });
 });
 
 describe.skipIf(!gitAvailable)(

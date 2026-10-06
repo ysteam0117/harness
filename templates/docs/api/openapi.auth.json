@@ -1,0 +1,52 @@
+{
+  "paths": {
+    "/api/auth/me": {
+      "get": {
+        "operationId": "getMe",
+        "summary": "ログイン中の利用者",
+        "description": "セッションの Cookie が必要。Cookie がない・無効なときは 401（UNAUTHENTICATED。原因は知らせない）。",
+        "responses": {
+          "200": {
+            "description": "ログイン中の利用者",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["id", "email"],
+                  "properties": {
+                    "id": { "type": "string" },
+                    "email": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthenticated" }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "summary": "ログアウト（サーバー側のセッションを無効にする）",
+        "responses": {
+          "204": { "description": "ログアウトした（セッションの Cookie を消す）" },
+          "401": { "$ref": "#/components/responses/Unauthenticated" },
+          "403": { "$ref": "#/components/responses/ForbiddenOrigin" }
+        }
+      }
+    }
+  },
+  "components": {
+    "responses": {
+      "Unauthenticated": {
+        "description": "ログインが必要（UNAUTHENTICATED）。認証が必要な API を、セッションなしで呼んだとき",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      }
+    }
+  }
+}

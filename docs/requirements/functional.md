@@ -484,8 +484,8 @@ templates/profiles/
 | フロントエンドの組み立て・画面の切り替え | Vite＋React Router | Cloudflare公式のViteの部品（`@cloudflare/vite-plugin`）で、画面（React）とAPI（Hono）を同じWorkersから同じドメインで配信する（[C-29](common/security.md#c-29)） | 作成済み（Issue #19） |
 | API通信（フロントエンド） | Axios | インスタンスとインターセプター（[C-46](common/frontend.md#c-46)） | 作成済み（Issue #19） |
 | フロントエンドの状態・フォーム | 標準：TanStack Query、React Hook Form＋Zod／必要になったとき：Zustand | Zustandは最初から入れず、複数の画面で共有する状態が必要になったときに、承認を得て追加する（[C-32](common/quality-test.md#c-32)・[C-45](common/frontend.md#c-45)） | 作成済み（Issue #19） |
-| テストの道具 | Vitest、@cloudflare/vitest-pool-workers、Testing Library、Playwright、MSW、fast-check、k6、OWASP ZAP、Schemathesis | 単体・結合（フロントエンド・バックエンド共通）、Workersの実行環境でのテスト、コンポーネントのテスト、E2E、外部APIのモック、異常な入力のテスト、負荷・限界のテスト（[C-79](common/quality-test.md#c-79)）、攻撃を試すテスト・APIの異常な入力のテスト（[C-82](common/quality-test.md#c-82)） | 作成済み（Issue #19）。Schemathesisは追加予定（Issue #42） |
-| 品質チェックの道具 | ESLint＋typescript-eslint＋eslint-plugin-react-hooks、Prettier、TypeScript（`tsc`）、Stryker、dependency-cruiser、jscpd、`npm audit`、Semgrep、gitleaks、OSV-Scanner、Dependabot | Lint、整形、型チェック、ミューテーションテスト、層をまたぐ依存の違反、重複、脆弱性、コードを見るセキュリティのテスト・秘密情報の混入の確認（[C-82](common/quality-test.md#c-82)） | 作成済み（Issue #19）。Semgrep・gitleaks・OSV-Scanner・Dependabotは追加予定（Issue #42） |
+| テストの道具 | Vitest、@cloudflare/vitest-pool-workers、Testing Library、Playwright、MSW、fast-check、k6、OWASP ZAP、Schemathesis | 単体・結合（フロントエンド・バックエンド共通）、Workersの実行環境でのテスト、コンポーネントのテスト、E2E、外部APIのモック、異常な入力のテスト、負荷・限界のテスト（[C-79](common/quality-test.md#c-79)）、攻撃を試すテスト・APIの異常な入力のテスト（[C-82](common/quality-test.md#c-82)） | 作成済み（Issue #19・#42） |
+| 品質チェックの道具 | ESLint＋typescript-eslint＋eslint-plugin-react-hooks、Prettier、TypeScript（`tsc`）、Stryker、dependency-cruiser、jscpd、`npm audit`、Semgrep、gitleaks、OSV-Scanner、Dependabot | Lint、整形、型チェック、ミューテーションテスト、層をまたぐ依存の違反、重複、脆弱性、コードを見るセキュリティのテスト・秘密情報の混入の確認（[C-82](common/quality-test.md#c-82)） | 作成済み（Issue #19・#42） |
 
 - ライブラリを入れるのは、メンテナンス性が上がる場合に限る。使わなくてもよい場面で入れると、仕組みが複雑になるだけになるため、標準で入れるものと、必要になったときに追加するものを分ける（[C-38](common/design-principles.md#c-38)・[C-53](common/design-principles.md#c-53)）
 - 大きな版が新しくなったばかりの道具（TypeScript・Vitest等）は、ほかの道具が対応していない場合がある。ひな形を作るときに組み合わせて動くことを確かめ、検証済みのバージョンとして記録する

@@ -96,6 +96,7 @@ description: テストの作成・実行のルール。テストの必須範囲�
 - 品質チェックとテストは、手元とCIで共通の1つのコマンド（{{check_command}}）で、プロジェクト全体に対して実行する
 - テストを追加・変更した後にも、品質チェックをやり直す
 - CIでも、開発環境と同じコンテナ・同じバージョンを使う
+- `{{check_command}}`は、Dockerを使わない`npm run check:app`（Lint・型・書式・依存の向き・重複・テスト・`npm audit`）に、Dockerで動くセキュリティのテスト（`npm run security`：Semgrep・gitleaks・OSV-Scanner）を足したもの。**ホストで実行する**。Docker（開発用のコンテナ）の中では`npm run check:app`を実行する（コンテナの中からはDockerを使えない）。セキュリティのテストの手順・合否・誤検知の抑え方は`docs/testing/security.md`
 
 ## 性能の目標
 
@@ -138,7 +139,8 @@ description: テストの作成・実行のルール。テストの必須範囲�
 
 - 攻撃を試すテストとペネトレーションテストは、本番に対して行わない。検証環境だけで、利用者の承認を得てから行う
 - 外部API・外部のサービスに攻撃を向けない
-- 誤検知と判断した指摘は、除外の設定に理由を書いて除外し、{{pr_equivalent}}に記録する。理由のない除外はしない
+- 誤検知と判断した指摘は、除外の設定に理由を書いて除外し、{{pr_equivalent}}に記録する。理由のない除外はしない（Semgrepは、該当の行に`// nosemgrep: <ルールのid> <理由>`を付ける。理由が妥当かは、コードレビューで確かめる。手順は`docs/testing/security.md`）
+- Schemathesisは、API仕様書（`docs/api/openapi.json`）から異常な入力を作って、動いているAPIに送る。`npm run check`には入れず、開発サーバーを起動して、`docs/testing/schemathesis.md`の手順で実行する（本番には向けない）。APIを足す・変えたら、仕様書も同じ変更の中で直す（食い違うと`backend/src/openapi.test.ts`が失敗する）
 - 見つかった弱点はIssueにして直し、再発を防ぐテストを毎回のテストに加える
 
 ### ペネトレーションテストの進め方

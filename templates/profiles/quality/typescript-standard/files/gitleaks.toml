@@ -1,0 +1,25 @@
+# gitleaks の設定（C-82）。作業ツリーの検査（npm run security:secrets）に使う。
+# gitleaks の標準のルール（useDefault）に、次の例外だけを足す。例外を足すときは、理由を書く。
+title = "gitleaks の設定"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "値の目印とコミットされないファイルだけを例外にする"
+# テスト用の架空の秘密情報は、値に FAKE_SECRET_FOR_TEST を含めて、本物と区別する（docs/testing/security.md）
+regexes = ['''FAKE_SECRET_FOR_TEST''']
+# 次のものは、Git に入れない（.gitignore の対象）ため、作業ツリーの検査から外す。
+# 入れてしまうことは、scripts/security-check.mjs（Git に追加された秘密のファイルの拒否）と pre-commit が止める。
+# .env.example（項目の例だけ）は、外さずに検査する。
+paths = [
+  '''(^|/)\.env(\.(development|test|production|staging|local))?$''',
+  '''(^|/)\.env\.[A-Za-z0-9_-]+\.local$''',
+  '''(^|/)\.dev\.vars(\..+)?$''',
+  # ハーネスの記録。管理するファイルの指紋（ハッシュ値）が並ぶだけで、秘密の値は入らない。ハッシュ値を、汎用のキーとして誤って検出するため外す
+  '''(^|/)\.harness/config\.yaml$''',
+  # 取得した依存・組み立ての結果・作業用の出力（すべて .gitignore の対象で、Git に入らない）
+  '''(^|/)node_modules/''',
+  '''(^|/)(dist|coverage|playwright-report|test-results|reports)/''',
+  '''(^|/)\.(wrangler|stryker-tmp|terraform)/''',
+]

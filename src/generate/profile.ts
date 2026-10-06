@@ -19,6 +19,19 @@ export type ProfilePackageJsonWhen = { when: When; packageJson: Record<string, u
 /** 回答に合うときだけ足すパッケージ（packages_when） */
 export type PackagesWhen = { when: Record<string, string>; packages: string[] };
 
+/** 道具の Docker のイメージ（版とダイジェストで固定し、確かめた日と方法を残す） */
+export type ContainerImage = {
+  /** イメージの名前（tag・ダイジェストを含まない） */
+  image: string;
+  tag: string;
+  /** sha256:<64桁の16進> */
+  digest: string;
+  /** 確かめた日（YYYY-MM-DD） */
+  checkedOn: string;
+  /** 確かめた方法 */
+  note: string;
+};
+
 export type Profile = {
   /** "<分類>/<id>"（例："backend-framework/hono"） */
   key: string;
@@ -60,6 +73,8 @@ export type Profile = {
   unverified: string[];
   /** 組み合わせの条件の説明（文章） */
   compatibilityNotes: string[];
+  /** 道具の Docker のイメージ（道具の名前 → イメージ。書いてなければ {}） */
+  containerImages: Record<string, ContainerImage>;
 };
 
 const SEGMENT = "[A-Za-z0-9][A-Za-z0-9_-]*";
@@ -92,7 +107,11 @@ const KNOWN_FIELDS = new Set([
   "wrangler",
   "wrangler_when",
   "optional_packages",
+  "container_images",
 ]);
+
+const CONTAINER_IMAGE_FIELDS = ["image", "tag", "digest", "checked_on", "note"];
+const CONTAINER_TOOL_RE = /^[a-z][a-z0-9_]*$/;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -144,6 +163,80 @@ function stringRecord(
     out[name] = v;
   }
   return out;
+}
+
+/** container_images（道具の名前 → image・tag・digest・checked_on・note）を読んで検証する */
+function containerImagesField(
+  data: Record<string, unknown>,
+  where: string,
+): Record<string, ContainerImage> {
+  const value = data["container_images"];
+  if (value === undefined) return {};
+  const shape =
+    "container_images は「道具の名前: {image, tag, digest, checked_on, note}」の形で書いてください";
+  if (!isPlainObject(value)) throw new GenerateError(`${where}：${shape}`);
+  const out: Record<string, ContainerImage> = {};
+  for (const [tool, raw] of Object.entries(value)) {
+    const at = `${where}：container_images の ${tool}`;
+    if (!CONTAINER_TOOL_RE.test(tool)) {
+      throw new GenerateError(
+        `${at}：道具の名前は、小文字・数字・_ で書いてください（値の名前 {{${tool}_image}} になります）`,
+      );
+    }
+    if (!isPlainObject(raw)) throw new GenerateError(`${at}：${shape}`);
+    for (const key of Object.keys(raw)) {
+      if (!CONTAINER_IMAGE_FIELDS.includes(key)) {
+        throw new GenerateError(`${at}：知らない項目 ${key} があります（書き間違いの可能性）`);
+      }
+    }
+    const text = (key: string): string => {
+      const v = raw[key];
+      if (typeof v !== "string" || v.trim() === "") {
+        throw new GenerateError(`${at}：項目 ${key} は、空でない文字列で必ず書いてください`);
+      }
+      return v;
+    };
+    const image = text("image");
+    const tag = text("tag");
+    const digest = text("digest");
+    const checkedOn = text("checked_on");
+    const note = text("note");
+    if (/[\s:@]/.test(image)) {
+      throw new GenerateError(`${at}：image は、tag・ダイジェストを含まない名前で書いてください`);
+    }
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(tag) || tag === "latest") {
+      throw new GenerateError(
+        `${at}：tag ${JSON.stringify(tag)} は、版を示す tag で書いてください（latest は固定にならないため使えません）`,
+      );
+    }
+    if (!/^sha256:[0-9a-f]{64}$/.test(digest)) {
+      throw new GenerateError(
+        `${at}：digest ${JSON.stringify(digest)} は「sha256:」と 64 桁の16進数で書いてください`,
+      );
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(checkedOn)) {
+      throw new GenerateError(`${at}：checked_on は、YYYY-MM-DD の日付で書いてください`);
+    }
+    out[tool] = { image, tag, digest, checkedOn, note };
+  }
+  return out;
+}
+
+/**
+ * container_images を、ひな形の値にする（F-28）。道具の名前が x なら、
+ * x_image（image:tag@digest）・x_tag・x_digest・x_checked_on。
+ */
+export function containerImageValues(profiles: Profile[]): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const profile of profiles) {
+    for (const [tool, entry] of Object.entries(profile.containerImages)) {
+      values[`${tool}_image`] = `${entry.image}:${entry.tag}@${entry.digest}`;
+      values[`${tool}_tag`] = entry.tag;
+      values[`${tool}_digest`] = entry.digest;
+      values[`${tool}_checked_on`] = entry.checkedOn;
+    }
+  }
+  return values;
 }
 
 function packagesWhenField(data: Record<string, unknown>, where: string): PackagesWhen[] {
@@ -389,6 +482,7 @@ export function loadProfile(templatesDir: string, key: string): Profile {
       );
     }
   }
+  const containerImages = containerImagesField(data, where);
   const verifiedVersions = stringRecord(data, "verified_versions", where, "名前: 版");
   const versionRanges = stringRecord(data, "version_ranges", where, "名前: 範囲");
   checkVersions({
@@ -487,6 +581,7 @@ export function loadProfile(templatesDir: string, key: string): Profile {
     externalTools,
     unverified,
     compatibilityNotes,
+    containerImages,
   };
 }
 

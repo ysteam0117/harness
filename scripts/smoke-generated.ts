@@ -1,14 +1,14 @@
 // 生成したプロジェクトが実際に動くことの確かめ（#56 AC-1・AC-2、R4・R5・R9）。
 //
 // 回答の YAML（架空の値）で4通り（D1・PostgreSQL・DB なし・既定の未定）のプロジェクトを、一時的なフォルダに生成し、それぞれ
-//   npm install → npm run check → npm run build → 開発サーバー（/api/health・/・サンプルの利用者の API）→ Docker（docker compose up）
+//   npm install → npm run check（ホスト。Docker で動くセキュリティのテストを含む）→ npm run build → 開発サーバー（/api/health・/・サンプルの利用者の API）→ Docker（docker compose up。コンテナの中は npm run check:app）
 // を確かめて、起動したものはすべて止め、一時的なフォルダは消す。
 // アプリ名は実行ごとに一意（smoke-<乱数>）で、同時に実行しても、コンテナ・ボリュームが混ざらない。
 // 途中で中断（Ctrl+C・SIGTERM）しても、起動したプロセス（子孫を含む）・Docker の資源・一時的なフォルダを片付ける。
 // 時間がかかるため、npm run check とは分けて、CI（ubuntu）で実行する。手元では npm run smoke:generated で実行できる。
 //
 // 環境変数
-//   SMOKE_REQUIRE_DOCKER=1  Docker が使えないときに、PostgreSQL・Docker の確かめを飛ばさずに失敗にする（CI で使う）
+//   SMOKE_REQUIRE_DOCKER=1  Docker が使えないときに、全部の通りを飛ばさずに失敗にする（CI で使う）。Docker は、D1・DB なしの通りにも要る（npm run check のセキュリティのテストが Docker で動くため。#42）
 //   SMOKE_CASES=d1,none     実行する通りを絞る（既定はすべて）
 //   SMOKE_REQUIRE_TERRAFORM=1  terraform が使えないときに、terraform validate を飛ばさずに失敗にする（CI で使う）
 //   SMOKE_SKIP_E2E=1        E2E（Playwright。ブラウザの導入が要る）を飛ばす
@@ -147,6 +147,35 @@ export function decideTerraformStep(available: boolean, env: Env): "run" | "skip
     throw new Error("terraform が使えません（SMOKE_REQUIRE_TERRAFORM=1 のため、失敗にします）");
   }
   return "skip";
+}
+
+/**
+ * Docker を使う確かめ（ホストの npm run check のセキュリティのテスト・PostgreSQL・コンテナ）を実行するか（#42）。
+ * 品質チェック（npm run check）に、Docker で動くセキュリティのテストが入ったため、D1・DB なしの通りも Docker が要る。
+ * Docker がなければ飛ばす。SMOKE_REQUIRE_DOCKER=1 のときは失敗にする
+ */
+export function decideDockerStep(available: boolean, env: Env): "run" | "skip" {
+  if (available) return "run";
+  if (env["SMOKE_REQUIRE_DOCKER"] === "1") {
+    throw new Error("Docker が使えません（SMOKE_REQUIRE_DOCKER=1 のため、失敗にします）");
+  }
+  return "skip";
+}
+
+/**
+ * コンテナの中で実行する品質チェックの script 名。check は、Docker で動くセキュリティのテスト（npm run security）を含み、
+ * コンテナの中では動かない（ホストで実行する）ため、コンテナの中は Docker を使わない check:app にする（#42）
+ */
+export const CONTAINER_CHECK_SCRIPT = "check:app";
+
+/** PostgreSQL の検証用コンテナの中で実行する sh -c の命令 */
+export function containerCheckShellCommand(): string {
+  return `npm install && npm run ${CONTAINER_CHECK_SCRIPT}`;
+}
+
+/** D1・DB なしの backend コンテナの中で実行する npm の引数 */
+export function containerCheckArgs(): string[] {
+  return ["npm", "run", CONTAINER_CHECK_SCRIPT];
 }
 
 /** E2E の段階を実行するか（SMOKE_SKIP_E2E=1 で飛ばす） */
@@ -1503,10 +1532,11 @@ async function dockerStage(
   });
   if (c.database === "postgresql") {
     // 例のテスト（test:db）は、検証用の DB につなぐ。開発用のコンテナの db には検証用の DB がないため、
-    // 検証用のプロジェクト（npm run docker:up:test と同じ。db は検証用の DB）のコンテナの中で、npm run check を行う（#37）
+    // 検証用のプロジェクト（npm run docker:up:test と同じ。db は検証用の DB）のコンテナの中で、npm run check:app を行う（#37）。
+    // コンテナの中は、Docker を使わない check:app（セキュリティのテストを含む check は、ホストで実行した。#42）
     await runStage(
       c.id,
-      "Docker：検証用コンテナの中の npm run check（test:db を含む）",
+      "Docker：検証用コンテナの中の npm run check:app（test:db を含む）",
       async () => {
         await startTestDatabase(projectDir, registry);
         await runCommand(
@@ -1520,15 +1550,15 @@ async function dockerStage(
             "backend",
             "sh",
             "-c",
-            "npm install && npm run check",
+            containerCheckShellCommand(),
           ],
           { cwd: projectDir, timeoutMs: 1_200_000, registry },
         );
       },
     );
   } else {
-    await runStage(c.id, "Docker：コンテナの中の npm run check", async () => {
-      await docker(["exec", "-T", "backend", "npm", "run", "check"], 900_000);
+    await runStage(c.id, "Docker：コンテナの中の npm run check:app", async () => {
+      await docker(["exec", "-T", "backend", ...containerCheckArgs()], 900_000);
     });
   }
   if (c.database === "d1") {
@@ -1943,11 +1973,8 @@ async function main(): Promise<void> {
   if (cases.length === 0 && !runLocal && !runVerify)
     throw new Error("SMOKE_CASES に合う通りがありません");
 
-  const docker = dockerAvailable();
-  const requireDocker = process.env["SMOKE_REQUIRE_DOCKER"] === "1";
-  if (!docker && requireDocker) {
-    throw new Error("Docker が使えません（SMOKE_REQUIRE_DOCKER=1 のため、失敗にします）");
-  }
+  // Docker は、DB に関係なく要る（npm run check のセキュリティのテストが Docker で動くため。#42）
+  const docker = decideDockerStep(dockerAvailable(), process.env) === "run";
 
   // 組み立て（ハーネスの dist/）も、中断で止まるよう記録する
   const buildRegistry = createCleanupRegistry();
@@ -1963,7 +1990,7 @@ async function main(): Promise<void> {
 
   const failures: string[] = [];
   for (const c of cases) {
-    if (c.database === "postgresql" && !docker) {
+    if (!docker) {
       console.log(`[${c.id}] Docker が使えないため、この通りを飛ばしました`);
       continue;
     }
@@ -1979,7 +2006,7 @@ async function main(): Promise<void> {
   }
   if (only === undefined || only.includes(VERIFY_CASE_ID)) {
     for (const c of SMOKE_CASES.filter((x) => x.id === "d1" || x.id === "postgresql")) {
-      if (c.database === "postgresql" && !docker) {
+      if (!docker) {
         console.log(`[${VERIFY_CASE_ID}-${c.id}] Docker が使えないため、この通りを飛ばしました`);
         continue;
       }
@@ -1993,7 +2020,9 @@ async function main(): Promise<void> {
       }
     }
   }
-  if (runLocal) {
+  if (runLocal && !docker) {
+    console.log(`[${LOCAL_GIT_CASE_ID}] Docker が使えないため、この通りを飛ばしました`);
+  } else if (runLocal) {
     console.log(`[${LOCAL_GIT_CASE_ID}] 確かめを始めます…`);
     try {
       await runLocalGitCase(createSmokeAppName());

@@ -2,8 +2,9 @@
 #!/bin/sh
 # コミットの前の確認（GitHub を使わないプロジェクト、C-83）。
 # 1. main の上での直接のコミットを止める（取り込みのコマンド npm run merge:check だけが許される）
-# 2. 秘密情報の混入を、gitleaks があれば確かめる
-# 3. ステージしたファイルだけを、整形（Prettier）と Lint（ESLint）で確かめる
+# 2. Git に追加された秘密のファイル（.env・.dev.vars など）を止める（gitleaks の有無に関係なく。名前だけを表示し、値は見ない）
+# 3. 秘密情報の混入を、gitleaks があれば確かめる
+# 4. ステージしたファイルだけを、整形（Prettier）と Lint（ESLint）で確かめる
 # 全部の確認（npm run check）は、取り込みのコマンドで行う。このフックを外して確認を飛ばさない。
 
 stop() {
@@ -34,6 +35,23 @@ if [ -z "$staged" ]; then
   exit 0
 fi
 
+# 2. Git に追加された秘密のファイル。.env.example のような、項目の例だけのファイル（名前が .example で終わる）は許す
+# case は関数の中に置く（macOS の /bin/sh（bash 3.2）は、$( ) の中の case を正しく読めないため）
+is_secret_file() {
+  case "${1##*/}" in
+    *.example) return 1 ;;
+    .env | .env.* | .dev.vars | .dev.vars.*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+secret_files=$(printf '%s\n' "$staged" | while IFS= read -r file; do
+  if is_secret_file "$file"; then printf '%s\n' "$file"; fi
+done)
+if [ -n "$secret_files" ]; then
+  echo "$secret_files" >&2
+  stop "上のファイルは秘密のファイルです。Git に入れられません（値は表示していません）。git rm --cached <ファイル> で外し、.gitignore に入っていることを確かめてください"
+fi
+
 # 作業ファイルとステージの内容が違うと、検査した内容とコミットする内容がずれる。ずれるファイルがあれば止める
 unstaged=$(git -c core.quotepath=off diff --name-only)
 if [ -n "$unstaged" ]; then
@@ -48,18 +66,24 @@ if [ -n "$unstaged" ]; then
   fi
 fi
 
-# 2. 秘密情報の混入（gitleaks）。入っていなければ警告して続ける（README に導入の案内がある）
+# 3. 秘密情報の混入（gitleaks）。入っていなければ警告して続ける（README に導入の案内がある）
+# .gitleaks.toml のパスの除外（.env など。作業ツリーの検査だけに使う）は使わない。標準のルールと、値の目印（FAKE_SECRET_FOR_TEST）だけの設定を、環境変数で渡す
+gitleaks_config='[extend]
+useDefault = true
+
+[allowlist]
+regexes = ["FAKE_SECRET_FOR_TEST"]'
 if command -v gitleaks >/dev/null 2>&1; then
   if gitleaks git --help 2>&1 | grep -q -- '--staged'; then
-    gitleaks git --pre-commit --staged --redact --no-banner || stop "秘密情報らしいものが見つかりました。コミットを止めました（値は表示していません）"
+    GITLEAKS_CONFIG_TOML="$gitleaks_config" gitleaks git --pre-commit --staged --redact --no-banner || stop "秘密情報らしいものが見つかりました。コミットを止めました（値は表示していません）"
   else
-    gitleaks protect --staged --redact --no-banner || stop "秘密情報らしいものが見つかりました。コミットを止めました（値は表示していません）"
+    GITLEAKS_CONFIG_TOML="$gitleaks_config" gitleaks protect --staged --redact --no-banner || stop "秘密情報らしいものが見つかりました。コミットを止めました（値は表示していません）"
   fi
 else
   echo "pre-commit：警告：gitleaks が入っていないため、秘密情報の確認を飛ばしました（導入の手順は README）" >&2
 fi
 
-# 3. 整形と Lint（ステージしたファイルだけ）
+# 4. 整形と Lint（ステージしたファイルだけ）
 to_check() {
   printf '%s\n' "$staged" | grep -E "$1" || true
 }

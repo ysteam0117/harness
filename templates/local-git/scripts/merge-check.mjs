@@ -76,6 +76,7 @@ function markFile() {
 
 function runCheck() {
   // 固定のコマンドだけを渡す（Windows の npm.cmd のため shell を使う）
+  // nosemgrep: semgrep.spawn-shell-true 外からの値を含まない固定の文字列だけを渡す（Windows の npm.cmd を起動するため）
   const result = spawnSync("npm run check", { stdio: "inherit", shell: true, windowsHide: true });
   checkInterrupted(result);
   return result.status === 0;
@@ -84,6 +85,7 @@ function runCheck() {
 function installDependencies() {
   // lock がないときは、取り込む内容に含まれない lock を作らない
   const command = existsSync("package-lock.json") ? "npm ci" : "npm install --no-package-lock";
+  // nosemgrep: semgrep.spawn-shell-true command は上の2つの固定の文字列のどちらかだけ（Windows の npm.cmd を起動するため）
   const result = spawnSync(command, { stdio: "inherit", shell: true, windowsHide: true });
   checkInterrupted(result);
   return result.status === 0;

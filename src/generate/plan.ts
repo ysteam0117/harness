@@ -5,7 +5,12 @@ import { stripHarnessComments } from "./comments.js";
 import { GenerateError } from "./errors.js";
 import { checkOutputPaths } from "./paths.js";
 import type { Answers } from "../questions/answers.js";
-import { mergePackageJson, resolveProfiles, selectProfileFiles } from "./profile.js";
+import {
+  containerImageValues,
+  mergePackageJson,
+  resolveProfiles,
+  selectProfileFiles,
+} from "./profile.js";
 import { expandExamples, normalizeNewlines, renderTemplate } from "./template.js";
 
 export type BuildOutputsInput = {
@@ -33,9 +38,11 @@ function compare(a: string, b: string): number {
  * パスの順に並べ、同じ入力なら同じ結果になる。
  */
 export function buildOutputs(input: BuildOutputsInput): BuildOutputsResult {
-  const { templatesDir, values } = input;
+  const { templatesDir } = input;
   const answers = input.answers ?? {};
   const profiles = resolveProfiles(templatesDir, input.profiles);
+  // プロファイルの container_images（Docker のイメージの版・ダイジェスト）を、{{semgrep_image}} などの値にする。渡された値が優先
+  const values = { ...containerImageValues(profiles), ...input.values };
   const sortedProfiles = [...profiles].sort((a, b) => compare(a.key, b.key));
 
   const outputs: OutputFile[] = buildAiOutputs({

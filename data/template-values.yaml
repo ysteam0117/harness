@@ -300,6 +300,12 @@ dependency_update_row:
     value: "| 依存関係の更新の確認 | `npm outdated` | 定期的に | 更新は、バージョンを確かめてから、Issueにして取り込む |"
   - value: "| 依存関係の更新の通知 | Dependabot | 常時 | 更新のPRは、バージョンを確かめてから取り込む |"
 
+# docs/testing/security.md の、依存ライブラリの更新の通知の節の本文（#42）
+security_dependabot_section:
+  - when: { answer: repository, equals: local }
+    value: GitHub を使わない（手元の Git だけの）ため、Dependabot は使わない。依存の更新は、定期的に `npm outdated` で確かめ、Issue にして、固定したまま動作を確かめてから取り込む（C-62）。
+  - value: "`.github/dependabot.yml` が、npm・GitHub Actions・Docker Compose の依存を、毎週確かめて、更新の PR を作る。npm の本番の依存は、1つの PR にまとめる。更新の PR は、品質チェックを通したうえで、固定したまま動作を確かめてから取り込む（C-62）。"
+
 # GitHub に作るリポジトリの公開範囲（gh repo create の引数）
 repo_visibility_flag:
   - when: { answer: visibility, equals: public }
@@ -397,3 +403,34 @@ auth_undecided_rows:
       | 3 | パスワード再設定などのメールの送信サービス | 要件定義 |
       | 4 | ログイン試行の制限の値（仮：5回で1分から倍々、上限15分） | 要件定義 |
   - value: ""
+
+# API の仕様書と実際のルートの突き合わせのテスト（backend/src/openapi.test.ts、#42）。index.ts と同じルートを、DB につなぐ処理を使わない代役で組み立てる。
+# 値は先頭の改行を含む（import の行の直後に差し込むため。何も足さないときは空）
+openapi_test_imports:
+  - when: { answer: auth, in: [app, oidc, both] }
+    value: "\nimport { authRoutes } from \"./routes/auth-session\";\nimport { sampleUserRoutes } from \"./routes/sample-users\";"
+  - when: { answer: database, notEquals: none }
+    value: "\nimport { sampleUserRoutes } from \"./routes/sample-users\";"
+  - value: ""
+
+openapi_test_app:
+  - when: { answer: auth, in: [app, oidc, both] }
+    value: |-
+      // DB につなぐ処理は使わない代役（このテストは、ルートの組み立てだけを確かめる）
+      const unusedDb = () => Promise.reject(new Error("DB は使いません"));
+
+      const app = createApp({
+        routes: [
+          ...authRoutes(unusedDb),
+          { path: "/api/sample-users", app: sampleUserRoutes(unusedDb) },
+        ],
+      });
+  - when: { answer: database, notEquals: none }
+    value: |-
+      // DB につなぐ処理は使わない代役（このテストは、ルートの組み立てだけを確かめる）
+      const unusedDb = () => Promise.reject(new Error("DB は使いません"));
+
+      const app = createApp({
+        routes: [{ path: "/api/sample-users", app: sampleUserRoutes(unusedDb) }],
+      });
+  - value: "const app = createApp();"

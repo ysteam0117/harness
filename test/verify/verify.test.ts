@@ -77,26 +77,46 @@ function input(
 }
 
 describe("#57 R1：D1・DB なし（npm install → npm run check）", () => {
-  it("通る：install → check の順に呼び、Docker は確かめず、環境ファイルを作る", async () => {
+  it("通る：Docker を確かめてから、install → check の順に呼び、環境ファイルを作る（#42：セキュリティのテストに Docker が要る）", async () => {
     const project = makeProject();
-    const f = fakeRunner();
-    let dockerChecked = 0;
+    const order: string[] = [];
+    const f = fakeRunner((key) => {
+      order.push(key);
+      return {};
+    });
     const result = await verifyProject(
       input(project, f.runner, {
         dockerAvailable: async () => {
-          dockerChecked++;
+          order.push("docker info");
           return true;
         },
       }),
     );
+    expect(order).toEqual(["docker info", "install", "run check"]);
     expect(f.keys()).toEqual(["install", "run check"]);
-    expect(dockerChecked).toBe(0);
     expect(result).toMatchObject({
       status: "passed",
       envCreated: [".env.development", ".env.test"],
     });
     expect(existsSync(path.join(project.dir, ".env.test"))).toBe(true);
   });
+
+  it.each(["d1", "none"] as const)(
+    "#42：%s でも Docker が使えないときは、npm を1回も呼ばず、環境ファイルも作らず、理由（セキュリティのテスト）を返す",
+    async (database) => {
+      const project = makeProject();
+      const f = fakeRunner();
+      const result = await verifyProject(
+        input(project, f.runner, { database, dockerAvailable: async () => false }),
+      );
+      expect(f.calls).toHaveLength(0);
+      expect(result.status).toBe("skipped");
+      if (result.status !== "skipped") throw new Error("skipped のはず");
+      expect(result.reason).toContain("Docker");
+      expect(result.reason).toContain("セキュリティのテスト");
+      expect(existsSync(path.join(project.dir, ".env.test"))).toBe(false);
+    },
+  );
 
   it("install が失敗したら check を呼ばない。失敗した手順は install", async () => {
     const f = fakeRunner((key) => (key === "install" ? { exitCode: 1 } : {}));

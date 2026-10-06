@@ -16,6 +16,7 @@ reports
 .agents
 .codex
 .github
+.semgrep
 AGENTS.md
 CLAUDE.md
 README.md

@@ -11,6 +11,8 @@
 | 結合テスト | [integration.md](integration.md) |
 | E2E | [e2e.md](e2e.md) |
 | ミューテーションテスト | [mutation.md](mutation.md) |
+| セキュリティのテスト（Semgrep・gitleaks・OSV-Scanner・Dependabot） | [security.md](security.md) |
+| API の異常な入力のテスト（Schemathesis） | [schemathesis.md](schemathesis.md) |
 | ペネトレーションテスト | [pentest-plan.md](pentest-plan.md) |
 
 ## 共通のルール

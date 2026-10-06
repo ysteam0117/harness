@@ -53,7 +53,7 @@ export interface VerifyInput {
   database: "d1" | "postgresql" | "none";
   versions: VersionResult;
   runner: CommandRunner;
-  /** Docker が使えるか（PostgreSQL のときだけ呼ぶ） */
+  /** Docker が使えるか（DB に関係なく、npm を呼ぶ前に呼ぶ。セキュリティのテストが Docker で動くため） */
   dockerAvailable: () => Promise<boolean>;
   /** 中断の合図。後始末には渡さない（後始末は止めない） */
   signal: AbortSignal;
@@ -73,7 +73,7 @@ export const DEFAULT_TIMEOUTS = {
 } as const;
 
 export const NO_DOCKER_REASON =
-  "PostgreSQL の動作確認には Docker が要りますが、Docker を使えなかったため、動作確認を飛ばしました（npm は呼んでいません）。Docker を起動して、生成した場所で npm install と npm run check を実行してください";
+  "動作確認には Docker が要ります（品質チェックのセキュリティのテストと、PostgreSQL の検証用の DB が Docker で動きます）が、Docker を使えなかったため、動作確認を飛ばしました（npm は呼んでいません）。Docker を起動して、生成した場所で npm install と npm run check を実行してください";
 
 const CLEANUP_FAILED =
   "検証用の PostgreSQL（Docker）を止められませんでした。生成した場所で npm run docker:down:test を実行してください";
@@ -136,7 +136,7 @@ export function pickSuspects(
 }
 
 /**
- * 生成したプロジェクトで、npm install → （PostgreSQL のとき）検証用 DB の起動 → npm run check → 検証用 DB の停止を行う。
+ * 生成したプロジェクトで、Docker の確認 → npm install → （PostgreSQL のとき）検証用 DB の起動 → npm run check → 検証用 DB の停止を行う。
  * install が失敗したら DB は起動しない。検証用 DB の停止は、起動の前に登録し、成功・失敗・中断のどれでも1回だけ、
  * 中断の合図とは別の時間切れだけで実行する。出力の秘密の値は伏せ字にし、出力から拾う名前は既知の一覧と照合する。
  */
@@ -146,12 +146,11 @@ export async function verifyProject(input: VerifyInput): Promise<VerifyResult> {
   const progress = input.onProgress ?? (() => undefined);
   const needsDb = input.database === "postgresql";
 
-  // Docker の確認は、npm を呼ぶ前に行う（使えなければ、何も呼ばずに飛ばす）
-  if (needsDb) {
-    const available = await input.dockerAvailable();
-    if (signal.aborted) return { status: "interrupted", cleanupFailures: [] };
-    if (!available) return { status: "skipped", reason: NO_DOCKER_REASON };
-  }
+  // Docker の確認は、DB に関係なく、npm を呼ぶ前に行う（使えなければ、何も呼ばずに飛ばす）。
+  // npm run check のセキュリティのテスト（Semgrep・gitleaks・OSV-Scanner）が Docker で動くため（#42）
+  const available = await input.dockerAvailable();
+  if (signal.aborted) return { status: "interrupted", cleanupFailures: [] };
+  if (!available) return { status: "skipped", reason: NO_DOCKER_REASON };
 
   let env: Awaited<ReturnType<typeof ensureEnvFiles>>;
   try {

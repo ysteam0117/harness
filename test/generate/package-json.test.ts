@@ -284,7 +284,9 @@ describe("#34 R3: package.json の組み立て（実際のプロファイル）"
 
   it("#34 R3: scripts（check など）と overrides は、プロファイルの package_json から入る", async () => {
     const { pkg } = await build({ database: "d1" });
-    expect(pkg.scripts["check"]).toContain("npm run lint");
+    // #42 R1：これまでの check の中身は check:app に移った
+    expect(pkg.scripts["check"]).toBe("npm run check:app && npm run security");
+    expect(pkg.scripts["check:app"]).toContain("npm run lint");
     expect(pkg.scripts["env:check"]).toBe("node scripts/env-check.mjs");
     expect(pkg).toHaveProperty(["overrides"]);
   });

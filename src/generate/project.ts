@@ -14,9 +14,10 @@ import { judge } from "./judgment.js";
 import { selectKnowledge } from "./knowledge.js";
 import { buildOutputs } from "./plan.js";
 import { buildIcons } from "./icons.js";
+import { buildOpenApi } from "./openapi.js";
 import { buildPackageJson } from "./package-json.js";
 import { checkOutputPaths } from "./paths.js";
-import { resolveProfiles } from "./profile.js";
+import { containerImageValues, resolveProfiles } from "./profile.js";
 import { rolesFor } from "./roles.js";
 import { normalizeNewlines, renderTemplate } from "./template.js";
 import { buildEnvExample, buildValues } from "./values.js";
@@ -76,7 +77,16 @@ const TEMPLATE_FILES: {
   { source: "docs/adr/0000-template.md", destination: "docs/adr/0000-template.md" },
   // 設計書のひな形（C-81）。プロジェクトのもの（managed ではない）。実装したPRの中で、書いて更新する
   { source: "docs/design/overview.md", destination: "docs/design/overview.md" },
-  ...["README", "quality", "unit", "integration", "e2e", "mutation"].map((name) => ({
+  ...[
+    "README",
+    "quality",
+    "unit",
+    "integration",
+    "e2e",
+    "mutation",
+    "security",
+    "schemathesis",
+  ].map((name) => ({
     source: `docs/testing/${name}.md`,
     destination: `docs/testing/${name}.md`,
   })),
@@ -89,6 +99,12 @@ const TEMPLATE_FILES: {
   {
     source: ".github/pull_request_template.md",
     destination: ".github/pull_request_template.md",
+    when: GITHUB_REPOSITORY,
+  },
+  // 依存ライブラリの更新の通知と PR（Dependabot、C-82）。GitHub のときだけ
+  {
+    source: ".github/dependabot.yml",
+    destination: ".github/dependabot.yml",
     when: GITHUB_REPOSITORY,
   },
   // GitHub を使わない（手元の Git だけ）場合の、Issue・フック・取り込みのコマンド・改善の提案の下書き（C-83）
@@ -134,6 +150,8 @@ const TEMPLATE_FILES: {
   // API の最初のひな形：Controller（routes）→ Service（services）の層（C-03）。DB ありの入口（index.ts）は data-access/drizzle が出す
   { source: "project/backend/app.ts", destination: "backend/src/app.ts" },
   { source: "project/backend/config.ts", destination: "backend/src/config.ts" },
+  // API の仕様書と実際のルートの突き合わせ（#42）。仕様書（docs/api/openapi.json）は下で組み立てる
+  { source: "project/backend/openapi.test.ts", destination: "backend/src/openapi.test.ts" },
   { source: "project/backend/health.route.ts", destination: "backend/src/routes/health.ts" },
   {
     source: "project/backend/health.route.test.ts",
@@ -196,6 +214,11 @@ export function isManagedPath(p: string): boolean {
     p === ".codex/rules/default.rules" ||
     p.startsWith(".github/ISSUE_TEMPLATE/") ||
     p === ".github/pull_request_template.md" ||
+    // セキュリティのテスト（C-82）。設定・ルール・実行のスクリプト・依存の更新の設定は、ハーネスの更新で置き換える（docs/api/openapi.json はプロジェクトのもの）
+    p === ".github/dependabot.yml" ||
+    p === ".gitleaks.toml" ||
+    p.startsWith(".semgrep/") ||
+    p === "scripts/security-check.mjs" ||
     // Skill の書き方の例（良い例・悪い例のテスト）。Skill が差し込むため、ハーネスの更新で置き換える（F-24）
     p.startsWith("backend/src/rules-examples/") ||
     p.startsWith("frontend/src/rules-examples/") ||
@@ -303,6 +326,8 @@ export function buildProject(input: BuildProjectInput): { files: ProjectFile[] }
   }
   const values = buildValues({ answers, judgment, knowledge, nodeVersion: nodeEntry.version });
   values["license_year"] = String(now.getFullYear());
+  // 道具の Docker のイメージ（版・ダイジェスト）。プロファイルの container_images（F-24）から、{{semgrep_image}} などとして差し込む
+  Object.assign(values, containerImageValues(profiles));
 
   // AI向けの出力・プロファイルの files
   const built = buildOutputs({ templatesDir, ais, profiles: profileKeys, values, answers });
@@ -332,6 +357,12 @@ export function buildProject(input: BuildProjectInput): { files: ProjectFile[] }
     content: buildWranglerJsonc({ profiles, answers, values }),
   });
   outputs.push({ path: ".env.example", content: buildEnvExample(answers) });
+
+  // API の仕様書（OpenAPI）。実際に組み込まれるルートの分だけを書く。プロジェクトのもの（managed ではない）
+  outputs.push({
+    path: "docs/api/openapi.json",
+    content: buildOpenApi({ templatesDir, answers, values }),
+  });
 
   outputs.push({ path: "docs/tech-stack.md", content: renderTechStack(versions, profiles) });
   if (acceptedWarnings.length > 0) {

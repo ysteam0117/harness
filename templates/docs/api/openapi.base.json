@@ -1,0 +1,71 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "{{app_name}} API",
+    "version": "0.1.0",
+    "description": "API の仕様書（OpenAPI 3.1）。API を足す・変えるときは、同じ変更の中でこの仕様書も直す（backend/src/openapi.test.ts が、実際のルートと食い違うと失敗にする）。Schemathesis（docs/testing/schemathesis.md）が、この仕様書から異常な入力を作って確かめる。"
+  },
+  "servers": [{ "url": "http://localhost:5173", "description": "開発（npm run dev）" }],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "死活監視・動作確認",
+        "responses": {
+          "200": {
+            "description": "動いている",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Health" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Health": {
+        "type": "object",
+        "required": ["status", "appEnv"],
+        "properties": {
+          "status": { "type": "string", "const": "ok" },
+          "appEnv": { "type": "string", "description": "環境の名前（development・test・production）" }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "description": "エラーの共通の形（error-handler.ts）。code は AppError のコード（VALIDATION_ERROR など）",
+        "required": ["code", "message"],
+        "properties": {
+          "code": { "type": "string" },
+          "message": { "type": "string" },
+          "fields": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "入力が正しくない項目の名前（VALIDATION_ERROR のとき）"
+          }
+        }
+      }
+    },
+    "responses": {
+      "ForbiddenOrigin": {
+        "description": "送信元（Origin）が許可されていない（状態を変える要求。C-28）",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      },
+      "ValidationError": {
+        "description": "入力が正しくない（VALIDATION_ERROR）",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      }
+    }
+  }
+}

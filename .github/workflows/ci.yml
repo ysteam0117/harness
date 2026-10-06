@@ -1,9 +1,9 @@
+# GitHub Actions の無料枠がなくなったため、push・PR では動かさず、手動（Actions の画面の「Run workflow」）だけにする（利用者の判断）。
+# 品質チェックは手元で npm run check・npm run pack:check を実行して確かめる。
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read

@@ -137,7 +137,12 @@ export function expectedManaged(p: string): boolean {
     p === ".github/pull_request_template.md" ||
     p.startsWith("backend/src/rules-examples/") ||
     p.startsWith("frontend/src/rules-examples/") ||
+    // セキュリティのテスト（#42）
+    p === ".github/dependabot.yml" ||
+    p === ".gitleaks.toml" ||
+    p.startsWith(".semgrep/") ||
     [
+      "scripts/security-check.mjs",
       "scripts/env-check.mjs",
       "scripts/local-env.ts",
       "scripts/run-local.ts",

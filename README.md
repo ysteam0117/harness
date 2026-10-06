@@ -168,7 +168,8 @@ harness create --answers answers.yaml --yes --verify
 - 通ると、`docs/tech-stack.md` の末尾に「動作確認」の節（日付つき）を足します。何度確かめても、節は1つです
 - 失敗しても、生成したファイルは残します。失敗した手順・品質チェック（script 名）・原因の候補のパッケージ・検証済みの版に戻す方法を表示します
 - `.env.development` と `.env.test` が無いときは、`.env.example` の項目から、架空の値で作ります（`.gitignore` の対象。値は表示しません）。すでにあるときは変えません
-- PostgreSQL のときは、Docker で検証用の DB を起動して確かめ、終わったら止めます。Docker が使えないときは、確かめを飛ばして理由を表示します
+- 品質チェック（`npm run check`）のセキュリティのテスト（Semgrep・gitleaks・OSV-Scanner）が Docker で動くため、DB に関係なく、先に Docker を確かめます。Docker が使えないときは、npm を呼ばずに、確かめを飛ばして理由を表示します（#42）
+- PostgreSQL のときは、Docker で検証用の DB を起動して確かめ、終わったら止めます
 - 終了コード：通った・飛ばした・対話で「はい」を選んで失敗は 0、`--verify` を付けて失敗は 1、中断（Ctrl+C）は 130（生成物は残します）
 
 ### 生成されるもの
@@ -271,9 +272,9 @@ npm ci               # ライブラリのインストール（lock ファイル�
 npm run check        # Lint・型チェック・整形の確認・共通仕様の対応の確認・テスト・脆弱性の確認
 npm run pack:check   # 配布物の確認（組み立て・パック・インストール・起動）
 npm run build        # src/ を dist/ に組み立てる
-npm run smoke:generated  # 生成したプロジェクトの動作の確認（D1・PostgreSQL・DB なしの 3 通りを生成し、npm install・npm run check・npm run build・開発サーバー・Docker を確かめる。時間がかかり、Docker が必要）
+npm run smoke:generated  # 生成したプロジェクトの動作の確認（D1・PostgreSQL・DB なしの 3 通りを生成し、npm install・npm run check（ホスト）・npm run build・開発サーバー・Docker（コンテナの中は npm run check:app）を確かめる。時間がかかり、Docker が必要）
 ```
 
-CI（GitHub Actions）は、push・PR のたびに、Windows・macOS・Linux で `npm run check` と `npm run pack:check` を実行します。生成したプロジェクトの動作の確認（smoke）は時間がかかるため、手動で実行するワークフロー（`.github/workflows/smoke.yml`。Actions の画面の「Run workflow」）に分けています。smoke のスクリプトの単体テストも、`npm run check` から外し、`npm run test:smoke` で実行します。
+CI（GitHub Actions）は、無料枠がないため、push・PR では動かさず、手動（Actions の画面の「Run workflow」）だけにしています（Windows・macOS・Linux で `npm run check` と `npm run pack:check` を実行します）。品質チェックは、手元で `npm run check`・`npm run pack:check` を実行して確かめます。生成したプロジェクトの動作の確認（smoke）は時間がかかるため、手動で実行するワークフロー（`.github/workflows/smoke.yml`。Actions の画面の「Run workflow」）に分けています。smoke のスクリプトの単体テストも、`npm run check` から外し、`npm run test:smoke` で実行します。
 
-`npm run smoke:generated` は、環境変数 `SMOKE_CASES=d1,none` で通りを絞れます。Docker が使えない手元では、PostgreSQL の通りと Docker の確かめを飛ばします（`SMOKE_REQUIRE_DOCKER=1` で失敗にできます）。途中で中断（Ctrl+C）しても、起動したプロセス・Docker のコンテナとボリューム・一時的なフォルダを片付けます。詳細は[動くアプリの土台](docs/design/skeleton.md)を参照してください。
+`npm run smoke:generated` は、環境変数 `SMOKE_CASES=d1,none` で通りを絞れます。生成したプロジェクトの `npm run check` が Docker で動くセキュリティのテストを含むため、Docker は D1・DB なしの通りにも要ります。Docker が使えない手元では、全部の通りを飛ばします（`SMOKE_REQUIRE_DOCKER=1` で失敗にできます）。途中で中断（Ctrl+C）しても、起動したプロセス・Docker のコンテナとボリューム・一時的なフォルダを片付けます。詳細は[動くアプリの土台](docs/design/skeleton.md)を参照してください。

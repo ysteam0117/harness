@@ -14,7 +14,7 @@
 ### 1 Issueの進め方
 
 Skill「opus-plan-sonnet-impl」に従う：Opusで計画 → Codexで計画レビュー（最大3回）→ Sonnetで実装 → Codexでコードレビュー（最大3回）→ 品質チェック（`npm run check`）・smoke。
-その後、コミット・プッシュ・PR作成・CI成功の確認・マージ・mainへのpullまで行う。
+その後、コミット・プッシュ・PR作成・マージ・mainへのpullまで行う。GitHub Actions の無料枠がないため CI は使わない（2026-10-07、利用者の判断）。マージの前の確認は、手元の npm run check・npm run test:smoke（と必要に応じて npm run pack:check・smoke）で行う。
 
 ### 次のIssueへの自動着手条件
 
@@ -32,7 +32,7 @@ Skill「opus-plan-sonnet-impl」に従う：Opusで計画 → Codexで計画レ�
 - 新しい依存パッケージの追加など、設計原則に抵触しうる変更が必要になったとき
 - 要件に「要調査」「未検証」と明記された項目に着手するとき
 - レビューを3回重ねても重大な指摘が残るとき
-- CIが失敗し、原因が今回の変更の範囲外にあるとき
+- 手元の品質チェックが失敗し、原因が今回の変更の範囲外にあるとき
 
 ---
 

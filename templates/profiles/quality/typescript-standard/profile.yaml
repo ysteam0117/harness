@@ -27,7 +27,13 @@ compatibility_notes:
   - "npm audit の合否は本番の依存（--omit=dev）で判定する。開発用の道具の脆弱性は記録して更新の判断に使う"
 package_json:
   scripts:
-    check: "npm run test:safety && npm run lint && npm run typecheck && npm run format:check && npm run deps:check && npm run dup:check && npm test && npm run audit:prod"
+    # check は、Docker を使わない check:app（コンテナの中でも動く）に、Docker で動くセキュリティのテスト（security）を足したもの。ホストで実行する（C-61・C-82）
+    check: "npm run check:app && npm run security"
+    check:app: "npm run test:safety && npm run lint && npm run typecheck && npm run format:check && npm run deps:check && npm run dup:check && npm test && npm run audit:prod"
+    security: node scripts/security-check.mjs
+    security:semgrep: node scripts/security-check.mjs semgrep
+    security:secrets: node scripts/security-check.mjs secrets
+    security:osv: node scripts/security-check.mjs osv
     test:safety: node scripts/test-safety.mjs
     lint: "eslint ."
     typecheck: "tsc -p ."
@@ -41,6 +47,34 @@ package_json:
   allowScripts:
     esbuild: true
     workerd: true
+# npm で入れない道具（Docker の公式イメージ）。tag とダイジェストで固定する（C-62）。値は scripts/security-check.mjs と docs/testing/ に {{名前_image}} などで差し込む。
+# 確かめ方：docker pull <image>:<tag> で取得し、docker inspect --format '{{json .RepoDigests}}' <image>:<tag> のダイジェストを写す。--version で版を確かめる。
+# 更新するときも同じ手順で確かめる（Dependabot は、このイメージを更新しない。手で更新する）。
+container_images:
+  semgrep:
+    image: semgrep/semgrep
+    tag: "1.179.0"
+    digest: "sha256:93963d9295a366f59e4850127b1550400ee7b388f04fe144e4a1f6325d96e01b"
+    checked_on: "2026-10-06"
+    note: "docker pull semgrep/semgrep:1.179.0 で取得し、docker inspect の RepoDigests でダイジェストを確かめた。semgrep --version は 1.179.0。GitHub の最新の安定版の版（Docker Hub の最新の tag は 1.179.0 と latest）"
+  gitleaks:
+    image: zricethezav/gitleaks
+    tag: "v8.30.1"
+    digest: "sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f"
+    checked_on: "2026-10-06"
+    note: "docker pull zricethezav/gitleaks:v8.30.1 で取得し、docker inspect の RepoDigests でダイジェストを確かめた。gitleaks version は v8.30.1（GitHub の最新の版）"
+  osv_scanner:
+    image: ghcr.io/google/osv-scanner
+    tag: "v2.6.0"
+    digest: "sha256:afd838850ac1a0fcc15ff4a041dc9ba11123c3f0d2666217a5f0fcf9222b55fa"
+    checked_on: "2026-10-06"
+    note: "docker pull ghcr.io/google/osv-scanner:v2.6.0 で取得し、docker inspect の RepoDigests でダイジェストを確かめた。osv-scanner --version は 2.6.0（GitHub の最新の版）"
+  schemathesis:
+    image: schemathesis/schemathesis
+    tag: "4.29.3"
+    digest: "sha256:39dfcd9f15942fcf760187ae1b7e3875d5ca0ae81afa51dbd184761d127a7fde"
+    checked_on: "2026-10-06"
+    note: "docker pull schemathesis/schemathesis:4.29.3 で取得し、docker inspect の RepoDigests でダイジェストを確かめた。schemathesis --version は 4.29.3（GitHub の最新の版。Docker Hub の stable の tag と同じ）"
 skill_name: quality-tools
 files:
   files/tsconfig.json: tsconfig.json
@@ -48,3 +82,17 @@ files:
   files/dependency-cruiser.cjs: .dependency-cruiser.cjs
   files/stryker.config.json: stryker.config.json
   files/jscpd.json: .jscpd.json
+  # セキュリティのテスト（C-82）。Semgrep のルールは、公開のルールから選んだもの（出どころ・版・ライセンスは各ファイルの先頭と NOTICE.md）
+  files/security-check.mjs: scripts/security-check.mjs
+  files/gitleaks.toml: .gitleaks.toml
+  files/semgrep/NOTICE.md: .semgrep/NOTICE.md
+  files/semgrep/javascript-browser-security-dom-based-xss.yaml: .semgrep/javascript-browser-security-dom-based-xss.yaml
+  files/semgrep/javascript-browser-security-insecure-document-method.yaml: .semgrep/javascript-browser-security-insecure-document-method.yaml
+  files/semgrep/javascript-browser-security-insecure-innerhtml.yaml: .semgrep/javascript-browser-security-insecure-innerhtml.yaml
+  files/semgrep/javascript-jose-security-jwt-none-alg.yaml: .semgrep/javascript-jose-security-jwt-none-alg.yaml
+  files/semgrep/javascript-jsonwebtoken-security-jwt-none-alg.yaml: .semgrep/javascript-jsonwebtoken-security-jwt-none-alg.yaml
+  files/semgrep/javascript-lang-security-audit-code-string-concat.yaml: .semgrep/javascript-lang-security-audit-code-string-concat.yaml
+  files/semgrep/javascript-lang-security-audit-dangerous-spawn-shell.yaml: .semgrep/javascript-lang-security-audit-dangerous-spawn-shell.yaml
+  files/semgrep/javascript-lang-security-audit-spawn-shell-true.yaml: .semgrep/javascript-lang-security-audit-spawn-shell-true.yaml
+  files/semgrep/javascript-lang-security-detect-child-process.yaml: .semgrep/javascript-lang-security-detect-child-process.yaml
+  files/semgrep/typescript-react-security-react-insecure-request.yaml: .semgrep/typescript-react-security-react-insecure-request.yaml
