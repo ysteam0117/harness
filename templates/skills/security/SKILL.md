@@ -61,10 +61,10 @@ description: セキュリティのルール。認証・認可・セッション�
 
 ## APIの仕様書（OpenAPI）
 
-- APIを足す・消す・変えるときは、同じ変更の中で、API仕様書（`docs/api/openapi.json`）も書く・直す。仕様書に、パス・メソッド・入力（zodの検証と同じ制約）・応答（成功とエラー）を書く
+- APIを足す・消す・変えるときは、同じ変更の中で、API仕様書（{{api_spec_doc}}）も書く・直す。仕様書に、パス・メソッド・入力（zodの検証と同じ制約）・応答（成功とエラー）を書く
 - 状態を変える操作は、送信元（`Origin`）が許可されていないときの403を、認証が必要なAPIは、未認証の401を、仕様書に書く
-- 実際のルートと仕様書の食い違いは、`backend/src/openapi.test.ts`が失敗にする。ルートを`backend/src/index.ts`に足したら、このテストの組み立ても同じにする
-- 仕様書は、Schemathesis（異常な入力を自動で作る。`docs/testing/schemathesis.md`）の入力になる。仕様書が実際のAPIと違うと、確かめた結果が信用できなくなる
+- {{api_spec_test_rule}}
+- 仕様書は、Schemathesis（異常な入力を自動で作る。{{schemathesis_doc}}）の入力になる。仕様書が実際のAPIと違うと、確かめた結果が信用できなくなる
 
 ## CSRF・HTTPメソッド・Cookie
 

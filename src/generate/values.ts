@@ -18,8 +18,8 @@ export interface BuildValuesInput {
   nodeVersion?: string;
 }
 
-type Choice = { when?: When; value: string };
-type Definition = string | Choice[];
+export type Choice = { when?: When; value: string };
+export type Definition = string | Choice[];
 
 const VALUES_FILE = "template-values.yaml";
 const ENV_FILE = "env-items.yaml";
@@ -27,15 +27,14 @@ const NAME_RE = /^[a-z][a-z0-9_]*$/;
 
 let cachedDefinitions: Record<string, Definition> | undefined;
 
-function loadDefinitions(): Record<string, Definition> {
-  if (cachedDefinitions) return cachedDefinitions;
-  const doc = readDataYaml(VALUES_FILE);
+/** 「名前: 値」または「名前: [- when / value の並び]」の YAML を読んで、定義にする（label はエラーの文に入れるファイルの名前） */
+export function parseValueDefinitions(doc: unknown, label: string): Record<string, Definition> {
   if (!isPlainObject(doc)) {
-    throw new GenerateError(`data/${VALUES_FILE}：「名前: 値」の形で書いてください`);
+    throw new GenerateError(`${label}：「名前: 値」の形で書いてください`);
   }
   const out: Record<string, Definition> = {};
   for (const [name, raw] of Object.entries(doc)) {
-    const at = `data/${VALUES_FILE} の ${name}`;
+    const at = `${label} の ${name}`;
     if (!NAME_RE.test(name)) {
       throw new GenerateError(`${at}：名前は英小文字・数字・_ で書いてください`);
     }
@@ -65,8 +64,38 @@ function loadDefinitions(): Record<string, Definition> {
         : { when: parseWhen(item["when"], where), value };
     });
   }
-  cachedDefinitions = out;
   return out;
+}
+
+/** 定義から、回答に合う値を選ぶ。合う値がなければ GenerateError（skipUnmatched が真なら、その名前を飛ばす） */
+export function chooseValues(
+  defs: Record<string, Definition>,
+  answers: Answers,
+  label: string,
+  skipUnmatched = false,
+): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const [name, def] of Object.entries(defs)) {
+    if (typeof def === "string") {
+      values[name] = def;
+      continue;
+    }
+    const chosen = def.find((c) => whenMatches(c.when, answers));
+    if (!chosen) {
+      if (skipUnmatched) continue;
+      throw new GenerateError(
+        `${label} の ${name}：この回答に合う値がありません（最後に、when のない行を書いてください）`,
+      );
+    }
+    values[name] = chosen.value;
+  }
+  return values;
+}
+
+function loadDefinitions(): Record<string, Definition> {
+  if (cachedDefinitions) return cachedDefinitions;
+  cachedDefinitions = parseValueDefinitions(readDataYaml(VALUES_FILE), `data/${VALUES_FILE}`);
+  return cachedDefinitions;
 }
 
 interface EnvItem {
@@ -285,19 +314,7 @@ export function buildValues(input: BuildValuesInput): Record<string, string> {
   const knowledge = input.knowledge ?? selectKnowledge(answers);
   const values: Record<string, string> = {};
 
-  for (const [name, def] of Object.entries(loadDefinitions())) {
-    if (typeof def === "string") {
-      values[name] = def;
-      continue;
-    }
-    const chosen = def.find((c) => whenMatches(c.when, answers));
-    if (!chosen) {
-      throw new GenerateError(
-        `data/${VALUES_FILE} の ${name}：この回答に合う値がありません（最後に、when のない行を書いてください）`,
-      );
-    }
-    values[name] = chosen.value;
-  }
+  Object.assign(values, chooseValues(loadDefinitions(), answers, `data/${VALUES_FILE}`));
 
   values["app_name"] = answers.app_name;
   values["auth_method"] = labelOf("auth", answers.auth);

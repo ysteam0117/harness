@@ -11,8 +11,8 @@ description: フロントエンド（React・TypeScript）の設計・実装・�
 
 ## 書き方の良い例・悪い例
 
-- 良い例・悪い例のコード（サーバーのデータの扱い・更新後の取り直し・4つの状態・フォーム・API通信・ログ）は、選んだライブラリのSkill（`frontend-state`・`http-client-axios`・`logger`）に載せている。コードを書く前に、変更する部分のSkillを読み、良い例の書き方に合わせる
-- ここには例を置かない（二重に持たない）。例はテスト（`frontend/src/rules-examples/`・`backend/src/rules-examples/logger.test.ts`）で動作を確かめてあり、消さない
+- 良い例・悪い例のコード（サーバーのデータの扱い・更新後の取り直し・4つの状態・フォーム・API通信・ログ）は、選んだライブラリのSkill（{{frontend_example_skills}}）に載せている。コードを書く前に、変更する部分のSkillを読み、良い例の書き方に合わせる
+- {{frontend_examples_note}}
 
 ## ディレクトリ構成
 

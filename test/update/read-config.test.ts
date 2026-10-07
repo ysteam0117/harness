@@ -108,3 +108,40 @@ describe("#35 config.yaml の読み込み", () => {
     expect(parseConfig(text(doc)).answers).not.toHaveProperty("check_location");
   });
 });
+
+describe("#15 R2: mode と marked_files の読み込み", () => {
+  it("#15 R2: mode が無い記録は create として読む（後方互換）。marked_files は空", async () => {
+    const doc = await validDoc();
+    delete doc["mode"];
+    const c = parseConfig(text(doc));
+    expect(c.mode).toBe("create");
+    expect(c.markedFiles).toEqual([]);
+  });
+
+  it.each(["create", "update", "adopt"])("#15 R2: mode: %s を受け付ける", async (mode) => {
+    expect(parseConfig(text({ ...(await validDoc()), mode })).mode).toBe(mode);
+  });
+
+  it("#15 R2: 知らない mode は ConfigError", async () => {
+    const base = await validDoc();
+    expect(() => parseConfig(text({ ...base, mode: "other" }))).toThrow(ConfigError);
+  });
+
+  it("#15 R2: marked_files を読む（管理するファイルの記録にあるものだけ）", async () => {
+    const doc = {
+      ...(await validDoc()),
+      mode: "adopt",
+      managed_files: { "CLAUDE.md": "a".repeat(64), "AGENTS.md": "b".repeat(64) },
+      marked_files: ["AGENTS.md", "CLAUDE.md"],
+    };
+    expect(parseConfig(text(doc)).markedFiles).toEqual(["AGENTS.md", "CLAUDE.md"]);
+  });
+
+  it("#15 R2: marked_files が一覧でない・使えないパスなら ConfigError", async () => {
+    const base = await validDoc();
+    expect(() => parseConfig(text({ ...base, marked_files: "AGENTS.md" }))).toThrow(ConfigError);
+    expect(() => parseConfig(text({ ...base, marked_files: ["../outside.md"] }))).toThrow(
+      ConfigError,
+    );
+  });
+});

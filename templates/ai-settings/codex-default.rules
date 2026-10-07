@@ -13,7 +13,7 @@ prefix_rule(
 prefix_rule(
     pattern = [["cat", "type", "more", "less", "head", "tail", "Get-Content"], [".env", ".env.development", ".env.test", ".env.production", ".env.local"]],
     decision = "forbidden",
-    justification = "秘密情報のファイルは読まない。足りない項目は npm run env:check で確かめる（C-05）",
+    justification = "秘密情報のファイルは読まない。足りない項目は {{env_check_how}}（C-05）",
     match = ["cat .env"],
 )
 

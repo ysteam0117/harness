@@ -299,6 +299,13 @@ async function run(options: UpdateOptions, deps: UpdateDeps): Promise<UpdateOutc
     throw e;
   }
 
+  // harness adopt で導入したアプリは、印の中だけを更新する仕組み（#16）が入るまで、更新できない（ファイルには触れない）
+  if (recorded.mode === "adopt") {
+    return fail(
+      "このプロジェクトは harness adopt で導入されています。導入したアプリの harness update は未対応です（#16 で対応予定）。ファイルは変更していません",
+    );
+  }
+
   // ダウングレード
   const cliVersion = (deps.harnessVersion ?? harnessVersion)();
   if (semver.valid(cliVersion) !== null && semver.lt(cliVersion, recorded.harnessVersion)) {
@@ -366,7 +373,10 @@ async function run(options: UpdateOptions, deps: UpdateDeps): Promise<UpdateOutc
 }
 
 /** 応答が戻らない質問も、中断を受けたら待つのをやめる。 */
-async function interruptible<T>(operation: () => Promise<T>, signal: AbortSignal): Promise<T> {
+export async function interruptible<T>(
+  operation: () => Promise<T>,
+  signal: AbortSignal,
+): Promise<T> {
   if (signal.aborted) throw new CancelledError();
   let onAbort: () => void = () => undefined;
   const interrupted = new Promise<never>((_resolve, reject) => {

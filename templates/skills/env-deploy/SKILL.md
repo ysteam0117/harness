@@ -33,10 +33,7 @@ description: 開発環境（Docker）・環境の分け方・IaC（Terraform）�
 
 ### テストがほかの環境を使わないための仕組み
 
-- テストのコマンドは、`.env.test`だけを読み込む
-- テストを始める前に、`APP_ENV`が`test`で、DBの接続先が手元であることを確かめ、違えば止める
-- `npm run env:check`と起動のときに、今の環境の名前を表示する（値は表示しない）
-- テストのスクリプトでは、wranglerの`--remote`を使わない
+{{test_isolation_notes}}
 
 ### Cloudflare上の検証の環境
 

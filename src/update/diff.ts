@@ -5,7 +5,15 @@ import type { FileState, NewFile } from "./plan.js";
 const MAX_LINES = 200;
 
 /** 今のファイルと新しい内容の差分（unified 形式）。改行の違いだけでは差分にしない。長いときは先頭だけ */
-export function formatDiff(filePath: string, current: string, next: string): string {
+export function formatDiff(
+  filePath: string,
+  current: string,
+  next: string,
+  /** 長くて省くときに添える、全体の見方（既定は update 用：.harness-new に置く） */
+  fullViewHint = `全体は ${filePath}.harness-new に置くと見られます`,
+  /** 表示する行数の上限（既定は200行。Infinity で省かない） */
+  maxLines = MAX_LINES,
+): string {
   const patch = createTwoFilesPatch(
     `現在の ${filePath}`,
     `新しい内容（${filePath}）`,
@@ -17,9 +25,9 @@ export function formatDiff(filePath: string, current: string, next: string): str
   );
   // 先頭の「Index:」「====」の行は省く
   const lines = patch.split("\n").filter((l) => !l.startsWith("Index: ") && !/^=+$/.test(l));
-  if (lines.length <= MAX_LINES) return lines.join("\n").trimEnd();
-  const omitted = lines.length - MAX_LINES;
-  return `${lines.slice(0, MAX_LINES).join("\n")}\n…（省略：あと ${String(omitted)} 行。全体は ${filePath}.harness-new に置くと見られます）`;
+  if (lines.length <= maxLines) return lines.join("\n").trimEnd();
+  const omitted = lines.length - maxLines;
+  return `${lines.slice(0, maxLines).join("\n")}\n…（省略：あと ${String(omitted)} 行。${fullViewHint}）`;
 }
 
 const PACKAGE_SECTIONS = ["scripts", "dependencies", "devDependencies"] as const;

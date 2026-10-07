@@ -173,10 +173,13 @@ export function buildAiOutputs(input: BuildAiOutputsInput): OutputFile[] {
     // ファイルの先頭の「# もとになった共通仕様」の行だけを取り除く（ほかの行はそのまま）
     add({
       path: ".codex/rules/default.rules",
-      content: readText(
-        path.join(templatesDir, "ai-settings/codex-default.rules"),
+      content: render(
+        readText(
+          path.join(templatesDir, "ai-settings/codex-default.rules"),
+          "ai-settings/codex-default.rules",
+        ).replace(/^# もとになった共通仕様[^\n]*\n/u, ""),
         "ai-settings/codex-default.rules",
-      ).replace(/^# もとになった共通仕様[^\n]*\n/u, ""),
+      ),
     });
   }
 

@@ -56,6 +56,10 @@ export interface BuildConfigInput {
   /** ハーネスが管理するファイルのパス → 中身 */
   managed: { path: string; content: string }[];
   now: Date;
+  /** 既定は create。harness adopt は adopt（既存のプロジェクトへの導入、F-29） */
+  mode?: "create" | "adopt";
+  /** 印で囲んだ文書のパス（adopt のときだけ）。managed の content は、印の中の本文にする */
+  markedFiles?: string[];
 }
 
 const HEADER = `# ハーネス（harness）が生成した記録です。ハーネスの更新（harness update）に使います。
@@ -81,7 +85,7 @@ export function buildConfigText(input: BuildConfigInput): string {
   const doc = {
     harness_version: harnessVersion(),
     generated_on: localDay(input.now),
-    mode: "create",
+    mode: input.mode ?? "create",
     answers: orderedAnswers(input.answers),
     accepted_warnings: input.acceptedWarnings.map((w) => ({
       id: w.id,
@@ -104,6 +108,9 @@ export function buildConfigText(input: BuildConfigInput): string {
     })),
     roles: input.roles,
     managed_files: managedFiles,
+    ...(input.markedFiles !== undefined && input.markedFiles.length > 0
+      ? { marked_files: [...input.markedFiles].sort((a, b) => (a < b ? -1 : 1)) }
+      : {}),
   };
   return HEADER + stringifyYaml(doc, { lineWidth: 0 });
 }

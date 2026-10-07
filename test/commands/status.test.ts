@@ -163,3 +163,92 @@ describe("#35 AC-5: harness status", () => {
     expect(statusCommand().options.map((o) => o.long)).toContain("--dir");
   });
 });
+
+describe("#15 R5: 導入したアプリ（mode: adopt）の状態は、印の中の本文の指紋で比べる", () => {
+  const BEGIN = "<!-- harness:begin -->";
+
+  async function adopted() {
+    const { cpSync, readFileSync, writeFileSync } = await import("node:fs");
+    const { stringify } = await import("yaml");
+    const { runAdopt } = await import("../../src/commands/adopt.js");
+    const { FakePrompter, baseAnswers } = await import("../questions/helpers.js");
+    const { FIXED_NOW } = await import("../versions/helpers.js");
+    const fixture = path.resolve(import.meta.dirname, "..", "fixtures", "adopt-sample");
+    const dir = path.join(newRoot(), "sample-app");
+    cpSync(fixture, dir, { recursive: true });
+    const answers: Record<string, unknown> = { ...baseAnswers() };
+    delete answers["app_name"];
+    const file = path.join(newRoot(), "answers.yaml");
+    writeFileSync(file, stringify(answers));
+    const errs: string[] = [];
+    const out = await runAdopt(
+      { answers: file, yes: true },
+      {
+        prompter: new FakePrompter(),
+        cwd: dir,
+        interactive: false,
+        stderr: (s) => errs.push(s),
+        stdout: () => undefined,
+        now: () => FIXED_NOW,
+      },
+    );
+    if (out.exitCode !== 0) throw new Error(`導入に失敗しました：${errs.join("")}`);
+    return { dir, readText: (rel: string) => readFileSync(path.join(dir, rel), "utf8") };
+  }
+
+  const modified = (out: string): string =>
+    out.slice(
+      out.indexOf("書き換え済みの管理ファイル"),
+      out.indexOf("書き換え済みの管理ファイル") + 200,
+    );
+
+  it("#15 R5: 導入の直後は、書き換え無し", async () => {
+    const { dir } = await adopted();
+    const s = setup(dir);
+    expect((await runStatus({}, s.deps)).exitCode).toBe(0);
+    expect(s.out()).toContain("書き換え済みの管理ファイル：0 件");
+    expect(s.out()).not.toContain("印が壊れている");
+  });
+
+  it("#15 R5: 印の外だけの編集は、書き換えに数えない", async () => {
+    const { dir, readText } = await adopted();
+    write(dir, "AGENTS.md", `${readText("AGENTS.md")}\n## 利用者が足した節\n\n- 追加の決まり\n`);
+    write(dir, "CLAUDE.md", `# 利用者の前書き\n\n${readText("CLAUDE.md")}`);
+    const s = setup(dir);
+    await runStatus({}, s.deps);
+    expect(s.out()).toContain("書き換え済みの管理ファイル：0 件");
+  });
+
+  it("#15 R5: 印の中の編集は、書き換えに数える", async () => {
+    const { dir, readText } = await adopted();
+    write(
+      dir,
+      "AGENTS.md",
+      readText("AGENTS.md").replace(BEGIN, `${BEGIN}\n（利用者が書き足した）`),
+    );
+    const s = setup(dir);
+    await runStatus({}, s.deps);
+    expect(s.out()).toContain("書き換え済みの管理ファイル：1 件");
+    expect(modified(s.out())).toContain("AGENTS.md");
+  });
+
+  it("#15 R5: 印が消えた・壊れたときは、印が壊れていると報告する", async () => {
+    const { dir, readText } = await adopted();
+    write(dir, "AGENTS.md", readText("AGENTS.md").replace(BEGIN, ""));
+    const s = setup(dir);
+    expect((await runStatus({}, s.deps)).exitCode).toBe(0);
+    expect(s.out()).toContain("印が壊れている管理ファイル：1 件");
+    expect(s.out()).toContain("AGENTS.md");
+  });
+
+  it("#15 R5: marked_files の無い既存の記録（create）は、これまでどおり全体の指紋で比べる", async () => {
+    const dir = await freshProject();
+    const s = setup(dir);
+    await runStatus({}, s.deps);
+    expect(s.out()).toContain("書き換え済みの管理ファイル：0 件");
+    write(dir, "CLAUDE.md", "# 書き換えた\n");
+    const s2 = setup(dir);
+    await runStatus({}, s2.deps);
+    expect(s2.out()).toContain("書き換え済みの管理ファイル：1 件");
+  });
+});
