@@ -484,6 +484,8 @@ export type CleanupRegistry = {
   trackCompose(projectDir: string): void;
   /** そのほかの後始末（フォルダの削除等） */
   add(name: string, run: () => void | Promise<void>): void;
+  /** その pid を、止める対象として記録しているか（記録を待つためのもの。記録は変えない） */
+  isTracking(pid: number): boolean;
   /**
    * 記録した全プロセスと子孫を止め、登録の逆順にすべて実行する（途中で失敗しても続ける）。
    * 失敗の文言（"<名前>：<理由>"）の配列を返す。2回目以降は後始末をやり直さず、1回目の完了を待って同じ結果を返す
@@ -609,6 +611,9 @@ export function createCleanupRegistry(
     },
     add(name, run) {
       items.push({ name, run });
+    },
+    isTracking(pid) {
+      return known.has(pid);
     },
     runAll() {
       // 2回目以降も、1回目の完了を待って、同じ結果を返す（途中で信号を受けても、後始末の完了前に終わらせない）

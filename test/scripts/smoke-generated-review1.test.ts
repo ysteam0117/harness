@@ -91,6 +91,13 @@ function alive(pid: number): boolean {
   }
 }
 
+/** 条件が成り立つまで、上限つきで待つ */
+async function until(condition: () => boolean, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (!condition() && Date.now() < deadline) await sleep(50);
+  return condition();
+}
+
 async function untilDead(pid: number, timeoutMs = 8000): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (alive(pid) && Date.now() < deadline) await sleep(50);
@@ -218,7 +225,9 @@ describe("#56 R(レビュー1)-4: smoke の中断で、起動したものを止�
     registry.trackProcess(parent);
     const grandchild = await readPid(pidFile);
     leftovers.push(grandchild);
-    await sleep(3000); // 自動の記録を待つ
+    // 自動の記録（短い間隔の snapshot）を、記録されるまで待つ。固定の時間に頼らない
+    // （Windows はプロセスの一覧の取得が遅く、固定の3秒では足りないことがあった。#9）
+    expect(await until(() => registry.isTracking(grandchild), 60_000)).toBe(true);
     process.kill(parent.pid as number, "SIGKILL");
     expect(await untilDead(parent.pid as number)).toBe(true);
     await registry.runAll();
