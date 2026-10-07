@@ -83,3 +83,16 @@ describe("#80 エージェントの定義", () => {
     expect(codexAgents.some((f) => f.content.includes("## 従うルール"))).toBe(true);
   });
 });
+
+describe("#4（旧 #41）Skill「レビュー」の Codex の呼び出し方", () => {
+  it("コードレビューも codex exec -s read-only に指示の文をファイルから渡す。codex review は案内しない", async () => {
+    const files = await generate({ ais: ["claude", "codex"] });
+    for (const p of [".claude/skills/review/SKILL.md", ".agents/skills/review/SKILL.md"]) {
+      const text = contentOf(files, p);
+      expect(text, p).toContain('codex exec -s read-only - < "<作業用フォルダ>/review-prompt.md"');
+      expect(text, p).not.toMatch(/codex review --(uncommitted|base)/);
+      expect(text, p).toContain("Skill のルールへの違反");
+      expect(text, p).toContain("結果は日本語で書くこと");
+    }
+  });
+});
