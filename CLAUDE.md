@@ -14,7 +14,7 @@
 ### 1 Issueの進め方
 
 Skill「opus-plan-sonnet-impl」に従う：Opusで計画 → Codexで計画レビュー（最大3回）→ Sonnetで実装 → Codexでコードレビュー（最大3回）→ 品質チェック（`npm run check`）・smoke。
-その後、コミット・プッシュ・PR作成・CI成功の確認・マージ・mainへのpullまで行う。マージの後は、main の CI も成功したことを確かめる。
+その後、コミット・プッシュ・PR作成・CI成功の確認・マージ・mainへのpullまで行う。マージは、PRのコミットを手元で1つにまとめてから「Rebase and merge」（gh pr merge --rebase）で行う。GitHubのsquashマージは、PRを作ったアカウントを作成者にしてコミットを作り直し、個人のアカウント名が履歴に入るため使わない。マージの後は、main の CI も成功したことを確かめる。
 
 ### リポジトリとコミット
 

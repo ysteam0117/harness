@@ -37,13 +37,18 @@ export function repositoryOf(repository: unknown): string | undefined {
   return `${owner}/${name}`;
 }
 
+/** ハーネスの公開のリポジトリ（組織 ysteam0117。個人のアカウント名を含まない） */
+export const DEFAULT_REPOSITORY = "ysteam0117/harness";
+
 /**
- * ハーネスの GitHub リポジトリ（「持ち主/名前」）。環境変数 HARNESS_REPOSITORY で渡す（利用者の判断。
- * 個人のアカウント名をコード・package.json・手順書に書かないため）。無い・形が違うときは undefined
+ * ハーネスの GitHub リポジトリ（「持ち主/名前」）。既定は DEFAULT_REPOSITORY。
+ * 環境変数 HARNESS_REPOSITORY で別のリポジトリ（フォーク等）に向けられる。形が違うときは undefined
  */
 export function readOwnRepository(env: NodeJS.ProcessEnv = process.env): string | undefined {
   const value = env["HARNESS_REPOSITORY"];
-  return value === undefined || value.trim() === "" ? undefined : repositoryOf(value.trim());
+  return value === undefined || value.trim() === ""
+    ? DEFAULT_REPOSITORY
+    : repositoryOf(value.trim());
 }
 
 /** 本物の gh を実行する（時間切れつき）。実行できなければ code: null */
@@ -82,7 +87,7 @@ export async function fetchLatestVersion(
     return {
       ok: false,
       reason:
-        "ハーネスの GitHub リポジトリが分かりません（環境変数 HARNESS_REPOSITORY に「持ち主/harness」を設定すると調べられます）",
+        "ハーネスの GitHub リポジトリが分かりません（環境変数 HARNESS_REPOSITORY の形が「持ち主/名前」になっていません）",
     };
   }
   let result: GhResult;

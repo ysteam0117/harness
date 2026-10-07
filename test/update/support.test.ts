@@ -85,15 +85,15 @@ describe("#35 リポジトリの読み取り", () => {
     expect(repositoryOf("--repo=x/y")).toBeUndefined();
   });
 
-  it("#36 リポジトリは環境変数 HARNESS_REPOSITORY から読む（架空の名前）。無い・空・形が違うときは undefined", () => {
+  it("#36 リポジトリは既定で ysteam0117/harness。環境変数 HARNESS_REPOSITORY で変えられる（架空の名前）。形が違うときは undefined", () => {
     expect(readOwnRepository({ HARNESS_REPOSITORY: "testowner/harness" })).toBe(
       "testowner/harness",
     );
     expect(readOwnRepository({ HARNESS_REPOSITORY: " testowner/harness " })).toBe(
       "testowner/harness",
     );
-    expect(readOwnRepository({})).toBeUndefined();
-    expect(readOwnRepository({ HARNESS_REPOSITORY: "" })).toBeUndefined();
+    expect(readOwnRepository({})).toBe("ysteam0117/harness");
+    expect(readOwnRepository({ HARNESS_REPOSITORY: "" })).toBe("ysteam0117/harness");
     expect(readOwnRepository({ HARNESS_REPOSITORY: "a b/c; rm -rf" })).toBeUndefined();
   });
 });
