@@ -592,7 +592,12 @@ describe("#31 AC-3: 実際の templates/ での出力", () => {
       "utf8",
     );
     expect(rulesSrc).toContain("もとになった共通仕様");
-    expect(rules).toBe(stripRulesMarker(rulesSrc));
+    expect(rules).toBe(
+      stripRulesMarker(rulesSrc).replace(
+        "{{env_check_how}}",
+        fakeValues()["env_check_how"] as string,
+      ),
+    );
     expect(rules).not.toContain("もとになった共通仕様");
   });
 

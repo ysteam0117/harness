@@ -11,6 +11,7 @@ import {
   readOwnRepository,
   type RunGh,
 } from "../update/latest.js";
+import { extractBlock } from "../adopt/markers.js";
 import { ConfigError, parseConfig, type RecordedConfig } from "../update/read-config.js";
 import { messageOf, readState } from "../update/state.js";
 
@@ -40,21 +41,36 @@ async function inspectManaged(
   fs: UpdateFs,
   root: string,
   recorded: RecordedConfig,
-): Promise<{ modified: string[]; missing: string[]; unreadable: string[] }> {
+): Promise<{
+  modified: string[];
+  missing: string[];
+  unreadable: string[];
+  brokenMarkers: string[];
+}> {
   const modified: string[] = [];
   const missing: string[] = [];
   const unreadable: string[] = [];
+  const brokenMarkers: string[] = [];
+  const marked = new Set(recorded.markedFiles);
   for (const [p, fp] of Object.entries(recorded.managedFiles)) {
     try {
       const state = await readState(fs, root, p);
-      if (state.kind === "absent") missing.push(p);
-      else if (fingerprint(state.text) !== fp) modified.push(p);
+      if (state.kind === "absent") {
+        missing.push(p);
+      } else if (marked.has(p)) {
+        // 印で囲んだ文書は、印の中の本文の指紋で比べる（印の外の編集は数えない）
+        const located = extractBlock(state.text);
+        if (located.kind !== "found") brokenMarkers.push(p);
+        else if (fingerprint(located.body) !== fp) modified.push(p);
+      } else if (fingerprint(state.text) !== fp) {
+        modified.push(p);
+      }
     } catch (e) {
       if (!(e instanceof GenerateError)) throw e;
       unreadable.push(p);
     }
   }
-  return { modified, missing, unreadable };
+  return { modified, missing, unreadable, brokenMarkers };
 }
 
 function listLines(paths: string[]): string[] {
@@ -135,6 +151,10 @@ export async function runStatus(
     if (managed.missing.length > 0) {
       lines.push(`消えている管理ファイル：${String(managed.missing.length)} 件`);
       lines.push(...listLines(managed.missing));
+    }
+    if (managed.brokenMarkers.length > 0) {
+      lines.push(`印が壊れている管理ファイル：${String(managed.brokenMarkers.length)} 件`);
+      lines.push(...listLines(managed.brokenMarkers));
     }
     if (managed.unreadable.length > 0) {
       lines.push(

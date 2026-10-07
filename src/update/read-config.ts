@@ -18,6 +18,8 @@ export class ConfigError extends Error {
 
 /** 記録された config.yaml のうち、更新に使うもの */
 export interface RecordedConfig {
+  /** 作り方：create（harness create）・update（harness update の後）・adopt（harness adopt）。記録が無ければ create */
+  mode: ConfigMode;
   harnessVersion: string;
   generatedOn: string;
   updatedOn?: string;
@@ -30,7 +32,12 @@ export interface RecordedConfig {
   removedFiles: string[];
   /** 管理の対象でなくなっていたため、無視した記録のパス */
   ignored: string[];
+  /** 印（harness:begin〜harness:end）で囲んだ文書のパス。managedFiles の指紋は、印の中の本文の指紋（adopt のときだけ） */
+  markedFiles: string[];
 }
+
+export type ConfigMode = "create" | "update" | "adopt";
+const MODES: readonly string[] = ["create", "update", "adopt"];
 
 const FILE = ".harness/config.yaml";
 
@@ -118,6 +125,12 @@ export function parseConfig(text: string): RecordedConfig {
       `${FILE} の harness_version が、バージョンの形ではありません：${harnessVersion}`,
     );
   }
+  const mode = "mode" in raw ? raw["mode"] : "create";
+  if (typeof mode !== "string" || !MODES.includes(mode)) {
+    throw new ConfigError(
+      `${FILE} の mode が誤っています（${MODES.join("・")} のどれかで書いてください）`,
+    );
+  }
   const generatedOn = need(raw, "generated_on", isString, "文字列");
   const updatedOn = typeof raw["updated_on"] === "string" ? raw["updated_on"] : undefined;
 
@@ -181,7 +194,19 @@ export function parseConfig(text: string): RecordedConfig {
     else ignored.push(p);
   }
 
+  const markedRaw = "marked_files" in raw ? raw["marked_files"] : [];
+  if (!Array.isArray(markedRaw) || !markedRaw.every((p) => typeof p === "string")) {
+    throw new ConfigError(`${FILE} の marked_files が誤っています（パスの一覧で書いてください）`);
+  }
+  const markedFiles: string[] = [];
+  for (const p of markedRaw as string[]) {
+    relativePath(p, "marked_files");
+    // 管理するファイルの記録にあるものだけ（記録が無ければ、比べる指紋が無い）
+    if (p in managedFiles) markedFiles.push(p);
+  }
+
   return {
+    mode: mode as ConfigMode,
     harnessVersion,
     generatedOn,
     ...(updatedOn !== undefined ? { updatedOn } : {}),
@@ -191,5 +216,6 @@ export function parseConfig(text: string): RecordedConfig {
     managedFiles,
     removedFiles,
     ignored,
+    markedFiles,
   };
 }

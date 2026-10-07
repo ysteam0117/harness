@@ -78,12 +78,9 @@ description: テストの作成・実行のルール。テストの必須範囲�
 
 ## テスト環境の構築と後始末
 
-- 環境別の起動は `npm run test` と `npm run dev:test` を使う。手元の `.env.test` と `APP_ENV=test` が選ばれ、親プロセスの接続設定は引き継がれない
-- PostgreSQLの検証DBはループバック上の接続先かつ名前が `_test` で終わるものを使う。D1/R2のローカル状態は開発用から分離される。これは任意の外部接続やOS権限を含む安全保証ではない
-- テスト用PostgreSQL/Composeの起動・停止は `npm run docker:up:test`・`npm run docker:down:test`、DB操作は `db:*:test` のscriptsを使う。Vitest WorkersのD1は一時的な隔離状態を使う
-- PostgreSQLのプロジェクトでは、品質チェック（`npm run check`）の`npm test`の後に、`posttest`が`npm run test:db`（Skillの良い例・悪い例のテスト`backend/src/rules-examples/*.db.test.ts`。Node.jsの別の設定`vitest.db.config.ts`）を実行する。検証用DBが起動していないと失敗するため、先に`npm run docker:up:test`で起動する。このテストは、その接続だけの一時的な表（`CREATE TEMP TABLE`）だけを使い、マイグレーション・シード・既存のデータには触れない。開発用のコンテナの中には検証用のDBがないため、コンテナの中で実行するときは、検証用のコンテナの中で行う
+- {{test_env_notes}}
 
-- 手順は`docs/testing/`に、テストの種類ごとに書いてある（必要なもの・構築の手順・確認の方法・実行方法・後始末・よくある失敗と対処）
+- {{test_docs_rule}}
 - 構築はスクリプトで1つのコマンドで行い、CIでも同じスクリプトを使う
 - 始める前に、使うポートが空いているかを確かめる。使われている場合は別のポートで続けず、何が使っているかを確かめる
 - テストが失敗したら、まず環境が原因でないかを切り分けてから、実装を調べる。環境が原因の失敗は「よくある失敗と対処」に追記する
@@ -96,7 +93,7 @@ description: テストの作成・実行のルール。テストの必須範囲�
 - 品質チェックとテストは、手元とCIで共通の1つのコマンド（{{check_command}}）で、プロジェクト全体に対して実行する
 - テストを追加・変更した後にも、品質チェックをやり直す
 - CIでも、開発環境と同じコンテナ・同じバージョンを使う
-- `{{check_command}}`は、Dockerを使わない`npm run check:app`（Lint・型・書式・依存の向き・重複・テスト・`npm audit`）に、Dockerで動くセキュリティのテスト（`npm run security`：Semgrep・gitleaks・OSV-Scanner）を足したもの。**ホストで実行する**。Docker（開発用のコンテナ）の中では`npm run check:app`を実行する（コンテナの中からはDockerを使えない）。セキュリティのテストの手順・合否・誤検知の抑え方は`docs/testing/security.md`
+- {{check_command_detail}}
 
 ## 性能の目標
 
@@ -139,13 +136,13 @@ description: テストの作成・実行のルール。テストの必須範囲�
 
 - 攻撃を試すテストとペネトレーションテストは、本番に対して行わない。検証環境だけで、利用者の承認を得てから行う
 - 外部API・外部のサービスに攻撃を向けない
-- 誤検知と判断した指摘は、除外の設定に理由を書いて除外し、{{pr_equivalent}}に記録する。理由のない除外はしない（Semgrepは、該当の行に`// nosemgrep: <ルールのid> <理由>`を付ける。理由が妥当かは、コードレビューで確かめる。手順は`docs/testing/security.md`）
-- Schemathesisは、API仕様書（`docs/api/openapi.json`）から異常な入力を作って、動いているAPIに送る。`npm run check`には入れず、開発サーバーを起動して、`docs/testing/schemathesis.md`の手順で実行する（本番には向けない）。APIを足す・変えたら、仕様書も同じ変更の中で直す（食い違うと`backend/src/openapi.test.ts`が失敗する）
+- 誤検知と判断した指摘は、除外の設定に理由を書いて除外し、{{pr_equivalent}}に記録する。理由のない除外はしない（Semgrepは、該当の行に`// nosemgrep: <ルールのid> <理由>`を付ける。理由が妥当かは、コードレビューで確かめる。{{security_procedure_ref}}）
+- {{schemathesis_rule}}
 - 見つかった弱点はIssueにして直し、再発を防ぐテストを毎回のテストに加える
 
 ### ペネトレーションテストの進め方
 
-1. `docs/testing/pentest-plan.md`に、範囲・観点・道具・期間・止める条件・テスト用の利用者を書き、利用者の承認を得る
+1. {{pentest_plan_place}}に、範囲・観点・道具・期間・止める条件・テスト用の利用者を書き、利用者の承認を得る
 2. シナリオは、要件・API仕様・権限の表・観点の一覧と、実装のコードをすべて見て作る。攻撃者の立場で、利用者の種類ごとに許されない操作ができないか、要件の制約（回数・期限・1回限り等）を破れないか、すべての入力（パス・クエリ・本文・ヘッダー・Cookie）を変えられる前提で考える
 3. ASVSのレベル（{{asvs_level}}）の項目に沿って、認証・認可・セッション・入力の確認・ファイルのアップロード等を確かめる。特に、他人のデータが見える・操作できる、組織をまたいでデータが見える、といった認可の不備を中心に見る
 4. 道具の実行は、利用者の承認を得てから行う。実行の判断は利用者が行う

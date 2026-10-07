@@ -1,0 +1,166 @@
+# harness adopt（既存のプロジェクトへの導入、F-29）で、data/template-values.yaml の値の代わりに使う値。
+# 同じ名前の値を入れ替える。書き方は template-values.yaml と同じ（名前: 値、または when / value の並び）。
+# 条件に合う行がなければ、入れ替えず、template-values.yaml の値を使う。template-values.yaml にない名前は書けない。
+#
+# 入れ替える理由：導入先のプロジェクトには、harness create が生成するアプリだけにあるもの
+# （npm run env:check・check:app・security などのコマンド、docs/project-rules.md・docs/secrets.md・docs/testing/ などの文書、
+# テストが開発・本番のDBと分かれていることの保証、技術プロファイルの Skill）が無い。
+# 無いものを、導入先の文書に書かない。品質チェック・テストのコマンドは「未設定」とし、既存のコマンドを確かめさせる。
+# 値の中に、印の文字列（begin・end）を書かない（導入した文書の印と区別できなくなるため）。
+
+check_command: このプロジェクトの既存の品質チェックのコマンド
+
+# ---- AGENTS.md ----
+rule_skills_backend: "`backend`・`error-api`"
+rule_skills_frontend: "`frontend`"
+rule_skills_frontend_api: "`frontend`"
+rule_skills_logger: 該当する技術のSkillはない。既存のログの書き方に合わせる
+rule_skills_testing: "`testing`"
+rule_skills_quality: 該当する技術のSkillはない。既存の設定に合わせる
+
+data_access_rule_row: "| DB・クエリ・マイグレーション | `backend`（DBの書き方は、既存のコードに合わせる） |"
+
+data_access_guide: |-
+  - データアクセスのライブラリと書き方は、このプロジェクトの既存のものに従う。1つのプロジェクトで書き方を複数用意しない
+  - 新しいライブラリの導入や、書き方の変更は、利用者に確認する
+
+project_rules_place: このプロジェクトの既存の文書
+
+env_missing_rule: 足りない項目を聞かれたら、**項目の名前だけ**で答える（値は読まない・書かない）。確かめ方は、このプロジェクトの既存の手順（README・`.env.example`）に従う
+
+secrets_guide: このプロジェクトの既存の手順
+
+project_rules_section: |-
+  - このプロジェクト固有のルールは、利用者の文章（このファイルの印の外）と、このプロジェクトの既存の文書にある。作業を始める前に読む
+  - 印の中と、Skillなど、ハーネスが管理するファイルに、プロジェクト固有のルールを書き足さない。ハーネスを更新したときに消えるため
+  - 新しいルールが必要になったら、次の問いで分ける。迷ったら、このプロジェクトの既存の文書に書く（置き場所は利用者と決める）
+    1. このアプリの業務や中身を知らないと書けないルール → このプロジェクトの既存の文書
+    2. 特定の技術を使うときにだけ必要なルール → ハーネス（技術プロファイル）への提案
+    3. どのアプリでも守るべきルール → ハーネス（共通仕様）への提案
+  - ハーネスのルールより緩めるルールは、理由をADRに記録し、利用者の承認を得てから、このプロジェクトの既存の文書に書く
+
+document_place_rows: |-
+  | フロントエンド・バックエンドのコード | このプロジェクトの既存の構成に従う |
+  | 要件定義書・設計書・設計判断の記録・テストの手順など | このプロジェクトの既存の文書に従う。場所が分からなければ、利用者に聞く |
+
+error_handler: このプロジェクトの既存のグローバルなエラーハンドリング（無ければ、利用者と相談して決める）
+
+dev_env_notes: 開発環境のコンテナ・DB・環境変数の分け方は、このプロジェクトの既存の構成に従う。変えるときは、利用者に確認する
+
+# ---- Skill「テスト」「環境・デプロイ」、エージェント「品質チェック」----
+test_env_notes: |-
+  品質チェック・テストの起動のコマンドは未設定（ハーネスは決めていない）。実行する前に、既存のプロジェクトのコマンド（`package.json`の`scripts`・README）を確かめる
+  - テストを実行する前に、テストが本番や共有のDB・外部のサービスに接続しないことを、接続先の設定で確かめる。確かめられない・不明なときは、実行せずに利用者に聞く
+  - 既存のテスト環境（DB・コンテナ・環境変数）の構築と後始末は、このプロジェクトの既存の手順に従う。ハーネスは、環境の分離を保証しない
+
+test_docs_rule: 手順書の置き場所は、このプロジェクトの既存の文書（READMEなど）に従う。手順書を足すときは、置き場所を利用者に確認する
+
+check_command_detail: 品質チェック・テストのコマンドは未設定（ハーネスは決めていない）。実行する前に、既存のプロジェクトのコマンド（`package.json`の`scripts`・README）と、テストが本番や共有のDBに接続しないことを確かめ、不明なら利用者に聞く
+
+security_procedure_ref: 手順は、このプロジェクトの既存の手順書に従う（無ければ、利用者に聞く）
+
+schemathesis_rule: Schemathesisは、API仕様書から異常な入力を作って、動いているAPIに送る。仕様書の場所と起動の方法は、このプロジェクトの既存のものを確かめて実行する（本番には向けない）。APIを足す・変えたら、仕様書も同じ変更の中で直す
+
+pentest_plan_place: ペネトレーションテストの計画の文書（置き場所は利用者と決める）
+
+test_isolation_notes: |-
+  - 既存のテストが、開発・本番のDBや外部のサービスに接続しないことを、実行する前に、接続先の設定（環境変数・設定ファイル）で確かめる。確かめられないときは、実行せず、利用者に聞く
+  - テストのスクリプトでは、wranglerの`--remote`を使わない
+  - 環境ごとの設定の分け方は、このプロジェクトの既存のものに従う。ハーネスは、環境の分離を保証しない
+
+test_docs_paren: （このプロジェクトの既存の手順）
+
+quality_checker_command_step: 品質チェック・テストのコマンドは未設定（ハーネスは決めていない）。実行する前に、既存のプロジェクトのコマンド（`package.json`の`scripts`・README）と、テストが本番や共有のDBに接続しないことを確かめ、不明なら利用者に聞く。確かめたコマンドで、**プロジェクト全体**に対して品質チェックとテストを実行する。一部のフォルダだけに限定しない
+
+# ---- ハーネスの改善の提案（生成したアプリの設定・テンプレートを前提にしないため、GitHub・手元の Git どちらも入れ替える）----
+feedback_instruction: 改善の提案の内容を記録し、利用者に伝える。出す場所と書き方は、利用者と決める。ハーネスのリポジトリへの伝達は、利用者の承認を得て行う
+
+# ---- 手元の Git だけで管理する場合（repository: local）----
+# 生成したアプリにある docs/issues/・docs/harness-feedback/・.githooks/・npm run merge:check を前提にしないようにする。
+# GitHub の場合は、template-values.yaml の値（PR・Issue の手順）をそのまま使う。
+workflow_issue_step:
+  - when: { answer: repository, equals: local }
+    value: "1. **Issueを作る**：Issueなしで作業を始めない。Issueの記録の置き場所と書き方は、このプロジェクトで決めたものに従う（決まっていなければ、利用者に確認する）。機能は親Issue、作業領域（DB・バックエンド・フロントエンド・その他）ごとに子Issueに分ける"
+
+workflow_review_steps:
+  - when: { answer: repository, equals: local }
+    value: |-
+      5. **記録を書く**：レビューの結果（レビューしたAI・指摘・採用したか・採用しなかった理由）と、受け入れ条件ごとの確認の結果を、Issueの記録に追記する。「知見」の欄は必ず埋める
+      6. **取り込む**：作業のブランチでコミットしたあと、品質チェックとテストが通ったことを確かめ、このプロジェクトで決めた手順で`main`に取り込む（決まっていなければ、利用者に確認する）
+      7. **Issueの状態を確かめる**：取り込んだ後、Issueの記録の状態が完了になっているかを確かめる
+
+workflow_main_rules:
+  - when: { answer: repository, equals: local }
+    value: |-
+      - **`main`の上で直接コミットしない**。変更はすべて作業のブランチから取り込む
+      - 確認を飛ばして取り込まない。コミットの前の確認（秘密情報・整形・Lint）で止まったら、原因を直す
+
+commit_merge_step:
+  - when: { answer: repository, equals: local }
+    value: "**コミット・取り込み**：`AGENTS.md`の「作業の流れ」に従う。取り込みの後、Issueの記録の状態が完了になったかを確かめる"
+
+prev_merged_check:
+  - when: { answer: repository, equals: local }
+    value: 直前のIssueが、`main`に取り込み済みである
+
+remote_ops_caution:
+  - when: { answer: repository, equals: local }
+    value: 記録を失う操作：Issueの記録の削除、ブランチの削除、`main`の履歴を書き換える操作
+
+harness_proposal_way:
+  - when: { answer: repository, equals: local }
+    value: 提案する（利用者に伝える）
+
+# 良い例・悪い例を載せたライブラリの Skill は、技術プロファイルの Skill なので入れない
+example_skills: このプロジェクトでは入れていない。既存のコードの書き方に合わせる
+frontend_example_skills: このプロジェクトでは入れていない。既存のコードの書き方に合わせる
+
+# 手元の Git だけで管理する場合：Issue のファイル（docs/issues/）は生成しないので、Issue の記録の置き場所は、利用者と決めたものに従う
+issue_and_pr:
+  - when: { answer: repository, equals: local }
+    value: Issueの記録
+
+issue_or_pr_record:
+  - when: { answer: repository, equals: local }
+    value: Issueの記録
+
+pr_equivalent:
+  - when: { answer: repository, equals: local }
+    value: Issueの記録
+
+issue_record_place:
+  - when: { answer: repository, equals: local }
+    value: Issueの記録
+
+knowledge_record_place:
+  - when: { answer: repository, equals: local }
+    value: Issueの記録の「知見」の欄
+
+test_list_place:
+  - when: { answer: repository, equals: local }
+    value: Issueの記録の「レビューの記録」
+
+change_review_place:
+  - when: { answer: repository, equals: local }
+    value: Issueの記録に残して、
+
+secret_write_places:
+  - when: { answer: repository, equals: local }
+    value: チャット・コミットメッセージ・Issueの記録
+
+# 導入先に作らない文書・フォルダ構成を前提にした箇所：既存のプロジェクトのものを確かめて合わせる（無ければ、利用者に聞く）
+requirements_doc: "このプロジェクトの既存の要件・仕様の文書（場所が分からなければ、利用者に聞く）"
+tech_stack_doc: "このプロジェクトの技術・バージョンの記録（既存の文書。無ければ、利用者に聞く）"
+design_overview_doc: "既存の設計書の全体の構成の文書"
+design_feature_doc: "既存の設計書の置き場所の、機能ごとの文書"
+design_doc_dir: "このプロジェクトの既存の設計書の置き場所"
+adr_dir: "このプロジェクトの設計判断の記録の置き場所（無ければ、利用者に聞く）"
+testing_docs_dir: "このプロジェクトのテストの手順書"
+prototype_dir: "<プロトタイプのフォルダ>/"
+api_spec_doc: "このプロジェクトの既存のAPI仕様書"
+schemathesis_doc: "このプロジェクトの既存の手順書"
+api_spec_test_rule: "実際のルートと仕様書の食い違いがないかは、このプロジェクトの既存のテストや手順で確かめる（無ければ、利用者に聞く）"
+backend_examples_note: "ここには例を置かない（二重に持たない）。コードの書き方は、このプロジェクトの既存のコードに合わせる"
+frontend_examples_note: "ここには例を置かない（二重に持たない）。コードの書き方は、このプロジェクトの既存のコードに合わせる"
+env_check_how: "項目の名前だけを確かめる。値は読まない"
+rules_apply_step: "決まったら、要件定義書を更新する。`harness update`は、既存のプロジェクトへの導入（adopt）にはまだ対応していない（#16 で対応予定）ため、有効にするルール・Skillへの反映は、ハーネスの改善の提案として記録する"

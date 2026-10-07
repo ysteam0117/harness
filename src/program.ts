@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { Command, Help } from "commander";
+import { adoptCommand, type AdoptDeps } from "./commands/adopt.js";
 import { createCommand, type CreateDeps } from "./commands/create.js";
 import { statusCommand, type StatusDeps } from "./commands/status.js";
 import { updateCommand, type UpdateDeps } from "./commands/update.js";
@@ -28,7 +29,10 @@ function translatePlaceholders(text: string): string {
 }
 
 /** 各コマンドの差し込み口（テスト用）。同じ名前の口（prompter・cwd・stderr など）は、型が同じ */
-export type ProgramDeps = Partial<CreateDeps> & Partial<UpdateDeps> & Partial<StatusDeps>;
+export type ProgramDeps = Partial<CreateDeps> &
+  Partial<UpdateDeps> &
+  Partial<StatusDeps> &
+  Partial<AdoptDeps>;
 
 export function createProgram(deps: ProgramDeps = {}): Command {
   const program = new Command("harness");
@@ -65,6 +69,7 @@ export function createProgram(deps: ProgramDeps = {}): Command {
   });
   program.addCommand(createCommand(deps));
   program.addCommand(updateCommand(deps));
+  program.addCommand(adoptCommand(deps));
   program.addCommand(statusCommand(deps));
   return program;
 }

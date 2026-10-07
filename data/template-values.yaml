@@ -434,3 +434,74 @@ openapi_test_app:
         routes: [{ path: "/api/sample-users", app: sampleUserRoutes(unusedDb) }],
       });
   - value: "const app = createApp();"
+
+# ---- 既存のプロジェクトへの導入（harness adopt、F-29）で入れ替える値 ----
+# ここの値は、harness create が生成するアプリの文言（生成したアプリだけにあるコマンド・文書を前提にしたもの）。
+# harness adopt は、同じ名前の値を data/adopt-values.yaml で入れ替える（生成していないコマンド・文書を、導入先の文書に書かないため）。ひな形には分岐を入れない（F-28）。
+
+# AGENTS.md の「コードを書く前に、ルールを読んで従う」の表の、技術プロファイルの Skill を含む欄
+rule_skills_backend: "`backend`・`error-api`・`backend-hono`"
+rule_skills_frontend: "`frontend`・`frontend-build`・`frontend-state`"
+rule_skills_frontend_api: "`frontend`・`http-client-axios`"
+rule_skills_logger: "`logger`"
+rule_skills_testing: "`testing`・`test-tools`"
+rule_skills_quality: "`quality-tools`"
+
+# Skill「フロントエンド」が案内する、良い例・悪い例を載せたライブラリの Skill
+frontend_example_skills: "`frontend-state`・`http-client-axios`・`logger`"
+
+# AGENTS.md の、生成したアプリにある文書・コマンドを前提にした箇所
+project_rules_place: "`docs/project-rules.md`"
+env_missing_rule: "足りない項目を聞かれたら、`npm run env:check`を実行し、**項目の名前だけ**で答える"
+secrets_guide: "`docs/secrets.md`の手順とコマンド"
+project_rules_section: |-
+  - このプロジェクト固有のルールは`docs/project-rules.md`にある。作業を始める前に読む
+  - このファイル（`AGENTS.md`）やSkillなど、ハーネスが管理するファイルに、プロジェクト固有のルールを書き足さない。ハーネスを更新したときに消えるため
+  - 新しいルールが必要になったら、次の問いで分ける。迷ったら`docs/project-rules.md`に書く
+    1. このアプリの業務や中身を知らないと書けないルール → `docs/project-rules.md`
+    2. 特定の技術を使うときにだけ必要なルール → ハーネス（技術プロファイル）への提案
+    3. どのアプリでも守るべきルール → ハーネス（共通仕様）への提案
+  - ハーネスのルールより緩めるルールは、理由をADRに記録し、利用者の承認を得てから`docs/project-rules.md`に書く
+document_place_rows: |-
+  | フロントエンド・バックエンドのコード | `frontend/`・`backend/`（1つのリポジトリで管理する） |
+  | 要件定義書 | `docs/requirements.md` |
+  | 技術とバージョン | `docs/tech-stack.md` |
+  | 設計書（全体の構成・機能ごとのファイルの役割と処理の流れ） | `docs/design/`（全体は`docs/design/overview.md`） |
+  | 設計判断の記録（ADR） | `docs/adr/` |
+  | テスト環境の構築手順 | `docs/testing/` |
+
+# Skill「テスト」「環境・デプロイ」、エージェント「品質チェック」の、生成したアプリのコマンド・文書・環境の分離を前提にした箇所
+test_env_notes: |-
+  環境別の起動は `npm run test` と `npm run dev:test` を使う。手元の `.env.test` と `APP_ENV=test` が選ばれ、親プロセスの接続設定は引き継がれない
+  - PostgreSQLの検証DBはループバック上の接続先かつ名前が `_test` で終わるものを使う。D1/R2のローカル状態は開発用から分離される。これは任意の外部接続やOS権限を含む安全保証ではない
+  - テスト用PostgreSQL/Composeの起動・停止は `npm run docker:up:test`・`npm run docker:down:test`、DB操作は `db:*:test` のscriptsを使う。Vitest WorkersのD1は一時的な隔離状態を使う
+  - PostgreSQLのプロジェクトでは、品質チェック（`npm run check`）の`npm test`の後に、`posttest`が`npm run test:db`（Skillの良い例・悪い例のテスト`backend/src/rules-examples/*.db.test.ts`。Node.jsの別の設定`vitest.db.config.ts`）を実行する。検証用DBが起動していないと失敗するため、先に`npm run docker:up:test`で起動する。このテストは、その接続だけの一時的な表（`CREATE TEMP TABLE`）だけを使い、マイグレーション・シード・既存のデータには触れない。開発用のコンテナの中には検証用のDBがないため、コンテナの中で実行するときは、検証用のコンテナの中で行う
+test_docs_rule: "手順は`docs/testing/`に、テストの種類ごとに書いてある（必要なもの・構築の手順・確認の方法・実行方法・後始末・よくある失敗と対処）"
+check_command_detail: "`{{check_command}}`は、Dockerを使わない`npm run check:app`（Lint・型・書式・依存の向き・重複・テスト・`npm audit`）に、Dockerで動くセキュリティのテスト（`npm run security`：Semgrep・gitleaks・OSV-Scanner）を足したもの。**ホストで実行する**。Docker（開発用のコンテナ）の中では`npm run check:app`を実行する（コンテナの中からはDockerを使えない）。セキュリティのテストの手順・合否・誤検知の抑え方は`docs/testing/security.md`"
+security_procedure_ref: "手順は`docs/testing/security.md`"
+schemathesis_rule: "Schemathesisは、API仕様書（`docs/api/openapi.json`）から異常な入力を作って、動いているAPIに送る。`npm run check`には入れず、開発サーバーを起動して、`docs/testing/schemathesis.md`の手順で実行する（本番には向けない）。APIを足す・変えたら、仕様書も同じ変更の中で直す（食い違うと`backend/src/openapi.test.ts`が失敗する）"
+pentest_plan_place: "`docs/testing/pentest-plan.md`"
+test_isolation_notes: |-
+  - テストのコマンドは、`.env.test`だけを読み込む
+  - テストを始める前に、`APP_ENV`が`test`で、DBの接続先が手元であることを確かめ、違えば止める
+  - `npm run env:check`と起動のときに、今の環境の名前を表示する（値は表示しない）
+  - テストのスクリプトでは、wranglerの`--remote`を使わない
+test_docs_paren: "（`docs/testing/`）"
+quality_checker_command_step: "手元とCIで共通の1つのコマンド（例：`npm run check`）で、**プロジェクト全体**に対して品質チェックとテストを実行する。一部のフォルダだけに限定しない"
+
+# 生成したアプリの文書・フォルダ構成を前提にした箇所（導入では data/adopt-values.yaml で入れ替える）
+requirements_doc: "`docs/requirements.md`"
+tech_stack_doc: "`docs/tech-stack.md`"
+design_overview_doc: "`docs/design/overview.md`"
+design_feature_doc: "`docs/design/<機能の名前>.md`"
+design_doc_dir: "`docs/design/`"
+adr_dir: "`docs/adr/`"
+testing_docs_dir: "`docs/testing/`"
+prototype_dir: "prototype/"
+api_spec_doc: "`docs/api/openapi.json`"
+schemathesis_doc: "`docs/testing/schemathesis.md`"
+api_spec_test_rule: "実際のルートと仕様書の食い違いは、`backend/src/openapi.test.ts`が失敗にする。ルートを`backend/src/index.ts`に足したら、このテストの組み立ても同じにする"
+backend_examples_note: "ここには例を置かない（二重に持たない）。例はテスト（`backend/src/rules-examples/`）で動作を確かめてあり、消さない"
+frontend_examples_note: "ここには例を置かない（二重に持たない）。例はテスト（`frontend/src/rules-examples/`・`backend/src/rules-examples/logger.test.ts`）で動作を確かめてあり、消さない"
+env_check_how: "npm run env:check で確かめる"
+rules_apply_step: "決まったら、`.harness/config.yaml`と要件定義書を更新し、`harness update`で、有効にするルール・Skillに反映する"
