@@ -2,11 +2,14 @@ import { execFile } from "node:child_process";
 import path from "node:path";
 import { Command } from "commander";
 import semver from "semver";
+import { buildAdoptFiles } from "../adopt/build.js";
+import { extractBlock, mergeBlock, MarkerError } from "../adopt/markers.js";
 import { collectFacts } from "../checks/facts.js";
 import type { AcceptedWarning } from "../checks/review.js";
 import { evaluateRules, loadRules, RulesError, type RuleHit } from "../checks/rules.js";
 import type { ToolStatus } from "../checks/tools.js";
 import {
+  buildConfigText,
   CONFIG_PATH,
   fingerprint,
   harnessVersion,
@@ -14,7 +17,9 @@ import {
   toUpdateConfigText,
 } from "../generate/config.js";
 import { GenerateError } from "../generate/errors.js";
+import { judge } from "../generate/judgment.js";
 import { buildAdr, buildProject, type ProjectFile } from "../generate/project.js";
+import { rolesFor } from "../generate/roles.js";
 import { type Answers } from "../questions/answers.js";
 import { questionDefinitions } from "../questions/definitions.js";
 import { findMissing, runQuestions } from "../questions/flow.js";
@@ -34,7 +39,7 @@ import { formatDiff, settingChangeNotes } from "../update/diff.js";
 import { realUpdateFs, type UpdateFs } from "../update/fs.js";
 import { planUpdate, type Decision, type FileState, type NewFile } from "../update/plan.js";
 import { ConfigError, parseConfig, type RecordedConfig } from "../update/read-config.js";
-import { messageOf, readState, type FileSnapshot } from "../update/state.js";
+import { isUtf8Text, messageOf, readState, type FileSnapshot } from "../update/state.js";
 
 export interface GitResult {
   /** 実行できなかった（git がない等）ときは null */
@@ -66,6 +71,8 @@ export interface UpdateDeps {
   harnessVersion?: () => string;
   /** 同梱の CHANGELOG.md の差し替え（テスト用） */
   changelog?: () => string | undefined;
+  /** テンプレートの置き場所の差し替え（テスト用。harness adopt で導入したアプリの更新で使う）。既定は同梱のもの */
+  templatesDir?: string;
 }
 
 export interface UpdateOptions {
@@ -118,6 +125,8 @@ interface Outcome {
   /** 消したままにした（removed_files） */
   leftRemoved: string[];
   obsolete: string[];
+  /** ハーネスの管理に入っていない（adopt で既存を残した）ため、触れなかったファイル */
+  untouched: string[];
   unchanged: number;
 }
 
@@ -199,6 +208,11 @@ function renderReport(input: {
       ? "新しいバージョンでは不要になりました（削除しません。要らなければ、手で消してください）。"
       : "新しいバージョンでは不要になりました（削除していません。要らなければ、手で消してください）。",
     o.obsolete.map((p) => `\`${p}\``),
+  );
+  section(
+    "管理外のため触れない",
+    "導入のとき（harness adopt）に既存のファイルを残したため、ハーネスの管理に入っていません。新しい内容には、更新しません。",
+    o.untouched.map((p) => `\`${p}\``),
   );
   section(
     "増えた質問",
@@ -297,13 +311,6 @@ async function run(options: UpdateOptions, deps: UpdateDeps): Promise<UpdateOutc
   } catch (e) {
     if (e instanceof ConfigError) return fail(e.message);
     throw e;
-  }
-
-  // harness adopt で導入したアプリは、印の中だけを更新する仕組み（#16）が入るまで、更新できない（ファイルには触れない）
-  if (recorded.mode === "adopt") {
-    return fail(
-      "このプロジェクトは harness adopt で導入されています。導入したアプリの harness update は未対応です（#16 で対応予定）。ファイルは変更していません",
-    );
   }
 
   // ダウングレード
@@ -454,6 +461,8 @@ async function update(
 ): Promise<UpdateOutcome & { applied?: true }> {
   const dryRun = options.dryRun === true;
   const yes = options.yes === true;
+  /** harness adopt で導入したアプリ：印の中だけを更新する（版・整合性・警告は、導入のときの記録のまま） */
+  const adopted = recorded.mode === "adopt";
   const now = (deps.now ?? (() => new Date()))();
   const prompter: Prompter = {
     note: (...args) => deps.prompter.note(...args),
@@ -512,68 +521,73 @@ async function update(
     .filter((id) => !(id in recorded.answers));
 
   // 版：記録された版はそのまま使う。増えた分は、同梱の検証済みの版（ネットワークは使わない）
-  let versions: VersionResult;
-  try {
-    const targets = targetsFor(answers);
-    const byName = new Map(recorded.versions.map((v) => [v.name, v]));
-    const entries: VersionEntry[] = [];
-    const unresolved: string[] = [];
-    for (const target of targets) {
-      const keep = byName.get(target.name);
-      if (keep !== undefined) {
-        entries.push(keep);
-      } else if (target.verified === undefined) {
-        unresolved.push(target.name);
-      } else {
-        entries.push({
-          name: target.name,
-          version: target.verified,
-          reason: "更新で追加（検証済みの版）",
-          surveyedOn: localDay(now),
-          latestStable: null,
-          latestStatus: "failed",
-          fetchFailure: "更新ではネットワークを使わないため、調べていません",
-          verified: target.verified,
-          newerThanVerified: false,
-          majorDiffers: false,
-        });
+  let versions: VersionResult = { entries: recorded.versions, newerThanVerified: false };
+  if (!adopted) {
+    try {
+      const targets = targetsFor(answers);
+      const byName = new Map(recorded.versions.map((v) => [v.name, v]));
+      const entries: VersionEntry[] = [];
+      const unresolved: string[] = [];
+      for (const target of targets) {
+        const keep = byName.get(target.name);
+        if (keep !== undefined) {
+          entries.push(keep);
+        } else if (target.verified === undefined) {
+          unresolved.push(target.name);
+        } else {
+          entries.push({
+            name: target.name,
+            version: target.verified,
+            reason: "更新で追加（検証済みの版）",
+            surveyedOn: localDay(now),
+            latestStable: null,
+            latestStatus: "failed",
+            fetchFailure: "更新ではネットワークを使わないため、調べていません",
+            verified: target.verified,
+            newerThanVerified: false,
+            majorDiffers: false,
+          });
+        }
       }
+      if (unresolved.length > 0) {
+        return fail(
+          `新しいバージョンで増えたパッケージに、検証済みの版がありません：${unresolved.join("、")}（更新ではネットワークを使わないため、版を決められません。harness create で新しく作るか、手で追加してください）`,
+        );
+      }
+      versions = { entries, newerThanVerified: entries.some((e) => e.newerThanVerified) };
+    } catch (e) {
+      if (e instanceof GenerateError) return fail(e.message);
+      throw e;
     }
-    if (unresolved.length > 0) {
-      return fail(
-        `新しいバージョンで増えたパッケージに、検証済みの版がありません：${unresolved.join("、")}（更新ではネットワークを使わないため、版を決められません。harness create で新しく作るか、手で追加してください）`,
-      );
-    }
-    versions = { entries, newerThanVerified: entries.some((e) => e.newerThanVerified) };
-  } catch (e) {
-    if (e instanceof GenerateError) return fail(e.message);
-    throw e;
   }
 
   // 整合性チェックをやり直す（生成先は、すでに中身があるのが当然なので、見ない）
-  let rules;
-  try {
-    rules = loadRules();
-  } catch (e) {
-    if (e instanceof RulesError) return fail(e.message);
-    throw e;
-  }
-  const facts = await collectFacts(answers, {
-    cwd: path.dirname(root),
-    versionsNewerThanVerified: versions.newerThanVerified,
-    isNonEmptyDir: () => Promise.resolve(false),
-    ...(deps.checkTools ? { checkTools: deps.checkTools } : {}),
-  });
-  const result = evaluateRules(rules, answers, facts);
-  if (result.errors.length > 0) {
-    deps.stderr("エラー: 整合性チェックでエラーが見つかりました。\n");
-    deps.stderr(`${result.errors.map(formatHit).join("\n")}\n`);
-    throw new Stop(1);
+  let newHits: RuleHit[] = [];
+  if (!adopted) {
+    let rules;
+    try {
+      rules = loadRules();
+    } catch (e) {
+      if (e instanceof RulesError) return fail(e.message);
+      throw e;
+    }
+    const facts = await collectFacts(answers, {
+      cwd: path.dirname(root),
+      versionsNewerThanVerified: versions.newerThanVerified,
+      isNonEmptyDir: () => Promise.resolve(false),
+      ...(deps.checkTools ? { checkTools: deps.checkTools } : {}),
+    });
+    const result = evaluateRules(rules, answers, facts);
+    if (result.errors.length > 0) {
+      deps.stderr("エラー: 整合性チェックでエラーが見つかりました。\n");
+      deps.stderr(`${result.errors.map(formatHit).join("\n")}\n`);
+      throw new Stop(1);
+    }
+    const knownIds = new Set(recorded.acceptedWarnings.map((w) => w.id));
+    newHits = result.warnings.filter((h) => h.id !== "missing-tools" && !knownIds.has(h.id));
   }
 
   // 新しい警告（手元の道具の不足は、プロジェクトの警告ではないので、数えない）
-  const knownIds = new Set(recorded.acceptedWarnings.map((w) => w.id));
-  const newHits = result.warnings.filter((h) => h.id !== "missing-tools" && !knownIds.has(h.id));
   const newWarnings: AcceptedWarning[] = [];
   if (newHits.length > 0 && !dryRun) {
     if (yes) {
@@ -606,25 +620,36 @@ async function update(
   const acceptedAll = [...recorded.acceptedWarnings, ...newWarnings];
 
   // 新しい組を、記録の回答・承知した警告・版で組み立てる
-  let built: ProjectFile[];
+  let managedNew: NewFile[];
+  let createdConfig: string | undefined;
+  let settingFiles: ProjectFile[] = [];
+  /** adopt のとき：印で囲んで統合する文書（AGENTS.md・CLAUDE.md）。content は印の中の本文 */
+  const adoptDocs = new Set<string>();
   try {
-    built = buildProject({ answers, acceptedWarnings: acceptedAll, versions, now }).files;
+    if (adopted) {
+      const files = buildAdoptFiles({
+        answers,
+        ...(deps.templatesDir !== undefined ? { templatesDir: deps.templatesDir } : {}),
+      });
+      managedNew = files.map((f) => ({ path: f.path, content: f.content }));
+      for (const f of files) if (f.kind === "doc") adoptDocs.add(f.path);
+    } else {
+      const built = buildProject({ answers, acceptedWarnings: acceptedAll, versions, now }).files;
+      managedNew = built
+        .filter((f) => f.managed)
+        .map((f) => ({
+          path: f.path,
+          content: f.content,
+          ...(f.executable ? { executable: true as const } : {}),
+        }));
+      createdConfig = built.find((f) => f.path === CONFIG_PATH)?.content;
+      if (createdConfig === undefined) return fail("新しい config.yaml を組み立てられませんでした");
+      settingFiles = built.filter((f) => f.path === "package.json" || f.path === "wrangler.jsonc");
+    }
   } catch (e) {
     if (e instanceof GenerateError) return fail(e.message);
     throw e;
   }
-  const managedNew: NewFile[] = built
-    .filter((f) => f.managed)
-    .map((f) => ({
-      path: f.path,
-      content: f.content,
-      ...(f.executable ? { executable: true as const } : {}),
-    }));
-  const createdConfig = built.find((f) => f.path === CONFIG_PATH)?.content;
-  if (createdConfig === undefined) return fail("新しい config.yaml を組み立てられませんでした");
-  const settingFiles = built.filter(
-    (f) => f.path === "package.json" || f.path === "wrangler.jsonc",
-  );
 
   // 今のファイルの状態を読む（管理するファイルと、知らせだけの設定。リンクは拒む）
   let states: Map<string, FileSnapshot>;
@@ -638,8 +663,43 @@ async function update(
     throw e;
   }
   const current = new Map<string, FileState>(states);
+  const untouched: string[] = [];
+  let planFiles = managedNew;
+  if (adopted) {
+    // 印で囲んだ文書は、印の中の本文だけを比べる。読めない・印が壊れている・印が無いときは、何も書かずに止まる
+    for (const p of recorded.markedFiles) {
+      const state = states.get(p);
+      if (state?.kind !== "file") continue;
+      if (!isUtf8Text(state)) {
+        return fail(
+          `${p} は、文字コードが UTF-8 ではないため扱えません（UTF-16・Shift_JIS など）。UTF-8 に変換してから、もう一度実行してください。何も書いていません`,
+        );
+      }
+      const located = extractBlock(state.text);
+      if (located.kind === "broken") {
+        return fail(
+          `${p} の印（harness:begin〜harness:end）が壊れています：${located.reason}。印を直してから、もう一度実行してください。何も書いていません`,
+        );
+      }
+      if (located.kind === "none") {
+        return fail(
+          `${p} に、ハーネスの印（harness:begin〜harness:end）がありません。印の中だけを更新するため、何も書いていません。印を戻してから、もう一度実行してください`,
+        );
+      }
+      current.set(p, { kind: "file", text: located.body });
+    }
+    // 導入のとき既存のファイルを残したもの（管理に入っていないが、ディスクにある）には、触れない
+    planFiles = managedNew.filter((f) => {
+      const onDisk = states.get(f.path)?.kind === "file";
+      if (onDisk && !(f.path in recorded.managedFiles)) {
+        untouched.push(f.path);
+        return false;
+      }
+      return true;
+    });
+  }
   const decisions = planUpdate({
-    files: managedNew,
+    files: planFiles,
     recorded: recorded.managedFiles,
     removed: recorded.removedFiles,
     current,
@@ -658,6 +718,7 @@ async function update(
   // --dry-run：判定の一覧だけ
   if (dryRun) {
     const outcome = describe(decisions);
+    outcome.untouched = untouched;
     deps.stdout(
       renderReport({
         dryRun: true,
@@ -682,6 +743,7 @@ async function update(
     restored: [],
     leftRemoved: [],
     obsolete: [],
+    untouched,
     unchanged: 0,
   };
   const ops: ApplyOp[] = [];
@@ -695,17 +757,23 @@ async function update(
     return s?.kind === "file" ? s.sha : null;
   };
   const fpOf = (file: NewFile): string => fingerprint(file.content);
+  /** 書き込む中身。印で囲む文書は、今のファイル全体の印の中だけを新しい本文にする（印の外は変えない） */
+  const contentOf = (file: NewFile): string => {
+    if (!adoptDocs.has(file.path)) return file.content;
+    const state = states.get(file.path);
+    return mergeBlock(state?.kind === "file" ? state.text : undefined, file.content);
+  };
   const replaceOp = (file: NewFile): ApplyOp => ({
     kind: "replace",
     path: file.path,
-    content: file.content,
+    content: contentOf(file),
     ...(file.executable ? { executable: true as const } : {}),
     expected: shaOf(file.path) ?? "",
   });
   const createOp = (file: NewFile, at: string = file.path): ApplyOp => ({
     kind: "create",
     path: at,
-    content: file.content,
+    content: contentOf(file),
     ...(file.executable ? { executable: true as const } : {}),
   });
   /** <path>.harness-new の置き場所。既にあれば .2・.3…（既存のファイルには触れない） */
@@ -791,6 +859,7 @@ async function update(
     }
   } catch (e) {
     if (e instanceof GenerateError) return fail(e.message);
+    if (e instanceof MarkerError) return fail(`${e.message}。何も書いていません`);
     throw e;
   }
 
@@ -815,12 +884,28 @@ async function update(
   }
 
   // config.yaml は最後に入れ替える
-  const configText = toUpdateConfigText(createdConfig, {
-    generatedOn: recorded.generatedOn,
-    updatedOn: localDay(now),
-    managedFiles: newFingerprints,
-    removedFiles: [...removedAfter],
-  });
+  const configText = toUpdateConfigText(
+    createdConfig ??
+      buildConfigText({
+        answers,
+        acceptedWarnings: recorded.acceptedWarnings,
+        judgment: judge(answers),
+        versions,
+        roles: rolesFor(answers.ais),
+        managed: [],
+        now,
+        mode: "adopt",
+        // 管理に残った、印で囲んだ文書
+        markedFiles: [...adoptDocs].filter((p) => p in newFingerprints),
+      }),
+    {
+      generatedOn: recorded.generatedOn,
+      updatedOn: localDay(now),
+      managedFiles: newFingerprints,
+      removedFiles: [...removedAfter],
+      mode: adopted ? "adopt" : "update",
+    },
+  );
   const configOp: ApplyOp = {
     kind: "replace",
     path: CONFIG_PATH,
@@ -933,6 +1018,7 @@ function describe(decisions: Decision[]): Outcome {
     restored: [],
     leftRemoved: [],
     obsolete: [],
+    untouched: [],
     unchanged: 0,
   };
   for (const d of decisions) {
@@ -987,6 +1073,7 @@ export function updateCommand(deps: Partial<UpdateDeps> = {}): Command {
         ...(deps.fs ? { fs: deps.fs } : {}),
         ...(deps.harnessVersion ? { harnessVersion: deps.harnessVersion } : {}),
         ...(deps.changelog ? { changelog: deps.changelog } : {}),
+        ...(deps.templatesDir ? { templatesDir: deps.templatesDir } : {}),
       });
       process.exitCode = outcome.exitCode;
     });

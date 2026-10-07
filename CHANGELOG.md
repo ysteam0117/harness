@@ -10,7 +10,7 @@
 
 - `harness adopt --answers <file>`：既存のプロジェクトに、AI 向けのルールだけを足す。`AGENTS.md`・`CLAUDE.md` は、既存の内容を残して、印（`<!-- harness:begin -->`〜`<!-- harness:end -->`）で囲んで追加する。共通の Skill・エージェントの定義・AI の権限の設定は、同じ名前のファイルがなければ追加し、あれば差分を見せて選ぶ（`--yes` では既存を残す）。技術プロファイルの Skill・コード・CI・設定ファイルには触れない
 - 秘密情報の確認（履歴を含む）はまだ行わない（#17 で追加予定）。導入の前に、秘密情報が含まれていないことを確かめる
-- `.harness/config.yaml` に `mode: adopt`・`marked_files` を記録する。`harness status` は、印で囲んだ文書を、印の中の本文の指紋で比べる。導入したアプリの `harness update` は、#16 が入るまで未対応（止まる）
+- `.harness/config.yaml` に `mode: adopt`・`marked_files` を記録する。`harness status` は、印で囲んだ文書を、印の中の本文の指紋で比べる。導入したアプリの `harness update` は、印の中だけを新しい内容にする（印の外は変えない。Issue #16）
 - 導入先の AI 向けの文書には、生成したアプリだけにあるコマンド・文書（`npm run env:check` など）を書かない。品質チェック・テストのコマンドは「未設定」とし、既存のコマンドを確かめさせる。`harness create` の出力は変わらない
 
 ### 互換性が壊れる変更

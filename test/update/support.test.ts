@@ -225,4 +225,31 @@ describe("#35 config.yaml の更新の書き方（toUpdateConfigText）", () => 
     });
     expect((parse(out) as Record<string, unknown>)["removed_files"]).toEqual(["b.md", "z.md"]);
   });
+
+  it("#16 mode を渡すと adopt が残り（marked_files も写る）、渡さなければ update", () => {
+    const adopted = `# 見出し
+${stringify({
+  harness_version: "0.2.0",
+  generated_on: "2026-10-03",
+  mode: "adopt",
+  answers: { app_name: "testapp-001" },
+  managed_files: { "a.md": "x" },
+  marked_files: ["a.md"],
+  roles: {},
+})}`;
+    const input = {
+      generatedOn: "2026-01-01",
+      updatedOn: "2026-10-05",
+      managedFiles: { "a.md": fingerprint("a") },
+      removedFiles: [],
+    };
+    const kept = parse(toUpdateConfigText(adopted, { ...input, mode: "adopt" })) as Record<
+      string,
+      unknown
+    >;
+    expect(kept["mode"]).toBe("adopt");
+    expect(kept["marked_files"]).toEqual(["a.md"]);
+    const plain = parse(toUpdateConfigText(adopted, input)) as Record<string, unknown>;
+    expect(plain["mode"]).toBe("update");
+  });
 });

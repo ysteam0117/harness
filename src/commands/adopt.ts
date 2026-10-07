@@ -24,7 +24,7 @@ import {
 import { formatDiff } from "../update/diff.js";
 import { realUpdateFs, type UpdateFs } from "../update/fs.js";
 import type { FileState } from "../update/plan.js";
-import { messageOf, rawSha, readState, type FileSnapshot } from "../update/state.js";
+import { isUtf8Text, messageOf, readState, type FileSnapshot } from "../update/state.js";
 import { interruptible } from "./update.js";
 
 export interface AdoptDeps {
@@ -76,11 +76,6 @@ class Stop extends Error {
 const codeOf = (e: unknown): string | undefined =>
   typeof e === "object" && e !== null ? (e as NodeJS.ErrnoException).code : undefined;
 
-/** 既存の文書が、UTF-8 として正しく読めるか。UTF-16・Shift_JIS 等（読み替えると元に戻らないもの）と、NUL を含むものは読めないとする */
-function isUtf8Text(state: Extract<FileSnapshot, { kind: "file" }>): boolean {
-  return rawSha(Buffer.from(state.text, "utf8")) === state.sha && !state.text.includes("\0");
-}
-
 /** 既存のアプリに、AI 向けのルールを足す（F-29 の最小限）。判定 → 確認 → 原子的な書き込み */
 export async function runAdopt(options: AdoptOptions, deps: AdoptDeps): Promise<AdoptOutcome> {
   try {
@@ -117,7 +112,7 @@ async function run(options: AdoptOptions, deps: AdoptDeps): Promise<AdoptOutcome
     const config = await readState(fs, root, CONFIG_PATH);
     if (config.kind === "file") {
       return fail(
-        `${CONFIG_PATH} がすでにあります。このプロジェクトは、ハーネスを導入済みです。状態の確認は harness status を使ってください（harness adopt は、導入していないプロジェクトに使います。adopt で導入したプロジェクトの harness update は、#16 で対応予定です）`,
+        `${CONFIG_PATH} がすでにあります。このプロジェクトは、ハーネスを導入済みです。状態の確認は harness status を使ってください（harness adopt は、導入していないプロジェクトに使います。導入したプロジェクトに新しいハーネスを反映するには、harness update を使ってください）`,
       );
     }
   } catch (e) {

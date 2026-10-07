@@ -124,6 +124,8 @@ export interface UpdateConfigInput {
   managedFiles: Record<string, string>;
   /** 利用者が消したままにした管理ファイルのパス */
   removedFiles: string[];
+  /** 作り方の記録。既定は update（harness adopt で導入したアプリは adopt のまま残す） */
+  mode?: "update" | "adopt";
 }
 
 /** 新しいハーネスで作った config.yaml の中身を、更新の記録に直す */
@@ -138,7 +140,7 @@ export function toUpdateConfigText(createdText: string, input: UpdateConfigInput
     harness_version: created["harness_version"],
     generated_on: input.generatedOn,
     updated_on: input.updatedOn,
-    mode: "update",
+    mode: input.mode ?? "update",
   };
   for (const [key, value] of Object.entries(created)) {
     if (key in doc) continue;

@@ -203,15 +203,15 @@ describe("#15 AC-3: 生成したアプリ専用のものを、導入先の文書
     }
   }
 
-  it("#15 AC-3: harness update を実行させる案内が無い（未対応と、改善の提案の記録を案内する）", async () => {
+  it("#16 AC-3: 有効にするルール・Skill の反映は、harness update で行うと案内する（未対応とは書かない）", async () => {
     const files = buildAdoptFiles({ answers: await completeAnswers(BOTH) });
     for (const f of files) {
       expect(f.content.includes("`harness update`で"), f.path).toBe(false);
     }
     const proc = files.find((f) => f.path === ".claude/skills/implementation-process/SKILL.md");
-    expect(proc?.content).toContain("まだ対応していない");
-    expect(proc?.content).toContain("#16");
-    expect(proc?.content).toContain("改善の提案");
+    expect(proc?.content).toContain("harness update");
+    expect(proc?.content).not.toContain("#16");
+    expect(proc?.content).not.toContain("まだ対応していない");
   });
 
   it("#15 AC-3: 品質チェック・テストのコマンドは「未設定。既存のコマンドと、DB に接続しないことを確かめ、不明なら利用者に聞く」と案内する", async () => {
