@@ -268,7 +268,7 @@ Docker が使えず `SMOKE_REQUIRE_DOCKER` もないときは、全部の通り�
 
 ## CI の smoke の仕事
 
-`.github/workflows/smoke.yml` の `smoke`。push・PR では動かさず、手動（`workflow_dispatch`。Actions の画面の「Run workflow」）で実行する（#82。時間がかかり環境に左右されるため、最終的な完成の前に通す）。`ubuntu-latest` だけで行う（`timeout-minutes: 60`）。`npm ci` の後に、smoke のスクリプトの単体テスト（`npm run test:smoke`。`test/scripts/smoke-generated*.test.ts`。`npm run check` からは外している）と `npm run smoke:generated` を実行し、環境変数 `SMOKE_REQUIRE_DOCKER`・`SMOKE_REQUIRE_TERRAFORM` に `1` を渡す。CI では Docker・Terraform が使えるはずなので、使えないときは飛ばさず失敗にする。
+`.github/workflows/smoke.yml` の `smoke`。push・PR では動かさず、手動（`workflow_dispatch`。Actions の画面の「Run workflow」）で実行する（#82。時間がかかり環境に左右されるため、最終的な完成の前に通す）。`ubuntu-latest` だけで行う（`timeout-minutes: 60`）。`npm ci` の後に、smoke のスクリプトの単体テスト（`npm run test:smoke`。`test/scripts/smoke-generated*.test.ts`。`npm run check` には入れず、CI（ci.yml）では push・PR のたびにも実行する。#9）と `npm run smoke:generated` を実行し、環境変数 `SMOKE_REQUIRE_DOCKER`・`SMOKE_REQUIRE_TERRAFORM` に `1` を渡す。CI では Docker・Terraform が使えるはずなので、使えないときは飛ばさず失敗にする。
 
 ## テストと受け入れ条件の対応
 

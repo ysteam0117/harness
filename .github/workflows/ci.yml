@@ -24,5 +24,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+      # smoke のスクリプトの単体テスト（子プロセス・後始末の部品）。生成したプロジェクトを動かす smoke は手動（smoke.yml）
+      - run: npm run test:smoke
       - name: 配布物の確認（組み立て・パック・インストール・起動）
         run: npm run pack:check
