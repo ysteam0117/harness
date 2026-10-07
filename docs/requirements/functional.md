@@ -361,20 +361,20 @@ knowledge/
 **核（`AGENTS.md`に常に書く）**
 
 - 日本語での表示（[C-67](common/workflow.md#c-67)）
-- 作業の流れ：Issue → ブランチ → PR、`main`の保護、ブランチ名・コミット・PR（[C-01](common/workflow.md#c-01)・[C-21](common/workflow.md#c-21)〜[C-23](common/workflow.md#c-23)・[C-42](common/workflow.md#c-42)）。GitHubを使わない場合の代わり（[C-83](common/workflow.md#c-83)）
+- 作業の流れ：Issue → ブランチ → PR、Issueの分け方、`main`の保護、ブランチ名・コミット・PR（[C-01](common/workflow.md#c-01)・[C-07](common/workflow.md#c-07)・[C-21](common/workflow.md#c-21)〜[C-23](common/workflow.md#c-23)・[C-42](common/workflow.md#c-42)）。GitHubを使わない場合の代わり（[C-83](common/workflow.md#c-83)）
 - 実装の進め方の要点と、立ち止まる条件（[C-66](common/workflow.md#c-66)）
-- 秘密情報・テストデータの禁止事項（[C-05](common/security.md#c-05)）
-- AIの作業ルール（[C-53](common/design-principles.md#c-53)）、完了の定義（[C-34](common/workflow.md#c-34)）
+- 秘密情報・テストデータの禁止事項（[C-05](common/security.md#c-05)）、テストで本物の外部APIを呼ばないこと（[C-70](common/quality-test.md#c-70)）
+- AIの作業ルール（[C-53](common/design-principles.md#c-53)）、完了の定義（[C-34](common/workflow.md#c-34)）と、完了の定義に含める設計書（[C-81](common/workflow.md#c-81)）、プロジェクト固有のルールの置き場所（[C-80](common/workflow.md#c-80)）
 - 知見の使い方（[C-56](common/design-principles.md#c-56)）と、各Skill・文書の場所の案内
 - 破壊的な操作（[C-75](common/design-principles.md#c-75)）、ハーネスの改善の提案（[C-78](common/workflow.md#c-78)）、要件定義とIssueへの分割（[C-76](common/workflow.md#c-76)）、エラーのもみ消しの禁止（[C-71](common/error-response.md#c-71)）、テスト後の後始末（[C-69](common/quality-test.md#c-69)）
 - 構成（[C-02](common/project-env.md#c-02)）、ライブラリの追加とバージョンの固定（[C-32](common/quality-test.md#c-32)・[C-62](common/quality-test.md#c-62)）、メンテナンス性（[C-38](common/design-principles.md#c-38)）
-- `CLAUDE.md`：Superpowers（[C-11](common/workflow.md#c-11)）、共有の範囲（[C-68](common/workflow.md#c-68)）、役割ごとのエージェントとモデル（[C-66](common/workflow.md#c-66)）
+- `CLAUDE.md`：日本語での表示（[C-67](common/workflow.md#c-67)）、Superpowers（[C-11](common/workflow.md#c-11)）、共有の範囲（[C-68](common/workflow.md#c-68)）、役割ごとのエージェントとモデル（[C-66](common/workflow.md#c-66)）、別のAIによるレビュー（[C-33](common/workflow.md#c-33)）
 
 **Skill（その作業のときだけ読み込む）**
 
 | Skill | 含める共通仕様 | 主に読む役割 |
 | --- | --- | --- |
-| 実装の進め方 | [C-76](common/workflow.md#c-76)・[C-66](common/workflow.md#c-66)・[C-33](common/workflow.md#c-33)・[C-34](common/workflow.md#c-34)・[C-35](common/workflow.md#c-35)・[C-07](common/workflow.md#c-07) | 統括（要件定義・Issueへの分割・Issueの実装を始めるとき） |
+| 実装の進め方 | [C-76](common/workflow.md#c-76)・[C-66](common/workflow.md#c-66)・[C-33](common/workflow.md#c-33)・[C-34](common/workflow.md#c-34)・[C-35](common/workflow.md#c-35)・[C-07](common/workflow.md#c-07)・[C-81](common/workflow.md#c-81) | 統括（要件定義・Issueへの分割・Issueの実装を始めるとき） |
 | バックエンド | [C-03](common/backend.md#c-03)・[C-04](common/backend.md#c-04)・[C-10](common/backend.md#c-10)・[C-30](common/backend.md#c-30)・[C-31](common/backend.md#c-31)・[C-37](common/backend.md#c-37)・[C-64](common/backend.md#c-64)・[C-65](common/backend.md#c-65)・[C-74](common/backend.md#c-74)・[C-57](common/design-principles.md#c-57) | 計画・実装・コードレビュー |
 | フロントエンド | [C-06](common/frontend.md#c-06)・[C-43](common/frontend.md#c-43)〜[C-52](common/frontend.md#c-52)・[C-54](common/frontend.md#c-54)・[C-55](common/frontend.md#c-55)・[C-77](common/frontend.md#c-77)・[C-57](common/design-principles.md#c-57) | 計画・実装・コードレビュー |
 | テスト | [C-24](common/quality-test.md#c-24)〜[C-26](common/quality-test.md#c-26)・[C-69](common/quality-test.md#c-69)・[C-70](common/quality-test.md#c-70)・[C-60](common/quality-test.md#c-60)・[C-61](common/quality-test.md#c-61)・[C-79](common/quality-test.md#c-79)・[C-82](common/quality-test.md#c-82) | テスト・品質チェック |
@@ -382,7 +382,7 @@ knowledge/
 | エラー応答・API | [C-15](common/error-response.md#c-15)・[C-71](common/error-response.md#c-71)・[C-73](common/error-response.md#c-73)・[C-31](common/backend.md#c-31) | 実装・コードレビュー |
 | 環境・デプロイ | [C-36](common/project-env.md#c-36)・[C-39](common/project-env.md#c-39)〜[C-41](common/project-env.md#c-41)・[C-08](common/workflow.md#c-08) | 統括（デプロイの承認を依頼するとき） |
 | レビュー | [C-33](common/workflow.md#c-33)と、レビューの実行方法（別のAIの実行時の注意等） | 計画レビュー・コードレビュー |
-| 知見 | [F-18](#f-18)と、該当する`knowledge/`の知見 | 全役割（判断に迷ったとき） |
+| 知見 | [F-18](#f-18)・[C-56](common/design-principles.md#c-56)と、該当する`knowledge/`の知見 | 全役割（判断に迷ったとき） |
 
 - 各役割のエージェントの定義に、読み込むSkillを書き、役割ごとに必要なルールだけを読み込ませる
 

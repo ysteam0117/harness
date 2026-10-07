@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   collectSpecIds,
   expandRange,
+  findTableMismatches,
   findUnassigned,
   parseSourceLine,
 } from "../scripts/check-spec-coverage.js";
@@ -172,5 +173,117 @@ describe("#37: C-81（設計書）と F-24（良い例・悪い例）", () => {
     expect(f24).toContain("テストで動作を確かめたものに限る");
     expect(f24).toContain("書き写さない");
     expect(f24).toContain("{{example:");
+  });
+});
+
+// #3（旧 #38）F-22：テンプレートの冒頭の番号の一覧が、F-21 の表と一致していること
+describe("#3 F-21 の表とテンプレートの一致（findTableMismatches）", () => {
+  let dir: string;
+  const write = (rel: string, text: string) => {
+    const full = path.join(dir, rel);
+    mkdirSync(path.dirname(full), { recursive: true });
+    writeFileSync(full, text);
+  };
+  const FUNCTIONAL = [
+    "## F-20",
+    '<a id="f-21"></a>',
+    "## F-21",
+    "**核（`AGENTS.md`に常に書く）**",
+    "- 作業の流れ（[C-01](a#c-01)・[C-21](a#c-21)〜[C-23](a#c-23)）",
+    "- `CLAUDE.md`：Superpowers（[C-11](a#c-11)）",
+    "",
+    "**Skill（その作業のときだけ読み込む）**",
+    "",
+    "| Skill | 含める共通仕様 | 主に読む役割 |",
+    "| --- | --- | --- |",
+    "| レビュー | [C-33](a#c-33)と、レビューの実行方法 | 計画レビュー |",
+    "| 知見 | [F-18](#f-18)・[C-56](a#c-56)と、知見 | 全役割 |",
+    '<a id="f-22"></a>',
+    "## F-22",
+  ].join("\n");
+
+  beforeAll(() => {
+    dir = mkdtempSync(path.join(os.tmpdir(), "harness-q3-"));
+  });
+  afterAll(() => {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  });
+
+  const setup = (over: Record<string, string> = {}) => {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    mkdirSync(dir, { recursive: true });
+    const files: Record<string, string> = {
+      "functional.md": FUNCTIONAL,
+      "templates/AGENTS.md": "<!-- もとになった共通仕様：C-01・C-21〜C-23 -->\n# 核\n",
+      "templates/CLAUDE.md": "@AGENTS.md\n\n<!-- もとになった共通仕様：C-11 -->\n",
+      "templates/skills/review/SKILL.md":
+        "---\nname: review\n---\n\n<!-- もとになった共通仕様：C-33 -->\n",
+      "templates/skills/knowledge/SKILL.md":
+        "---\nname: knowledge\n---\n\n<!-- もとになった共通仕様：F-18・C-56 -->\n",
+      ...over,
+    };
+    for (const [rel, text] of Object.entries(files)) write(rel, text);
+    return () => findTableMismatches(path.join(dir, "functional.md"), path.join(dir, "templates"));
+  };
+
+  it("表と一致していれば空", () => {
+    expect(setup()()).toEqual([]);
+  });
+
+  it("AC-1：テンプレートにあって表に無い番号・表にあってテンプレートに無い番号を、両方とも返す", () => {
+    const run = setup({
+      "templates/AGENTS.md": "<!-- もとになった共通仕様：C-01・C-21・C-22・C-99 -->\n",
+    });
+    const result = run();
+    expect(result.join("\n")).toContain("templates/AGENTS.md");
+    expect(result.join("\n")).toContain("C-23");
+    expect(result.join("\n")).toContain("C-99");
+  });
+
+  it("AC-1：別のテンプレートに割り当てた番号（Skill の取り違え）を検出する", () => {
+    const run = setup({
+      "templates/skills/review/SKILL.md":
+        "---\nname: review\n---\n\n<!-- もとになった共通仕様：C-56 -->\n",
+    });
+    expect(run().join("\n")).toContain("templates/skills/review/SKILL.md");
+  });
+
+  it("AC-2：番号の一覧が欠けたテンプレートを検出する", () => {
+    const run = setup({ "templates/CLAUDE.md": "@AGENTS.md\n" });
+    expect(run().join("\n")).toMatch(/templates\/CLAUDE\.md.*一覧がありません/);
+  });
+
+  it("AC-2：一覧が冒頭（最初の見出しより前）に無く、本文や末尾にだけある場合も、欠けとして検出する", () => {
+    const run = setup({
+      "templates/AGENTS.md": "# 核\n\n本文\n\n<!-- もとになった共通仕様：C-01・C-21〜C-23 -->\n",
+    });
+    expect(run().join("\n")).toMatch(/templates\/AGENTS\.md.*一覧がありません/);
+  });
+
+  it("F-21 の表に同じ Skill の行が複数あると、エラーにする（後の行が先の行を上書きして見逃さない）", () => {
+    const run = setup({
+      "functional.md": FUNCTIONAL.replace(
+        "| レビュー | [C-33](a#c-33)と、レビューの実行方法 | 計画レビュー |",
+        "| レビュー | [C-56](a#c-56) | 計画レビュー |\n| レビュー | [C-33](a#c-33)と、レビューの実行方法 | 計画レビュー |",
+      ),
+    });
+    expect(run).toThrow(/同じ Skill の行が複数あります：レビュー/);
+  });
+
+  it("表に無い Skill のフォルダがあると検出する", () => {
+    const run = setup({
+      "templates/skills/extra/SKILL.md":
+        "---\nname: extra\n---\n\n<!-- もとになった共通仕様：C-33 -->\n",
+    });
+    expect(run().join("\n")).toContain("templates/skills/extra/SKILL.md");
+  });
+
+  it("今のリポジトリ（docs/requirements/functional.md と templates/）で食い違いが0件", () => {
+    expect(
+      findTableMismatches(
+        path.join(rootDir, "docs", "requirements", "functional.md"),
+        path.join(rootDir, "templates"),
+      ),
+    ).toEqual([]);
   });
 });
