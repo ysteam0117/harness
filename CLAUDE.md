@@ -14,7 +14,17 @@
 ### 1 Issueの進め方
 
 Skill「opus-plan-sonnet-impl」に従う：Opusで計画 → Codexで計画レビュー（最大3回）→ Sonnetで実装 → Codexでコードレビュー（最大3回）→ 品質チェック（`npm run check`）・smoke。
-その後、コミット・プッシュ・PR作成・マージ・mainへのpullまで行う。GitHub Actions の無料枠がないため CI は使わない（2026-10-07、利用者の判断）。マージの前の確認は、手元の npm run check・npm run test:smoke（と必要に応じて npm run pack:check・smoke）で行う。
+その後、コミット・プッシュ・PR作成・CI成功の確認・マージ・mainへのpullまで行う。マージの後は、main の CI も成功したことを確かめる。
+
+### リポジトリとコミット
+
+- 作業は公開のリポジトリ（組織 ysteam0117 の harness）の複製（C:web_application_filesharness-public）で行う。旧リポジトリ（非公開）と古い作業ツリーには push しない（書き換える前の履歴を含むため）
+- コミットの名前とメールアドレスは ysteam0117 <ysteam0117@users.noreply.github.com>。個人のアカウント名・メールアドレスを、コミット・ファイル・Issue・PR の本文に書かない
+- Issue の番号は、文書の中では旧リポジトリの番号のままでよい（新しいリポジトリの Issue の冒頭に旧番号を書いてある）
+
+### smoke（ハーネス自身の確認）
+
+- smoke（.github/workflows/smoke.yml・scripts/smoke-generated.ts・npm run test:smoke）はハーネス自身を確かめるもので、生成・導入するプロジェクトには入れない。templates/ の下に smoke に関わるものを置かない
 
 ### 次のIssueへの自動着手条件
 
@@ -32,7 +42,7 @@ Skill「opus-plan-sonnet-impl」に従う：Opusで計画 → Codexで計画レ�
 - 新しい依存パッケージの追加など、設計原則に抵触しうる変更が必要になったとき
 - 要件に「要調査」「未検証」と明記された項目に着手するとき
 - レビューを3回重ねても重大な指摘が残るとき
-- 手元の品質チェックが失敗し、原因が今回の変更の範囲外にあるとき
+- CIが失敗し、原因が今回の変更の範囲外にあるとき
 
 ---
 
