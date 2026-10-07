@@ -1157,28 +1157,7 @@ describe("#35 CLI の入口", () => {
   });
 });
 
-describe("#15 R2: 導入済み（mode: adopt）のアプリの harness update", () => {
-  it("#15 R2: mode: adopt なら、未対応と表示して止まり、ファイルに触れない（--yes でも --dry-run でも）", async () => {
-    const dir = await freshProject();
-    editConfig(dir, (doc) => {
-      doc["mode"] = "adopt";
-      doc["marked_files"] = ["AGENTS.md"];
-    });
-    simulateOldVersion(dir, NEW_REPLACED, "# 古いハーネスの CLAUDE.md\n");
-    const before = snapshot(dir);
-    for (const options of [{ yes: true }, { dryRun: true }, {}]) {
-      const s = updateSetup(dir);
-      const out = await runUpdate(options, s.deps);
-      expect(out.exitCode).toBe(1);
-      expect(s.err()).toContain("harness adopt");
-      expect(s.err()).toContain("未対応");
-      expect(s.err()).toContain("#16");
-      expect(s.out()).toBe("");
-      expect(snapshot(dir)).toEqual(before);
-      expect(exists(dir, ".harness/.update-lock")).toBe(false);
-    }
-  });
-
+describe("#15 R2: mode の記録がある既存のアプリの harness update（adopt の更新は update-adopt.test.ts）", () => {
   it("#15 R2: mode: update の既存の記録でも、これまでどおり更新できる", async () => {
     const dir = await freshProject();
     editConfig(dir, (doc) => {

@@ -20,6 +20,11 @@ export function messageOf(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+/** 既存の文書が、UTF-8 として正しく読めるか。UTF-16・Shift_JIS 等（読み替えると元に戻らないもの）と、NUL を含むものは読めないとする */
+export function isUtf8Text(state: Extract<FileSnapshot, { kind: "file" }>): boolean {
+  return rawSha(Buffer.from(state.text, "utf8")) === state.sha && !state.text.includes("\0");
+}
+
 /**
  * 生成先の中の相対パスが、リンク（シンボリックリンク・ジャンクション）をたどらないかを確かめる。
  * 途中のフォルダ・ファイル自身がリンクなら GenerateError。まだ無い部分は確かめない。
