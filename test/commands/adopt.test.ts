@@ -11,6 +11,7 @@ import { BEGIN, END } from "../../src/adopt/markers.js";
 import { runAdopt, type AdoptDeps } from "../../src/commands/adopt.js";
 import { fingerprint } from "../../src/generate/config.js";
 import { CancelledError } from "../../src/questions/prompter.js";
+import { cleanScan } from "../adopt/secret-scan-helpers.js";
 import { FakePrompter, baseAnswers } from "../questions/helpers.js";
 import { FIXED_DAY, FIXED_NOW } from "../versions/helpers.js";
 import { cleanupRoots, newRoot, readConfig, sha, snapshot, write } from "../update/helpers.js";
@@ -69,6 +70,7 @@ function setup(
     stderr: (s) => errs.push(s),
     stdout: (s) => outs.push(s),
     now: () => FIXED_NOW,
+    secretScan: cleanScan,
     ...over,
   };
   return { deps, prompter, errs, outs, err: () => errs.join(""), out: () => outs.join("") };
@@ -247,21 +249,21 @@ describe("#15 AC-1: 既存のアプリに、AI 向けのルールを印で囲ん
     expect(count(read(dir, "AGENTS.md"), BEGIN)).toBe(1);
   });
 
-  it("#15 AC-1: 秘密情報の確認はまだ行わないことを、始めに表示する（#17 で追加予定）", async () => {
+  it("#15 AC-1 / #17: 開始の表示に、秘密情報の確認の結果と、コミット・push をしないことを出す", async () => {
     const dir = sampleApp();
     const s = setup(dir);
     await runAdopt({ answers: answersFile(), yes: true }, s.deps);
     const notes = s.prompter.notes.join("\n");
-    expect(notes).toContain("秘密情報の確認（履歴を含む）はまだ行いません");
-    expect(notes).toContain("#17");
-    expect(notes).toContain("導入の前に、秘密情報が含まれていないことを確かめてください");
+    expect(notes).toContain("秘密情報の確認：問題は見つかりませんでした");
+    expect(notes).not.toContain("まだ行いません");
+    expect(notes).toContain("コミット・push はしません");
   });
 
-  it("#15 AC-1: --dry-run でも、始めの表示は出る", async () => {
+  it("#15 AC-1 / #17: --dry-run でも、始めの表示は出る", async () => {
     const dir = sampleApp();
     const s = setup(dir);
     await runAdopt({ answers: answersFile(), dryRun: true }, s.deps);
-    expect(s.prompter.notes.join("\n")).toContain("秘密情報の確認（履歴を含む）はまだ行いません");
+    expect(s.prompter.notes.join("\n")).toContain("秘密情報の確認：問題は見つかりませんでした");
   });
 });
 

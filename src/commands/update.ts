@@ -904,6 +904,7 @@ async function update(
       managedFiles: newFingerprints,
       removedFiles: [...removedAfter],
       mode: adopted ? "adopt" : "update",
+      ...(adopted && recorded.secretScan !== undefined ? { secretScan: recorded.secretScan } : {}),
     },
   );
   const configOp: ApplyOp = {

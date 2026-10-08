@@ -12,6 +12,7 @@ import { runAdopt, type AdoptDeps } from "../../src/commands/adopt.js";
 import { runStatus } from "../../src/commands/status.js";
 import { runUpdate } from "../../src/commands/update.js";
 import { fingerprint } from "../../src/generate/config.js";
+import { cleanScan } from "../adopt/secret-scan-helpers.js";
 import { FakePrompter, baseAnswers } from "../questions/helpers.js";
 import { FIXED_NOW } from "../versions/helpers.js";
 import {
@@ -87,6 +88,7 @@ async function adoptedApp(
     stderr: () => undefined,
     stdout: () => undefined,
     now: () => FIXED_NOW,
+    secretScan: cleanScan,
   };
   const out = await runAdopt({ answers: answersFile(), yes: true }, deps);
   if (out.exitCode !== 0) throw new Error("導入に失敗しました");
@@ -406,5 +408,31 @@ describe("#16 AC-1: adopt したアプリの update は、印の中だけを更�
     const s2 = updateSetup(dir, { "update_restore:CLAUDE.md": [true] }, { interactive: true });
     expect((await runUpdate({}, s2.deps)).exitCode, s2.err()).toBe(0);
     await expectRestored(dir);
+  });
+});
+
+describe("#17 adopt で記録した秘密情報の確認は、harness update の後も残る", () => {
+  it("passed（範囲・日付）が、更新の後も同じ", async () => {
+    const dir = await adoptedApp();
+    const before = readConfig(dir)["secret_scan"];
+    expect(before).toEqual({
+      status: "passed",
+      scope: "history+worktree",
+      checked_on: expect.any(String) as string,
+    });
+    const s = updateSetup(dir);
+    expect((await runUpdate({ yes: true }, s.deps)).exitCode, s.err()).toBe(0);
+    expect(readConfig(dir)["updated_on"]).toBeDefined();
+    expect(readConfig(dir)["secret_scan"]).toEqual(before);
+  });
+
+  it("skipped（確認していない）も、そのまま残る", async () => {
+    const dir = await adoptedApp();
+    editConfig(dir, (doc) => {
+      doc["secret_scan"] = { status: "skipped", checked_on: "2026-10-01" };
+    });
+    const s = updateSetup(dir);
+    expect((await runUpdate({ yes: true }, s.deps)).exitCode, s.err()).toBe(0);
+    expect(readConfig(dir)["secret_scan"]).toEqual({ status: "skipped", checked_on: "2026-10-01" });
   });
 });
