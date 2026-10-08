@@ -4,7 +4,7 @@
 // 文書に書くのは、ファイルのパスと技術の名前だけ（値・ファイルの中身は書かない）。
 import { isPlainObject, readDataYaml } from "../generate/data.js";
 import { GenerateError } from "../generate/errors.js";
-import { HARNESS_CHECK_PATH } from "./ci.js";
+import { BASELINE_SCRIPT_PATH, HARNESS_CHECK_PATH } from "./ci.js";
 import { CLASS_ORDER, type DetectClass, type DetectedStack } from "./detect.js";
 
 export type Verdict = "met" | "partial" | "unmet" | "na" | "unconfirmed";
@@ -198,11 +198,18 @@ function ciVerdict(files: AdoptedPaths, stack: DetectedStack): Judged {
   const found = stack.apps.flatMap((a) => a.items).filter((i) => i.class === "ci");
   const parts: string[] = [];
   if (introduced) parts.push(`${HARNESS_CHECK_PATH}（導入）`);
+  const baseline = [files.added, files.replaced, files.same].some((l) =>
+    l.includes(BASELINE_SCRIPT_PATH),
+  );
+  if (baseline) parts.push(`${BASELINE_SCRIPT_PATH}（導入。Lint・型・書式の違反の件数の基準線）`);
   for (const i of found) parts.push(`${i.technology}（${i.evidence.join("、")}）`);
   if (parts.length === 0) {
     return { verdict: "unmet", basis: "CI のワークフローが見つかりませんでした" };
   }
-  return { verdict: "partial", basis: `${parts.join("、")}。実行している内容は未確認` };
+  const note = baseline
+    ? ""
+    : "。基準線（違反の件数が増えていないかの確認）は Node.js のアプリだけが対象";
+  return { verdict: "partial", basis: `${parts.join("、")}${note}。実行している内容は未確認` };
 }
 
 function stackVerdict(check: AdoptionCheck, stack: DetectedStack): Judged {

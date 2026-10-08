@@ -277,9 +277,10 @@ harness adopt --answers answers.yaml --skip-secret-scan   # 秘密情報の確�
 | `AGENTS.md`・`CLAUDE.md` | 既存の内容を残し、ハーネスの部分を印（`<!-- harness:begin -->`〜`<!-- harness:end -->`）で囲んで末尾に足す（ファイルが無ければ作る）。印の外は1文字も変えない。印が壊れている・UTF-8 でないときは、何も書かずに止まる |
 | 共通の Skill・エージェントの定義・AI の権限の設定 | 同じ名前のファイルがなければ追加する。ある場合は、差分を見せて「置き換える／残す」を選ぶ（`--yes` では残す） |
 | 当てた技術プロファイルの Skill | 既存のアプリの技術を判定し、必要な手がかりがすべて合ったプロファイルの Skill だけを入れる（`.claude/skills/<名前>/`・`.agents/skills/<名前>/`）。`AGENTS.md` の「ルールを読んで従う」の表に行を足し、どのフォルダに当たるかを書く。既存のアプリがハーネスと違う技術なら、共通のルールだけを入れる。`harness update` は、判定し直さず、導入のときに記録したプロファイルで組み直す（今のハーネスに無いプロファイルは、報告して飛ばす） |
-| プロファイルのコード・設定ファイル | 入れない・触れない（ESLint・Prettier・tsconfig・`package.json`・既存のワークフローは変わらない。Lint・型・テストの基準線は Issue #21） |
+| プロファイルのコード・設定ファイル | 入れない・触れない（ESLint・Prettier・tsconfig・`package.json`・既存のワークフローは変わらない） |
+| `.harness/scripts/baseline-check.mjs` | Node.js のアプリがあるときに追加する、基準線の確認のスクリプト（確認の場所によらず置く。`harness update` で置き換える）。導入のときの Lint・型・書式の違反の件数（ESLint のエラーと警告・tsc の型エラー・Prettier の整形が要るファイル。各アプリの`node_modules`にあるものだけ）を`.harness/baseline.json`に記録し、増えたら失敗する。`harness adopt`は件数を測らない。導入のあと、各アプリで`npm ci`をしてから`node .harness/scripts/baseline-check.mjs --init`を実行し、できた`baseline.json`を導入の PR に含める。減ったら`--update`で下げる。上げるのは`--allow-increase`を付けたときだけで、ADR に記録し承認を得る。表示は件数・種類・フォルダだけ（ソースの中身は出さない）。GitHub Actions で確認するときは、`harness-check.yml`に`baseline`の job も加わる |
 | `docs/harness-adoption.md` | 共通仕様との差の一覧。同じ名前のファイルがあれば、差分を見せて選ぶ（`--yes` では既存を残す）。`harness update` は書き換えない |
-| `.github/workflows/harness-check.yml` | GitHub で、品質チェックを GitHub Actions で行う（`check_location` が `github_actions` か `both`）ときだけ追加する。秘密情報の確認（固定の gitleaks のイメージ。`--redact`・ネットワークなし。値は出さない）を常に、`npm audit --omit=dev --audit-level=high` を Node.js のアプリのフォルダ（導入のときに記録したもの）だけ行う（既存の脆弱性でも最初から失敗する）。見つかったときの表示は、場所・行・コミットだけで、値は出さない（ファイル名そのものに秘密の値を書いていた場合は、その名前が表示される）。既存のワークフローは変えない。同じ名前のファイルがあれば、差分を見せて選ぶ |
+| `.github/workflows/harness-check.yml` | GitHub で、品質チェックを GitHub Actions で行う（`check_location` が `github_actions` か `both`）ときだけ追加する。秘密情報の確認（固定の gitleaks のイメージ。`--redact`・ネットワークなし。値は出さない）を常に、`npm audit --omit=dev --audit-level=high` を Node.js のアプリのフォルダ（導入のときに記録したもの）だけ行い、基準線の確認（`baseline`）も同じフォルダで行う（既存の脆弱性でも最初から失敗する）。見つかったときの表示は、場所・行・コミットだけで、値は出さない（ファイル名そのものに秘密の値を書いていた場合は、その名前が表示される）。既存のワークフローは変えない。同じ名前のファイルがあれば、差分を見せて選ぶ |
 
 - 品質チェック・テストのコマンドは、導入したルールの中では「未設定」です。AI は、実行する前に、既存のコマンドと、テストが本番や共有の DB に接続しないことを確かめます
 - 記録は `.harness/config.yaml`（`mode: adopt`）に書きます。すでにあれば、二重に導入せず止まります

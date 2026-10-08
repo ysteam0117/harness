@@ -24,7 +24,12 @@ import {
   type ScanScope,
   type SecretScanResult,
 } from "../adopt/secret-scan.js";
-import { describeSkippedDir, HARNESS_CHECK_PATH, skippedAuditDirs } from "../adopt/ci.js";
+import {
+  BASELINE_SCRIPT_PATH,
+  describeSkippedDir,
+  HARNESS_CHECK_PATH,
+  skippedAuditDirs,
+} from "../adopt/ci.js";
 import {
   branchNameFor,
   createBranch,
@@ -384,8 +389,23 @@ async function checkSecrets(
   }
 }
 
+/** 基準線を記録する手順（Node.js のアプリがあるとき。コミットの前に行う） */
+const BASELINE_STEPS = [
+  "まず、導入の PR に含める基準線を記録します。各アプリで依存を入れた（`npm ci`）あと、リポジトリのルートで次を実行して、できた `.harness/baseline.json` を確かめてください（次のコミットに含まれます）。",
+  "",
+  "```sh",
+  "node .harness/scripts/baseline-check.mjs --init",
+  "```",
+  "",
+];
+
 /** 導入のあとの手順（コミット・push・PR は、利用者が行う） */
-function nextSteps(branch: string, issue: number | undefined, repository: string): string[] {
+function nextSteps(
+  branch: string,
+  issue: number | undefined,
+  repository: string,
+  baseline: boolean,
+): string[] {
   const ref = issue === undefined ? "" : ` (#${String(issue)})`;
   const title = `chore: ハーネスを導入する${ref}`;
   const lines = [
@@ -393,6 +413,7 @@ function nextSteps(branch: string, issue: number | undefined, repository: string
     "",
     `導入した差分を Git で確かめ、既存のテストと品質チェックを実行してください。ブランチ \`${branch}\` に書きました（main に直接入れません。harness adopt は、コミット・push・PR をしていません）。確かめたら、次の手順で取り込みます。`,
     "",
+    ...(baseline ? BASELINE_STEPS : []),
     "```sh",
     "git add -A",
     `git commit -m "${title}"`,
@@ -561,6 +582,8 @@ function renderReport(input: {
   match: ProfileMatch;
   missing: MissingProfile[];
   skippedDirs: string[];
+  /** 基準線の確認のスクリプトを置く（Node.js のアプリがある） */
+  baseline: boolean;
   /** 差の一覧の件数の要約 */
   summary: string[];
   /** 書いたブランチ（--dry-run は undefined） */
@@ -629,6 +652,21 @@ function renderReport(input: {
     for (const d of input.skippedDirs) lines.push(`- ${d}`);
     lines.push("");
   }
+  if (input.baseline) {
+    lines.push(
+      "### 基準線（Lint・型・書式の違反の件数）",
+      "",
+      "`harness adopt` は、違反の件数を測りません（導入先のコードを動かさないため）。導入のあとの手順（「次にすること」）で、利用者が記録します。",
+      "",
+    );
+  } else if (input.stack.apps.length > 0) {
+    lines.push(
+      "### 基準線の対象外",
+      "",
+      "- 基準線（Lint・型・書式の違反の件数）は、Node.js のアプリだけが対象です。このプロジェクトには、Node.js のアプリが見つかりませんでした",
+      "",
+    );
+  }
   if (input.dryRun && input.diffs.length > 0) {
     lines.push("### 差分", "");
     for (const d of input.diffs) lines.push(`#### ${d.path}`, "", "```diff", d.text, "```", "");
@@ -643,7 +681,7 @@ function renderReport(input: {
       "",
     );
   } else if (input.branch !== undefined) {
-    lines.push(...nextSteps(input.branch.name, input.issue, input.repository));
+    lines.push(...nextSteps(input.branch.name, input.issue, input.repository, input.baseline));
   }
   return lines.join("\n");
 }
@@ -840,6 +878,7 @@ async function adopt(
         match,
         missing,
         skippedDirs,
+        baseline: files.some((f) => f.path === BASELINE_SCRIPT_PATH),
         summary: summaryLines(prelim.assessment),
         branch: undefined,
         issue,
@@ -1039,6 +1078,7 @@ async function adopt(
       match,
       missing,
       skippedDirs,
+      baseline: files.some((f) => f.path === BASELINE_SCRIPT_PATH),
       summary: summaryLines(final.assessment),
       branch: git.branch,
       issue,

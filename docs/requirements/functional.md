@@ -842,6 +842,11 @@ harness create
 - 品質チェックは、基準線より違反が**増えた**場合に失敗にする。新しく書いたコード・変えたコードは、最初から基準を満たす必要がある
 - 既存の違反はIssueにして段階的に減らし、減ったら基準線も下げる。基準線を上げる（緩める）ことはしない。やむを得ず上げる場合は、ADRに記録し、承認を得る（[C-80](common/workflow.md#c-80)）
 - **例外**：秘密情報の混入と、本番の依存の高・重大の脆弱性（[C-32](common/quality-test.md#c-32)・[C-82](common/quality-test.md#c-82)）は、基準線を使わず、最初から直す
+- **決定（Issue #21）**：
+  - 数える種類は、ESLint のエラーと警告（別々）・tsc の型エラー数・Prettier の整形が要るファイル数。導入先の各アプリの`node_modules`にその道具と設定があるものだけ数え、無いものは「対象外」（`null`）にする。テストの失敗・`npm audit`の中低・重複と複雑さは数えない（重複と複雑さは別の Issue）。ハーネスの基準の設定は使わず、既存の設定を使う。ハーネス自身のファイル（アプリのフォルダの`.harness/`の下）は数えない
+  - `harness adopt`は件数を測らない（導入先のコードを動かさないため）。利用者が各アプリで`npm ci`をしたあと、`node .harness/scripts/baseline-check.mjs --init`で`.harness/baseline.json`を作り、導入の PR に含める。`baseline.json`が無い・壊れている・版が違うときの確認は失敗にする
+  - どの値も「今 ≦ 基準線」なら通る。減ったときは通り、`--update`で下げる案内を出す。`--update`は、増えた値が1つも無いときだけ書く。上げるのは`--allow-increase`を付けたときだけで、ADR に記録して承認を得る案内（[C-80](common/workflow.md#c-80)）を出す。`null`から数値は`--update`で記録できる。数値から`null`（道具が無くなった）は失敗にする
+  - スクリプトは、確認の場所（手元・GitHub Actions）によらず、Node.js のアプリがあるときに置く。GitHub Actions の job は、`repository: github`で`check_location`が`github_actions`か`both`のときだけ。手元では、`AGENTS.md`の印の中に実行方法を書く。Node.js 以外のアプリは対象外（差の一覧に書く）。道具は Node.js で直接動かし、シェルも`npx`も使わない。表示には件数・種類・フォルダだけを出し、ソースの中身は出さない
 
 ### 既存の要件定義書
 

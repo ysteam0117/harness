@@ -137,6 +137,7 @@ describe("#15 AC-1: 既存のアプリに、AI 向けのルールを印で囲ん
           rel === ".github/workflows/harness-check.yml" ||
           rel === "docs/harness-adoption.md" ||
           rel === ".harness/config.yaml" ||
+          rel === ".harness/scripts/baseline-check.mjs" ||
           rel === ".harness/baseline.json",
       ),
     ).toBe(true);
@@ -144,7 +145,7 @@ describe("#15 AC-1: 既存のアプリに、AI 向けのルールを印で囲ん
     // 技術プロファイルの Skill は入らない
     expect(added.some((rel) => rel.includes("backend-hono"))).toBe(false);
     expect(existsSync(path.join(dir, ".harness", ".update-lock"))).toBe(false);
-    expect(readdirSync(path.join(dir, ".harness"))).toEqual(["config.yaml"]);
+    expect(readdirSync(path.join(dir, ".harness"))).toEqual(["config.yaml", "scripts"]);
   });
 
   it("#15 AC-1: config.yaml に mode: adopt・marked_files・印の中の本文の指紋が記録される", async () => {

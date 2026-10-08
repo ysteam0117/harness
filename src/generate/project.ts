@@ -218,6 +218,8 @@ export function isManagedPath(p: string): boolean {
     p === ".github/dependabot.yml" ||
     // harness adopt が追加する CI の確認（秘密情報・npm audit、#18）
     p === ".github/workflows/harness-check.yml" ||
+    // 基準線の確認のスクリプト（#21）。baseline.json は、導入先のプロジェクトのもの（update は触らない）
+    p === ".harness/scripts/baseline-check.mjs" ||
     p === ".gitleaks.toml" ||
     p.startsWith(".semgrep/") ||
     p === "scripts/security-check.mjs" ||
