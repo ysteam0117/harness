@@ -1,0 +1,128 @@
+# harness adopt が docs/harness-adoption.md（差の一覧）に出す、共通仕様（C-xx）の一覧と、機械的な判定の方法（F-29 の手順5）。
+# 共通仕様の文書（docs/requirements/）は配布物に入らないため、見出しはここに持つ。
+# 項目の過不足は、テスト（test/adopt/adoption-checks.test.ts）が docs/requirements/common/*.md の冒頭の表と照らして確かめる。
+#
+# method（判定の方法）：
+#   harness_files：files に書いたファイルを、今回の導入で足した・同じだった（満たしている）／既存を残した（一部）。
+#                  導入しなかったファイルしかなければ、未確認
+#   ci            ：harness-check.yml を足す、または既存の CI（GitHub Actions など）があれば「一部」、なければ「満たしていない」
+#   stack         ：stack の条件（class か technology）に合う技術を判定できていれば「一部」（設定の違いは見ない）、なければ「満たしていない」
+#   scan          ：秘密情報の確認が通っていれば clean の値（既定は met）、省いていれば未確認
+#   answers       ：回答だけでは決まらない。rule が回答で有効でなければ「対象外」、有効なら未確認
+#   manual        ：コードを読まないと分からない。未確認（導入のあと、AI が根拠つきで埋める）
+# rule（任意）：回答からの判定（src/generate/judgment.ts）で有効になるときだけ対象にするルール。無効なら「対象外」。未定は有効として扱う。
+#   answers では必須。そのほかの方法でも書ける
+
+checks:
+  C-01: { title: Issue 駆動の開発フロー, method: manual }
+  C-02: { title: frontend/ と backend/ のフォルダ分け, method: manual }
+  C-03: { title: バックエンドの層の分離, method: manual }
+  C-04: { title: DTO で必要な列だけを取得, method: manual }
+  C-05:
+    title: テストデータ・秘密情報・ログイン UI の標準ルール
+    method: harness_files
+    files: [AGENTS.md, CLAUDE.md]
+  C-06: { title: フロントエンドのフォルダ構成と責務, method: manual }
+  C-07: { title: 親 Issue と子 Issue, method: manual }
+  C-08: { title: セマンティックバージョニング, method: manual }
+  C-09: { title: 個人情報の取り扱い, method: answers, rule: C-09 }
+  C-10: { title: 不要なアクセス・転送を避ける, method: manual }
+  C-11: { title: Superpowers のワークフロー, method: manual }
+  C-12: { title: 認証方式, method: manual }
+  C-13: { title: 認可はデフォルト拒否, method: manual }
+  C-14: { title: 認可の範囲, method: answers, rule: C-14 }
+  C-15: { title: エラー応答の形式, method: manual }
+  C-16: { title: アプリと外部 IdP のセッション, method: manual }
+  C-17: { title: アクセストークンとリフレッシュトークン, method: manual }
+  C-18: { title: 認証情報の回復, method: manual }
+  C-19: { title: 推測攻撃を防ぐ試行制限, method: answers, rule: C-19 }
+  C-20: { title: MFA と重要操作前の再認証, method: answers, rule: C-20 }
+  C-21: { title: ブランチ名の形式, method: manual }
+  C-22: { title: コミットメッセージの形式, method: manual }
+  C-23: { title: PR の書き方と Squash マージ, method: manual }
+  C-24:
+    title: 単体・結合・E2E テスト
+    method: stack
+    stack: { class: test }
+  C-25: { title: 要求に基づくテストの設計, method: manual }
+  C-26: { title: テストと受け入れ条件の対応, method: manual }
+  C-27: { title: 入力チェックと SQL インジェクション・XSS の対策, method: manual }
+  C-28: { title: 安全なメソッドと Cookie・CSRF, method: manual }
+  C-29: { title: CORS, method: manual }
+  C-30: { title: ログに秘密・個人情報を出さない, method: answers, rule: C-30 }
+  C-31: { title: API の URL・日時・ページングの形式, method: manual }
+  C-32: { title: lock ファイルと依存ライブラリの管理, method: manual }
+  C-33: { title: 実装と別の AI によるレビュー, method: manual }
+  C-34: { title: 完了の定義, method: manual }
+  C-35: { title: 判断の記録（Issue・PR・ADR）, method: manual }
+  C-36: { title: 開発環境の Docker コンテナ, method: manual }
+  C-37: { title: DB のマイグレーション, method: manual }
+  C-38: { title: メンテナンス性, method: manual }
+  C-39: { title: 本番環境の IaC, method: manual }
+  C-40: { title: 開発・検証・本番の環境の分離, method: manual }
+  C-41: { title: デプロイの承認と切り戻し, method: answers, rule: C-41 }
+  C-42: { title: main への直接の push の禁止, method: manual }
+  C-43: { title: コンポーネントの責務と Props の型, method: manual }
+  C-44:
+    title: TypeScript の strict
+    method: stack
+    stack: { technology: TypeScript }
+  C-45: { title: 状態の管理, method: manual }
+  C-46: { title: API 通信の層, method: manual }
+  C-47: { title: フォームの入力チェック, method: manual }
+  C-48: { title: 非同期の画面の状態の表示, method: manual }
+  C-49: { title: フロントエンドでの外部入力と秘密情報の扱い, method: manual }
+  C-50: { title: 性能の最適化と key, method: manual }
+  C-51: { title: HTML の意味とキーボード操作, method: manual }
+  C-52: { title: 変更にテストを伴わせる, method: manual }
+  C-53:
+    title: 既存のコードに合わせ、エラーを隠さない
+    method: harness_files
+    files: [AGENTS.md]
+  C-54: { title: フロントエンドの完了の定義, method: manual }
+  C-55: { title: アプリアイコン・ファビコン, method: manual }
+  C-56:
+    title: 判断に迷う場面の知見の参照
+    method: harness_files
+    files: [.claude/skills/knowledge/SKILL.md, .agents/skills/knowledge/SKILL.md]
+  C-57:
+    title: 自動整形と命名規則
+    method: stack
+    stack: { technology: Prettier }
+  C-58: { title: セキュリティヘッダー, method: manual }
+  C-59: { title: レート制限, method: manual }
+  C-60: { title: 性能の目標, method: manual }
+  C-61:
+    title: CI と手元の同じ品質チェック
+    method: ci
+  C-62:
+    title: バージョンの固定
+    method: stack
+    stack: { class: runtime }
+  C-63: { title: アップロードしたファイルの非公開, method: manual }
+  C-64: { title: トランザクションの範囲, method: answers, rule: C-64 }
+  C-65: { title: バッチ処理, method: manual }
+  C-66: { title: 実装の役割分担の流れ, method: answers, rule: C-66 }
+  C-67: { title: AI の報告を日本語で書く, method: manual }
+  C-68:
+    title: AI 向けの設定（共有するものと個人のもの）
+    method: harness_files
+    files: [.claude/settings.json, .codex/rules/default.rules]
+  C-69: { title: テスト環境の構築手順, method: manual }
+  C-70: { title: 外部 API のテストにモックを使う, method: manual }
+  C-71: { title: エラーをもみ消さない, method: harness_files, files: [AGENTS.md] }
+  C-72: { title: SQL はパラメータで渡す, method: manual }
+  C-73: { title: 予期しないエラーのグローバル処理, method: manual }
+  C-74: { title: 外部 API の版の固定, method: manual }
+  C-75: { title: 取り消しが難しい操作の扱い, method: harness_files, files: [AGENTS.md] }
+  C-76: { title: 要件定義とプロトタイプ, method: manual }
+  C-77: { title: 操作結果のすぐの反映, method: answers, rule: C-77 }
+  C-78: { title: ハーネスの改善点の記録, method: manual }
+  C-79: { title: 壊そうとしても壊れないことのテスト, method: answers, rule: C-79 }
+  C-80: { title: プロジェクト固有のルールの文書, method: manual }
+  C-81: { title: 設計書（docs/design/）, method: manual }
+  C-82:
+    title: セキュリティのテスト
+    method: scan
+    clean: partial
+  C-83: { title: GitHub を使わないときの Issue とレビューの記録, method: manual }

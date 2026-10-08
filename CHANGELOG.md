@@ -19,7 +19,12 @@
 
 - Skill「既存のプロジェクトへの導入」（Issue #19）：`templates/skills/adopt-existing/SKILL.md`。導入の前に、AI が既存の要件定義書・README・設計書・コードを読み、`harness adopt --answers` に渡す回答のファイルを、根拠（読んだファイル）つきで作る手順。判定できない項目は `undecided` にし、技術プロファイルの候補は YAML のコメントで書く（CLI は読まない）。`.env` などの秘密情報は開かない。この Skill はハーネスを使う人だけが読むもので、`harness create`・`harness adopt`・`harness update` の出力には入らない。回答の形・CLI の質問は変わらない
 
+- 差の一覧と新しいブランチ（Issue #20）：`harness adopt` が、共通仕様（C-xx）との差の一覧 `docs/harness-adoption.md` を作る。判定は「満たしている／一部／満たしていない／対象外／未確認」。CLI は機械的に分かる項目（導入したファイル・CI・判定した技術・秘密情報の確認・回答で当てはまらない条件つきのルール）だけ判定し、ほかは「未確認」にする（回答が「未定」の項目は、対象外にしない）。導入のあとに AI が Skill「既存のプロジェクトへの導入」の節に従って「未確認」を根拠つきで埋め、Issue にする。文書にはファイルのパスと名前だけを書き、導入のときの記録として `harness update` は書き換えない。共通仕様の一覧は `data/adoption-checks.yaml`
+- `harness adopt --issue <番号>`（適用するときは必須。`--dry-run` では不要）：承認のあと、書く前に、新しいブランチ `chore/<番号>-adopt-harness` に移る。Git のフォルダでない・作業ツリーが汚れている・同じ名前のブランチが別にある、のときは、何も書かずに止まる（今いるブランチがちょうど同名なら続ける）。`main` 以外にいるときは、今の HEAD から分ける。コミット・push・PR はせず、手順を表示する。`harness create` の出力は変わらない
+
 ### 互換性が壊れる変更
+
+- `harness adopt` の適用に `--issue <番号>` が必須になり、Git のフォルダで作業ツリーがきれいなときだけ実行できる（新しいブランチに導入するため）。`--dry-run` は、これまでどおり、どこでも実行できる
 
 - **生成したプロジェクトの品質チェック（`npm run check`）に Docker が必須になった**。D1・DB なしのプロジェクトでも、Semgrep・gitleaks・OSV-Scanner を Docker のイメージで実行する。Docker がないと `npm run check` は失敗する（スキップの環境変数はない）。Docker のコンテナの中では、Docker を使わない `npm run check:app` を実行する。`harness update` の後、Docker を入れて起動してから `npm run check` を実行する。Docker Desktop は、大きな会社が業務で使うときは有料になる
 - 品質チェックを2段にした：`npm run check:app`（これまでの `check` の中身）と、`npm run check`（`check:app` に `npm run security` を足したもの）。CI（GitHub Actions）の ubuntu は Docker を使える

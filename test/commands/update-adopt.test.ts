@@ -8,7 +8,8 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { stringify } from "yaml";
 import { BEGIN, END } from "../../src/adopt/markers.js";
-import { runAdopt, type AdoptDeps } from "../../src/commands/adopt.js";
+import type { AdoptDeps } from "../../src/commands/adopt.js";
+import { runAdopt } from "../adopt/git-helpers.js";
 import { runStatus } from "../../src/commands/status.js";
 import { runUpdate } from "../../src/commands/update.js";
 import { fingerprint } from "../../src/generate/config.js";
@@ -138,6 +139,20 @@ describe("#16 AC-1: adopt したアプリの update は、印の中だけを更�
     expect(config.managed_files[SKILL]).toBe(fingerprint(read(dir, SKILL)));
     expect(s.out()).toContain("AGENTS.md");
     expect(exists(dir, ".harness/.update-lock")).toBe(false);
+  });
+
+  it("#20 AC-5: 差の一覧(docs/harness-adoption.md)は導入のときの記録。update は書き換えず、記録(指紋)にも入れない", async () => {
+    const dir = await adoptedApp();
+    const DOC = "docs/harness-adoption.md";
+    // 利用者(または AI)が「未確認」を埋めた状態にする
+    write(dir, DOC, `${read(dir, DOC)}\n| 埋めた項目(テスト) |\n`);
+    const before = sha(bytes(dir, DOC));
+    expect(readConfig(dir).managed_files[DOC]).toBeUndefined();
+    const s = updateSetup(dir);
+    expect((await runUpdate({ yes: true }, s.deps)).exitCode, s.err()).toBe(0);
+    expect(sha(bytes(dir, DOC))).toBe(before);
+    expect(exists(dir, `${DOC}.harness-new`)).toBe(false);
+    expect(readConfig(dir).managed_files[DOC]).toBeUndefined();
   });
 
   it("#16 CRLF と BOM：BOM と CRLF が保たれ、印の外がバイト単位で同じ", async () => {

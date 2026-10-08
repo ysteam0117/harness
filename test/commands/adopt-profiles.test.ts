@@ -6,7 +6,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { parse, stringify } from "yaml";
-import { runAdopt, type AdoptDeps } from "../../src/commands/adopt.js";
+import type { AdoptDeps } from "../../src/commands/adopt.js";
+import { runAdopt } from "../adopt/git-helpers.js";
 import { runUpdate } from "../../src/commands/update.js";
 import { realUpdateFs } from "../../src/update/fs.js";
 import { gitleaksImage } from "../../src/adopt/secret-scan.js";
@@ -123,6 +124,7 @@ describe("#18-B adopt：TypeScript（Hono・React）に、当てた6つのプロ
       rel === "AGENTS.md" ||
       rel === "CLAUDE.md" ||
       rel === CHECK ||
+      rel === "docs/harness-adoption.md" ||
       rel.startsWith(".claude/") ||
       rel.startsWith(".agents/") ||
       rel.startsWith(".codex/") ||
