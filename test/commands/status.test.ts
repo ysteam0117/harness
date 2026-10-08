@@ -170,7 +170,7 @@ describe("#15 R5: 導入したアプリ（mode: adopt）の状態は、印の中
   async function adopted() {
     const { cpSync, readFileSync, writeFileSync } = await import("node:fs");
     const { stringify } = await import("yaml");
-    const { runAdopt } = await import("../../src/commands/adopt.js");
+    const { runAdopt } = await import("../adopt/git-helpers.js");
     const { FakePrompter, baseAnswers } = await import("../questions/helpers.js");
     const { FIXED_NOW } = await import("../versions/helpers.js");
     const { cleanScan } = await import("../adopt/secret-scan-helpers.js");

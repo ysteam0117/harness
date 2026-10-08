@@ -8,7 +8,8 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { stringify } from "yaml";
 import { BEGIN, END } from "../../src/adopt/markers.js";
-import { runAdopt, type AdoptDeps } from "../../src/commands/adopt.js";
+import type { AdoptDeps } from "../../src/commands/adopt.js";
+import { runAdopt } from "../adopt/git-helpers.js";
 import { fingerprint } from "../../src/generate/config.js";
 import { CancelledError } from "../../src/questions/prompter.js";
 import { cleanScan } from "../adopt/secret-scan-helpers.js";
@@ -116,7 +117,7 @@ describe("#15 AC-1: 既存のアプリに、AI 向けのルールを印で囲ん
     expect(claude.startsWith(BEGIN)).toBe(true);
     expect(claude.endsWith(`${END}\n`)).toBe(true);
 
-    // 変わったのは、AGENTS.md と、新しく足したファイルと、.harness だけ
+    // 変わったのは、AGENTS.md と、新しく足したファイル（差の一覧 docs/harness-adoption.md を含む）と、.harness だけ
     const after = snapshot(dir);
     for (const [rel, hash] of before) {
       if (rel === "AGENTS.md") continue;
@@ -134,6 +135,7 @@ describe("#15 AC-1: 既存のアプリに、AI 向けのルールを印で囲ん
           rel === "CLAUDE.md" ||
           rel.startsWith(".claude/") ||
           rel === ".github/workflows/harness-check.yml" ||
+          rel === "docs/harness-adoption.md" ||
           rel === ".harness/config.yaml" ||
           rel === ".harness/baseline.json",
       ),
@@ -258,7 +260,7 @@ describe("#15 AC-1: 既存のアプリに、AI 向けのルールを印で囲ん
     const notes = s.prompter.notes.join("\n");
     expect(notes).toContain("秘密情報の確認：問題は見つかりませんでした");
     expect(notes).not.toContain("まだ行いません");
-    expect(notes).toContain("コミット・push はしません");
+    expect(notes).toContain("コミット・push・PR はしません");
   });
 
   it("#15 AC-1 / #17: --dry-run でも、始めの表示は出る", async () => {

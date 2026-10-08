@@ -96,7 +96,7 @@ const CANCEL_MESSAGE = "中断しました。ファイルは変更していま�
 const LOCK_PATH = ".harness/.update-lock";
 const EDIT_NOTICE = "更新の間は、ファイルを編集しないでください。";
 
-const realRunGit: RunGit = (args, cwd) =>
+export const realRunGit: RunGit = (args, cwd) =>
   new Promise((resolve) => {
     execFile(
       "git",

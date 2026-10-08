@@ -47,16 +47,17 @@
 
 1. 場所を決める（`--dir`、なければ作業中のフォルダ）。`.harness/config.yaml` が既にあれば止める（二重に導入しない）
 2. `--answers` を読む（必須）。アプリ名は、常にフォルダの名前から決める。名前の形が正しくなければ止めて案内する。回答ファイルに、フォルダの名前と違う `app_name` があれば止める（同じなら可）。端末でなく回答が足りなければ、足りない項目を示して止める
-3. 端末でなく `--yes` もなければ止める（`--dry-run` を除く）
+3. `--issue` を確かめる（適用するときは必須、`--dry-run` では不要。正の整数でなければ止める）。端末でなく `--yes` もなければ止める（`--dry-run` を除く）
+3.5. （適用するときだけ）新しいブランチの検査（下の「差の一覧と新しいブランチ」）。何も書き換えない。
 4. 秘密情報の確認（下の「秘密情報の確認」）。中断（SIGINT・SIGTERM）の受け付けは、この確認より前に始める。`--dry-run` でも確認する
 5. ロック（`.harness/.update-lock`。`harness update` と同じ）を取る。`--dry-run` はロックしない
-6. 開始の表示（秘密情報の確認の結果・コミット／push をしないこと）。足りない項目だけ質問する
+6. 開始の表示（秘密情報の確認の結果・ブランチ・コミット／push／PR をしないこと）。足りない項目だけ質問する
 7. `buildAdoptFiles` で導入するファイルを作り、今のファイルを読む（リンクは拒む）。既存の `AGENTS.md`・`CLAUDE.md` が UTF-8 として読めなければ（UTF-16・Shift_JIS 等。BOM 付きの UTF-8 は可）、書き込みの前に止める。印が壊れていても、止める
 8. `planAdopt` で判定する
-9. `--dry-run`：一覧と差分を表示して終わる
-10. 差分の表示（同じ名前で中身が違うファイルは、省かず全体を見せる。`.harness-new` は使わない）→ 承認（`--yes` なら聞かない。同じ名前で中身が違うファイルは、対話なら「置き換える／残す」を選ぶ。既定は残す）。「いいえ」なら何も書かない
-11. `applyUpdate` で書く。**`.harness/config.yaml` の新規作成も、同じ一括の最後の操作**にする。途中の失敗・中断（Ctrl+C）では、書いた分を元に戻し、ロックも一時ファイルも残さない
-12. 結果の一覧（PR の本文に貼れる Markdown）を出す。コミット・push はしない
+9. `--dry-run`：一覧と差分と差の一覧の件数の要約を表示して終わる（git に触れない）
+10. 差分の表示（同じ名前で中身が違うファイルは、省かず全体を見せる。`.harness-new` は使わない）→ 承認（`--yes` なら聞かない。同じ名前で中身が違うファイルは、対話なら「置き換える／残す」を選ぶ。既定は残す）。「いいえ」なら何も書かない。差の一覧（`docs/harness-adoption.md`）は、ほかのファイルの選択が決まった後の内容で作り直し、同名のファイルがあれば同じように選ばせる
+11. 新しいブランチへ移ってから（`git switch -c`）、`applyUpdate` で書く。**`.harness/config.yaml` の新規作成も、同じ一括の最後の操作**にする。途中の失敗・中断（Ctrl+C）では、書いた分を元に戻し、ロックも一時ファイルも残さない
+12. 結果の一覧（PR の本文に貼れる Markdown）と、次の手順を出す。コミット・push・PR はしない
 
 ## 判定
 
@@ -149,6 +150,36 @@
 - 導入のとき既存を残したファイル（新しい組にあるが管理に入っておらず、ディスクにある）は、管理外として触れず、報告だけする。新しい組から消えた文書・ファイルは、不要になったものとして報告するだけで、消さない
 - `config.yaml` は `mode: adopt` のまま、`marked_files` は管理に残った文書にして書き直す
 
+## 差の一覧と新しいブランチ（Issue #20）
+
+F-29 の手順5・6。`harness adopt` は、共通仕様（C-xx）との差の一覧 `docs/harness-adoption.md` を作り、新しいブランチ `chore/<--issue の番号>-adopt-harness` に書く。
+
+| ファイル | 役割 |
+| --- | --- |
+| `data/adoption-checks.yaml` | 共通仕様の一覧と判定の方法（C-38）。`docs/requirements/` は配布物に入らないため、見出しをここに持つ。`test/adopt/adoption-checks.test.ts` が、`docs/requirements/common/*.md` の冒頭の表の C-xx と過不足なく一致することを確かめる |
+| `src/adopt/assess.ts` | `loadAdoptionChecks`・`assessAdoption`（判定。純粋な関数）・`renderAdoptionDoc`（文書の本文。LF）・`summaryLines`（件数の要約） |
+| `src/adopt/git.ts` | `parseIssue`・`branchNameFor`・`prepareBranch`（書く前の検査）・`createBranch`（`git switch -c`）。git の実行は `RunGit`（`update.ts` と共通。`AdoptDeps.runGit` で差し替え） |
+
+判定の値は、満たしている／一部／満たしていない／対象外／未確認。CLI は機械的に分かる項目だけ判定する。
+
+| 方法（method） | 判定 |
+| --- | --- |
+| `harness_files` | 書く（書かない）ファイルの結果から。足した・統合した・置き換えた・同じ内容 → 満たしている。既存を残した → 一部。今回導入しなかったファイルだけ（選ばなかった AI の分など）→ 未確認 |
+| `ci` | `harness-check.yml` を導入する、または既存の CI を判定している → 一部（実行内容は未確認）。どちらもなければ満たしていない |
+| `stack` | 判定した技術（`detected_stack`）に合えば一部（設定の差は未確認）、なければ満たしていない |
+| `scan` | 秘密情報の確認が通った → `clean` の値（既定は満たしている）。省いた → 未確認 |
+| `answers` | `rule` が回答の判定（`judge`）で有効でなければ対象外、有効なら未確認 |
+| `manual` | 未確認。導入のあとに、AI が Skill「既存のプロジェクトへの導入」の節に従い、根拠つきで埋める |
+
+`rule` は、どの方法にも付けられる。回答で有効でなければ対象外にする。回答が「未定」の項目は、`judge` が安全側で有効にするので、対象外にならない。文書には、ファイルのパスと技術の名前だけを書く（値・中身は書かない）。
+
+- **文書の判定の順序**：差の一覧は、同名ファイルの「置き換える／残す」の選択がすべて確定した後（最終の書き込み内容が決まった後）に作る。`--dry-run` の要約は、選択の前の既定（`--yes` と同じく既存を残す）で作る。`docs/harness-adoption.md` 自身に同名のファイルがあれば、ほかのファイルと同じく、差分を見せて選ぶ（`--yes` は既存を残す）
+- 文書は `config.yaml` の `managed_files`（指紋）に入れない。導入のときの記録なので、`harness update` は書き換えない
+- **ブランチの検査**（`prepareBranch`）：`.harness/.update-lock` を作る前、最初の書き込みの前に行う。Git のフォルダか、作業ツリーがきれいか（未追跡のファイルを含む。回答のファイルをプロジェクトの中に置いていると止まる）、同名のブランチがないか（今いるブランチがちょうど同名なら続ける）。オプションでの回避はない。`main` 以外にいるときは、今の HEAD から分け、元を表示する
+- **ブランチの作成**：承認の後、書き込みの前に `git switch -c`。取り消し・`--dry-run` では作らない。書き込みに失敗したときは、ファイルは元に戻り、ブランチは空で残る（消さず、消し方を表示する）。ロックは未追跡のまま残っていても `switch -c` はできる
+- `--issue` は適用するとき必須（`--dry-run` では不要で、git に触れない）。正の整数でなければ止まる
+- コミット・push・PR はしない。手順（`git add -A`・`commit`・`push`、GitHub なら `gh pr create`、手元の Git だけなら C-83）を表示する
+
 ## 生成したアプリ専用のものを書かない
 
 導入先には、`harness create` が生成するアプリだけにあるもの（`npm run env:check`・`check:app`・`security` などのコマンド、`docs/project-rules.md`・`docs/secrets.md`・`docs/testing/` などの文書、テストが開発・本番の DB と分かれていることの保証、技術プロファイルのコード）が無い。ひな形には分岐を入れず（F-28）、`data/template-values.yaml` の値を、導入のときだけ `data/adopt-values.yaml` で入れ替える。
@@ -163,4 +194,4 @@
 
 ## テスト
 
-`test/adopt/`（印・判定・組み立て・Skill「既存のプロジェクトへの導入」`adoption-skill.test.ts`・秘密情報の確認 `secret-scan.test.ts`。プロファイルの Skill `build-profiles.test.ts`、`harness-check.yml` `harness-check.test.ts`）、`test/commands/adopt-profiles.test.ts`（Skill・`harness-check.yml` の導入と、update が記録した `applied` で組み直すこと）、`test/scripts/smoke-generated-harness-check.test.ts`（実際の Docker の gitleaks で、生成した確認の `run` を動かす）、`test/commands/adopt-secret-scan.test.ts`（確認の道具を差し替えた結果の扱い）、`test/scripts/smoke-generated-secret-scan.test.ts`（実際の Docker の gitleaks。`npm run test:smoke`。Docker が無ければ飛ばす）、`test/adopt/detect*.test.ts`・`match-profiles.test.ts`（技術の判定。偽の fs で、読んだパスを記録して .env・リンク・ルートの外を確かめる）、`test/commands/adopt-detect.test.ts`（`test/fixtures/adopt-hono-react`・`adopt-django`・`adopt-go`・`adopt-mixed` を写して実行）、`test/commands/adopt.test.ts`（架空の既存のアプリ `test/fixtures/adopt-sample/` を一時フォルダに写して実行）。`test/commands/update.test.ts`・`status.test.ts`・`test/update/read-config.test.ts` に、導入済みのアプリの扱いを足した。
+`test/adopt/`（印・判定・組み立て・Skill「既存のプロジェクトへの導入」`adoption-skill.test.ts`・秘密情報の確認 `secret-scan.test.ts`。プロファイルの Skill `build-profiles.test.ts`、`harness-check.yml` `harness-check.test.ts`）、`test/commands/adopt-profiles.test.ts`（Skill・`harness-check.yml` の導入と、update が記録した `applied` で組み直すこと）、`test/scripts/smoke-generated-harness-check.test.ts`（実際の Docker の gitleaks で、生成した確認の `run` を動かす）、`test/commands/adopt-secret-scan.test.ts`（確認の道具を差し替えた結果の扱い）、`test/scripts/smoke-generated-secret-scan.test.ts`（実際の Docker の gitleaks。`npm run test:smoke`。Docker が無ければ飛ばす）、`test/adopt/detect*.test.ts`・`match-profiles.test.ts`（技術の判定。偽の fs で、読んだパスを記録して .env・リンク・ルートの外を確かめる）、`test/commands/adopt-detect.test.ts`（`test/fixtures/adopt-hono-react`・`adopt-django`・`adopt-go`・`adopt-mixed` を写して実行）、`test/commands/adopt.test.ts`（架空の既存のアプリ `test/fixtures/adopt-sample/` を一時フォルダに写して実行）。Issue #20：`test/adopt/assess.test.ts`・`adoption-checks.test.ts`・`git.test.ts`（偽の git。`git-helpers.ts` が偽の git と、既存のテスト向けの `runAdopt` の包みを持つ）、`test/commands/adopt-report.test.ts`（差の一覧とブランチ。偽の git）、`test/commands/adopt-branch.test.ts`（実際の git）。`test/commands/update.test.ts`・`status.test.ts`・`test/update/read-config.test.ts` に、導入済みのアプリの扱いを足した。

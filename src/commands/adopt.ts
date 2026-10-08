@@ -1,6 +1,12 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { Command } from "commander";
+import {
+  assessAdoption,
+  renderAdoptionDoc,
+  summaryLines,
+  type AdoptedPaths,
+} from "../adopt/assess.js";
 import { buildAdoptFiles, type AdoptFile } from "../adopt/build.js";
 import {
   CLASS_ORDER,
@@ -19,6 +25,14 @@ import {
   type SecretScanResult,
 } from "../adopt/secret-scan.js";
 import { describeSkippedDir, HARNESS_CHECK_PATH, skippedAuditDirs } from "../adopt/ci.js";
+import {
+  branchNameFor,
+  createBranch,
+  ensureOnBranch,
+  parseIssue,
+  prepareBranch,
+  type BranchPlan,
+} from "../adopt/git.js";
 import { extractBlock, mergeBlock, MarkerError } from "../adopt/markers.js";
 import {
   describeMissing,
@@ -53,7 +67,7 @@ import { formatDiff } from "../update/diff.js";
 import { realUpdateFs, type UpdateFs } from "../update/fs.js";
 import type { FileState } from "../update/plan.js";
 import { isUtf8Text, messageOf, readState, type FileSnapshot } from "../update/state.js";
-import { interruptible } from "./update.js";
+import { interruptible, realRunGit, type RunGit } from "./update.js";
 
 export interface AdoptDeps {
   prompter: Prompter;
@@ -71,6 +85,8 @@ export interface AdoptDeps {
   secretScan?: (root: string, signal: AbortSignal) => Promise<SecretScanResult>;
   /** docker・git の実行役の差し替え（テスト用。secretScan を差し替えないときに使う） */
   runner?: Runner;
+  /** git の実行の差し替え（テスト用）。既定は本物（新しいブランチの検査と作成に使う） */
+  runGit?: RunGit;
 }
 
 export interface AdoptOptions {
@@ -84,6 +100,8 @@ export interface AdoptOptions {
   dryRun?: boolean;
   /** --skip-secret-scan：秘密情報の確認を省く（Docker が無いときなど。確認していないと記録する） */
   skipSecretScan?: boolean;
+  /** --issue：導入先の Issue の番号（正の整数）。新しいブランチ chore/<番号>-adopt-harness の名前になる。適用するときは必須 */
+  issue?: number | string;
 }
 
 export interface AdoptOutcome {
@@ -93,8 +111,9 @@ export interface AdoptOutcome {
 const CANCEL_MESSAGE = "中断しました。ファイルは変更していません。";
 const LOCK_PATH = ".harness/.update-lock";
 const HARNESS_DIR = ".harness";
+const DOC_PATH = "docs/harness-adoption.md";
 const START_NOTICE =
-  "harness adopt は、ファイルを書くだけです。コミット・push はしません。導入の差分は、Git で確かめてください。";
+  "harness adopt は、新しいブランチ（chore/<Issue番号>-adopt-harness）にファイルを書くだけです。コミット・push・PR はしません。導入の差分は、Git で確かめてください。";
 
 /** 秘密情報の確認の結果（開始の表示・レポート・config に使う） */
 type ScanOutcome =
@@ -208,6 +227,21 @@ async function run(options: AdoptOptions, deps: AdoptDeps): Promise<AdoptOutcome
   }
   initial.app_name = folderName;
 
+  // --issue（適用するときは必須。--dry-run では不要。書いてあれば、正しさを確かめる）
+  let issue: number | undefined;
+  if (options.issue !== undefined) {
+    issue = parseIssue(options.issue);
+    if (issue === undefined) {
+      return fail(
+        `--issue「${String(options.issue)}」は使えません。導入先の Issue の番号を、正の整数で指定してください（例：--issue 12）`,
+      );
+    }
+  } else if (!dryRun) {
+    return fail(
+      "--issue で導入先の Issue の番号を指定してください（新しいブランチ chore/<番号>-adopt-harness に導入します。何が変わるかだけを見るなら、--dry-run を使います。--issue は要りません）",
+    );
+  }
+
   if (!yes && !dryRun && !deps.interactive) {
     return fail(
       "端末で実行していないため、確認できません。確認を省くには --yes を付けてください（--dry-run で、何が変わるかだけを確かめられます）",
@@ -224,6 +258,15 @@ async function run(options: AdoptOptions, deps: AdoptDeps): Promise<AdoptOutcome
       deps.stderr("--answers の回答ファイルに書いてください。\n");
       throw new Stop(1);
     }
+  }
+
+  // 新しいブランチの検査（git か・作業ツリーがきれいか・同じ名前のブランチがないか）。ロックや .harness を作る前に行う。何も書き換えない
+  const runGit = deps.runGit ?? realRunGit;
+  let branch: BranchPlan | undefined;
+  if (!dryRun && issue !== undefined) {
+    const prepared = await prepareBranch(runGit, root, issue);
+    if (!prepared.ok) return fail(prepared.message);
+    branch = prepared.plan;
   }
 
   // 並行の実行を防ぐ（--dry-run は何も書かないので、ロックしない）
@@ -262,7 +305,10 @@ async function run(options: AdoptOptions, deps: AdoptDeps): Promise<AdoptOutcome
       }
     }
     if (controller.signal.aborted) throw new CancelledError();
-    const result = await adopt(root, initial, options, deps, fs, fail, controller.signal, scan);
+    const result = await adopt(root, initial, options, deps, fs, fail, controller.signal, scan, {
+      runGit,
+      branch,
+    });
     if (controller.signal.aborted && result.applied) {
       deps.stderr("導入は完了しました。\n");
     } else if (controller.signal.aborted && result.exitCode === 0) {
@@ -337,6 +383,54 @@ async function checkSecrets(
     }
   }
 }
+
+/** 導入のあとの手順（コミット・push・PR は、利用者が行う） */
+function nextSteps(branch: string, issue: number | undefined, repository: string): string[] {
+  const ref = issue === undefined ? "" : ` (#${String(issue)})`;
+  const title = `chore: ハーネスを導入する${ref}`;
+  const lines = [
+    "### 次にすること",
+    "",
+    `導入した差分を Git で確かめ、既存のテストと品質チェックを実行してください。ブランチ \`${branch}\` に書きました（main に直接入れません。harness adopt は、コミット・push・PR をしていません）。確かめたら、次の手順で取り込みます。`,
+    "",
+    "```sh",
+    "git add -A",
+    `git commit -m "${title}"`,
+    `git push -u origin ${branch}`,
+  ];
+  if (repository === "github") {
+    lines.push(`gh pr create --title "${title}" --body "docs/harness-adoption.md を見てください"`);
+  }
+  lines.push("```", "");
+  if (repository !== "github") {
+    lines.push(
+      "GitHub を使わないため、PR は作りません。ブランチは、レビューの記録を残したうえで、main に取り込んでください（C-83）。",
+      "",
+    );
+  }
+  lines.push(
+    "取り込んだあと、`docs/harness-adoption.md` の「未確認」を、Skill「既存のプロジェクトへの導入」で埋め、「満たしていない」「一部」の項目を Issue にします。",
+    "",
+  );
+  return lines;
+}
+
+/** 書くブランチの説明（開始の表示に出す） */
+function branchSentence(plan: BranchPlan): string {
+  if (plan.alreadyOn)
+    return `ブランチ：今いるブランチ ${plan.name} に書きます（新しくは作りません）。`;
+  return plan.from === undefined
+    ? `ブランチ：HEAD が切り離されている状態から、新しいブランチ ${plan.name} を作って書きます（承認のあと、書く前に作ります）。`
+    : `ブランチ：${plan.from} から、新しいブランチ ${plan.name} を作って書きます（承認のあと、書く前に作ります）。`;
+}
+
+const pathsOf = (o: Outcome): AdoptedPaths => ({
+  added: o.added,
+  merged: o.merged.map((m) => m.path),
+  replaced: o.replaced,
+  kept: o.kept,
+  same: o.same,
+});
 
 /** 導入の結果（追加した・統合した…）。レポートに使う */
 interface Outcome {
@@ -467,6 +561,13 @@ function renderReport(input: {
   match: ProfileMatch;
   missing: MissingProfile[];
   skippedDirs: string[];
+  /** 差の一覧の件数の要約 */
+  summary: string[];
+  /** 書いたブランチ（--dry-run は undefined） */
+  branch: BranchPlan | undefined;
+  /** --issue の番号（--dry-run で指定がなければ undefined） */
+  issue: number | undefined;
+  repository: string;
 }): string {
   const o = input.outcome;
   const lines: string[] = [];
@@ -512,6 +613,16 @@ function renderReport(input: {
     "すでに同じ内容のファイルです（書き換えません）。",
     o.same.map((p) => `\`${p}\``),
   );
+  lines.push(
+    "### 共通仕様との差の一覧",
+    "",
+    input.dryRun
+      ? `\`${DOC_PATH}\` に残します。判定は、機械的に分かる項目だけです（ほかは「未確認」）。`
+      : `\`${DOC_PATH}\` に残しました。判定は、機械的に分かる項目だけです（ほかは「未確認」で、導入のあとに AI が根拠つきで埋めます）。`,
+    "",
+    ...input.summary.map((s) => `- ${s}`),
+    "",
+  );
   lines.push(...detectionLines(input.stack, input.match, input.missing));
   if (input.skippedDirs.length > 0) {
     lines.push("### harness-check.yml で確かめられないもの", "");
@@ -522,13 +633,17 @@ function renderReport(input: {
     lines.push("### 差分", "");
     for (const d of input.diffs) lines.push(`#### ${d.path}`, "", "```diff", d.text, "```", "");
   }
-  if (!input.dryRun) {
+  if (input.dryRun) {
+    const name =
+      input.issue === undefined ? "chore/<Issue番号>-adopt-harness" : branchNameFor(input.issue);
     lines.push(
-      "### 次にすること",
+      "### 実行すると",
       "",
-      "導入した差分を Git で確かめ、既存のテストと品質チェックを実行し、Issue・PR（またはブランチ）で取り込んでください（main に直接入れません）。harness adopt は、コミット・push をしていません。",
+      `新しいブランチ \`${name}\` を作り、そこに書きます（--issue で導入先の Issue の番号を指定します）。コミット・push・PR はしません。`,
       "",
     );
+  } else if (input.branch !== undefined) {
+    lines.push(...nextSteps(input.branch.name, input.issue, input.repository));
   }
   return lines.join("\n");
 }
@@ -542,9 +657,11 @@ async function adopt(
   fail: (message: string) => never,
   signal: AbortSignal,
   scan: ScanOutcome,
+  git: { runGit: RunGit; branch: BranchPlan | undefined },
 ): Promise<AdoptOutcome & { applied?: true }> {
   const dryRun = options.dryRun === true;
   const yes = options.yes === true;
+  const issue = parseIssue(options.issue);
   const now = (deps.now ?? (() => new Date()))();
   const prompter: Prompter = {
     note: (...args) => deps.prompter.note(...args),
@@ -559,6 +676,7 @@ async function adopt(
       scanSentence(scan),
       ...(scan.status === "passed" && scan.gitleaksConfig ? [GITLEAKS_CONFIG_NOTICE] : []),
       START_NOTICE,
+      ...(git.branch === undefined ? [] : [branchSentence(git.branch)]),
       ...(dryRun ? [] : [EDIT_NOTICE]),
     ].join("\n"),
     "導入を始めます",
@@ -620,6 +738,8 @@ async function adopt(
       }
       states.set(f.path, state);
     }
+    // 差の一覧の文書（docs/harness-adoption.md）も、同じ名前のファイルの扱い（差分を見せて選ぶ）の対象にする
+    states.set(DOC_PATH, await readState(fs, root, DOC_PATH));
   } catch (e) {
     if (e instanceof GenerateError) return fail(e.message);
     throw e;
@@ -650,6 +770,41 @@ async function adopt(
   const outcome: Outcome = { added: [], merged: [], replaced: [], kept: [], same: [] };
   for (const d of decisions) tally(d, outcome);
 
+  // 差の一覧（docs/harness-adoption.md）。最終の選択（置き換える／残す）がすべて決まった後の内容で作る
+  const enabledRules = judge(answers).enabledRules;
+  const withDoc = (replace: ReadonlySet<string>) => {
+    const files: Outcome = {
+      added: [...outcome.added],
+      merged: [...outcome.merged],
+      replaced: outcome.kept.filter((p) => replace.has(p)),
+      kept: outcome.kept.filter((p) => !replace.has(p)),
+      same: [...outcome.same],
+    };
+    const assessment = assessAdoption({ enabledRules, files: pathsOf(files), stack, scan });
+    const docFile: AdoptFile = {
+      path: DOC_PATH,
+      kind: "file",
+      content: renderAdoptionDoc(assessment, { appName: answers.app_name, day: localDay(now) }),
+    };
+    const docDecision = planAdopt({ files: [docFile], current })[0] as AdoptDecision;
+    return { files, assessment, docDecision };
+  };
+  type WithDoc = ReturnType<typeof withDoc>;
+  /** 文書も含めた、書く（書かない）ファイルの結果 */
+  const fullOutcome = (w: WithDoc, replaceDoc: boolean): Outcome => {
+    const o: Outcome = {
+      added: [...w.files.added],
+      merged: [...w.files.merged],
+      replaced: [...w.files.replaced],
+      kept: [...w.files.kept],
+      same: [...w.files.same],
+    };
+    if (w.docDecision.kind === "choose") (replaceDoc ? o.replaced : o.kept).push(DOC_PATH);
+    else tally(w.docDecision, o);
+    return o;
+  };
+  const prelim = withDoc(new Set());
+
   // 差分（既存の文書への統合と、同じ名前で中身が違うファイル）
   const diffOf = (d: AdoptDecision): { path: string; text: string } | undefined => {
     const hint = "全体は導入した後のファイルで確かめられます";
@@ -667,7 +822,7 @@ async function adopt(
     }
     return undefined;
   };
-  const diffs = decisions.flatMap((d) => {
+  const diffs = [...decisions, prelim.docDecision].flatMap((d) => {
     const diff = diffOf(d);
     return diff === undefined ? [] : [diff];
   });
@@ -677,7 +832,7 @@ async function adopt(
     deps.stdout(
       renderReport({
         dryRun: true,
-        outcome,
+        outcome: fullOutcome(prelim, false),
         diffs,
         appName: answers.app_name,
         scan,
@@ -685,24 +840,28 @@ async function adopt(
         match,
         missing,
         skippedDirs,
+        summary: summaryLines(prelim.assessment),
+        branch: undefined,
+        issue,
+        repository: answers.repository,
       }),
     );
     return { exitCode: 0 };
   }
 
   // 確認（対話）／既定（--yes。同じ名前のファイルは残す）
+  const shown = fullOutcome(prelim, false);
   prompter.note(
     [
-      ...outcome.merged.map((m) => `印で囲んで統合：${m.path}${m.created ? "（新しく作る）" : ""}`),
-      ...outcome.added.map((p) => `追加：${p}`),
-      ...outcome.kept.map((p) => `同じ名前で中身が違う：${p}`),
-      ...(outcome.same.length > 0
-        ? [`同じ内容（書かない）：${String(outcome.same.length)} 件`]
-        : []),
+      ...shown.merged.map((m) => `印で囲んで統合：${m.path}${m.created ? "（新しく作る）" : ""}`),
+      ...shown.added.map((p) => `追加：${p}`),
+      ...shown.kept.map((p) => `同じ名前で中身が違う：${p}`),
+      ...(shown.same.length > 0 ? [`同じ内容（書かない）：${String(shown.same.length)} 件`] : []),
     ].join("\n"),
     "導入する内容",
   );
   const replace = new Set<string>();
+  let replaceDoc = false;
   if (!yes) {
     for (const d of decisions) {
       const diff = diffOf(d);
@@ -727,6 +886,24 @@ async function adopt(
       });
       if (choice === "replace") replace.add(d.path);
     }
+    // 差の一覧は、ほかのファイルの選択が決まった後の内容で作り直し、同じ名前のファイルがあれば選ばせる
+    const docNow = withDoc(replace).docDecision;
+    if (docNow.kind === "choose") {
+      prompter.note(
+        formatDiff(docNow.path, docNow.current, docNow.file.content, "", Number.POSITIVE_INFINITY),
+        `差分：${docNow.path}`,
+      );
+      const choice = await prompter.select<"replace" | "keep">({
+        id: `adopt_conflict:${docNow.path}`,
+        message: `${docNow.path} は、すでにあり、中身が違います。どうしますか`,
+        options: [
+          { value: "replace", label: "ハーネスの内容で置き換える" },
+          { value: "keep", label: "今のファイルを残す" },
+        ],
+        initialValue: "keep",
+      });
+      replaceDoc = choice === "replace";
+    }
     const go = await prompter.confirm({
       id: "adopt_confirm",
       message: "この内容で導入しますか",
@@ -738,9 +915,9 @@ async function adopt(
     }
   }
 
-  // 置き換えを選んだものは、結果で「残した」から「置き換え」に移す
-  outcome.replaced = outcome.kept.filter((p) => replace.has(p));
-  outcome.kept = outcome.kept.filter((p) => !replace.has(p));
+  // 最終の選択（--yes はすべて「残す」）で、差の一覧を作り直す。置き換えを選んだものは、結果で「残した」から「置き換え」に移る
+  const final = withDoc(replace);
+  const finalOutcome = fullOutcome(final, replaceDoc);
 
   // 書き込みの操作を組み立てる。config.yaml も同じ一括の最後の操作にする
   const ops: ApplyOp[] = [];
@@ -788,6 +965,23 @@ async function adopt(
     }
   }
 
+  // 差の一覧の文書は、ハーネスの管理（指紋）には入れない（導入のときの記録。harness update は書き換えない）
+  const docDecision = final.docDecision;
+  switch (docDecision.kind) {
+    case "add":
+      ops.push({ kind: "create", path: DOC_PATH, content: docDecision.file.content });
+      break;
+    case "choose":
+      if (replaceDoc) ops.push(replaceOp(DOC_PATH, docDecision.file.content));
+      else checks.push({ path: DOC_PATH, sha: shaOf(DOC_PATH) });
+      break;
+    case "same":
+      checks.push({ path: DOC_PATH, sha: shaOf(DOC_PATH) });
+      break;
+    case "doc-merge":
+      break;
+  }
+
   const configText = buildConfigText({
     answers,
     acceptedWarnings: [],
@@ -806,6 +1000,14 @@ async function adopt(
 
   // 適用前なら何も書かず、適用中なら applyUpdate が元に戻す
   if (signal.aborted) throw new CancelledError();
+  // 承認のあと、書く前に、新しいブランチへ移る（できなければ、何も書かずに止まる）
+  if (git.branch !== undefined) {
+    const moved = await createBranch(git.runGit, root, git.branch);
+    if (!moved.ok) return fail(moved.message);
+    // 作ったとき・すでにいたときのどちらも、書く直前に、今のブランチを取り直す（対話の間に移されていないか）
+    const still = await ensureOnBranch(git.runGit, root, git.branch.name);
+    if (!still.ok) return fail(still.message);
+  }
   try {
     const applied = await applyUpdate({
       root,
@@ -816,13 +1018,20 @@ async function adopt(
     });
     for (const w of applied.cleanupWarnings) deps.stderr(`${w}\n`);
   } catch (e) {
-    return reportApplyError(e, deps);
+    const reported = reportApplyError(e, deps);
+    if (git.branch !== undefined && !git.branch.alreadyOn) {
+      deps.stderr(
+        `ブランチ ${git.branch.name} は作りましたが、ファイルは元に戻したため、中身は空のままです（ブランチは消していません）。不要なら、元のブランチに戻って git branch -D ${git.branch.name} で消してください
+`,
+      );
+    }
+    return reported;
   }
 
   deps.stdout(
     renderReport({
       dryRun: false,
-      outcome,
+      outcome: finalOutcome,
       diffs: [],
       appName: answers.app_name,
       scan,
@@ -830,6 +1039,10 @@ async function adopt(
       match,
       missing,
       skippedDirs,
+      summary: summaryLines(final.assessment),
+      branch: git.branch,
+      issue,
+      repository: answers.repository,
     }),
   );
   prompter.note(
@@ -880,6 +1093,10 @@ export function adoptCommand(deps: Partial<AdoptDeps> = {}): Command {
     .option("--dir <フォルダ>", "導入するプロジェクトのフォルダ（既定は作業中のフォルダ）")
     .option("--dry-run", "何が変わるかの一覧と差分だけを表示し、何も書かない")
     .option(
+      "--issue <番号>",
+      "導入先の Issue の番号（正の整数）。新しいブランチ chore/<番号>-adopt-harness に導入する（適用するときは必須。--dry-run では不要）",
+    )
+    .option(
       "--skip-secret-scan",
       "秘密情報の確認（Docker の gitleaks）を省く（確認していないと記録する）",
     )
@@ -894,6 +1111,7 @@ export function adoptCommand(deps: Partial<AdoptDeps> = {}): Command {
         ...(deps.fs ? { fs: deps.fs } : {}),
         ...(deps.secretScan ? { secretScan: deps.secretScan } : {}),
         ...(deps.runner ? { runner: deps.runner } : {}),
+        ...(deps.runGit ? { runGit: deps.runGit } : {}),
       });
       process.exitCode = outcome.exitCode;
     });

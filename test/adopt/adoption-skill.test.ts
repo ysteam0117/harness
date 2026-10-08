@@ -6,7 +6,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { parse, stringify } from "yaml";
-import { runAdopt, type AdoptDeps } from "../../src/commands/adopt.js";
+import type { AdoptDeps } from "../../src/commands/adopt.js";
+import { runAdopt } from "./git-helpers.js";
 import { runUpdate } from "../../src/commands/update.js";
 import { AnswersError, parseAnswersYaml } from "../../src/questions/answers.js";
 import { questionDefinitions } from "../../src/questions/definitions.js";
@@ -124,6 +125,29 @@ describe("#19 AC-1: Skill の本文", () => {
       expect(text, word).toContain(word);
     }
     expect(text).not.toContain("端末で質問される");
+  });
+
+  it("#20 導入のあとに、差の一覧の「未確認」を根拠つきで埋めて Issue にする節がある(秘密情報は開かない・値は書かない)", () => {
+    const text = skillText();
+    const start = text.indexOf("## 導入のあとに、未確認の項目を埋める");
+    expect(start).toBeGreaterThan(0);
+    const section = text.slice(start);
+    for (const word of [
+      "docs/harness-adoption.md",
+      "未確認",
+      "満たしている",
+      "一部",
+      "満たしていない",
+      "対象外",
+      "根拠",
+      "Issue",
+      "--issue",
+    ]) {
+      expect(section, word).toContain(word);
+    }
+    // 導入のあとの節にも、秘密情報を開かない・値を書かない約束がある
+    expect(section).toContain(".env");
+    expect(section).toMatch(/値|中身/);
   });
 });
 
