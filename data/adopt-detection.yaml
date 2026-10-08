@@ -1,0 +1,170 @@
+# harness adopt（既存のプロジェクトへの導入、F-29 の手順2・「既存の技術の扱い」）で、既存の技術を判定するルール（C-38：ルールはデータで持つ）。
+# ファイルの有無・package.json の依存の名前・設定ファイルから、機械的に判定できることだけを書く。
+# .env・.env.* は読まない（.env.example だけ、キーの名前を使い、値は捨てる）。リンクはたどらない。ルートの外は読まない。
+#
+# class（分類）：language・runtime・backend・frontend・db・test・quality・ci
+
+# 調べるフォルダ（ルートの相対パス）。ルートに加えて、深さ2までを調べる。node_modules・.git は見ない。
+# package.json の workspaces に書かれたフォルダも、深さ2までなら調べる
+candidate_dirs: [frontend, backend]
+candidate_parents: [apps, packages]
+
+# package.json の dependencies／devDependencies／peerDependencies／optionalDependencies の名前 → 技術
+node_packages:
+  hono: { class: backend, technology: Hono }
+  express: { class: backend, technology: Express }
+  fastify: { class: backend, technology: Fastify }
+  koa: { class: backend, technology: Koa }
+  "@nestjs/core": { class: backend, technology: NestJS }
+  react: { class: frontend, technology: React }
+  react-router: { class: frontend, technology: React Router }
+  react-router-dom: { class: frontend, technology: React Router }
+  vite: { class: frontend, technology: Vite }
+  vue: { class: frontend, technology: Vue }
+  next: { class: frontend, technology: Next.js }
+  "@angular/core": { class: frontend, technology: Angular }
+  svelte: { class: frontend, technology: Svelte }
+  "@tanstack/react-query": { class: frontend, technology: TanStack Query }
+  axios: { class: frontend, technology: Axios }
+  drizzle-orm: { class: db, technology: Drizzle ORM }
+  prisma: { class: db, technology: Prisma }
+  "@prisma/client": { class: db, technology: Prisma }
+  typeorm: { class: db, technology: TypeORM }
+  sequelize: { class: db, technology: Sequelize }
+  mongoose: { class: db, technology: Mongoose }
+  pg: { class: db, technology: PostgreSQL（pg） }
+  mysql2: { class: db, technology: MySQL（mysql2） }
+  better-sqlite3: { class: db, technology: SQLite（better-sqlite3） }
+  vitest: { class: test, technology: Vitest }
+  jest: { class: test, technology: Jest }
+  mocha: { class: test, technology: Mocha }
+  cypress: { class: test, technology: Cypress }
+  "@playwright/test": { class: test, technology: Playwright }
+  typescript: { class: quality, technology: TypeScript }
+  eslint: { class: quality, technology: ESLint }
+  prettier: { class: quality, technology: Prettier }
+
+# Node.js 以外（Python・Go・Ruby・Java）は、ファイルの有無で言語（language）だけを判定する。
+# フレームワーク・依存の名前（Django・pytest・Rails・Spring 等）は判定しない（後の #19 で AI が根拠つきで補う）。
+# version_pattern があれば、そのファイルを読み、最初に合う行の（1）を版とする（go.mod の go 行）
+languages:
+  - files: [pyproject.toml, requirements.txt, setup.py, manage.py]
+    language: Python
+  - files: [go.mod]
+    language: Go
+    version_pattern: '^go\s+([0-9][0-9.]*)\s*$'
+  - files: [Gemfile]
+    language: Ruby
+  - files: [pom.xml, build.gradle, build.gradle.kts]
+    language: Java
+
+# ファイルがあるだけで分かるもの（中身は読まない）
+presence:
+  - paths: [tsconfig.json]
+    class: quality
+    technology: TypeScript
+  - paths:
+      - .eslintrc
+      - .eslintrc.json
+      - .eslintrc.js
+      - .eslintrc.cjs
+      - .eslintrc.yml
+      - .eslintrc.yaml
+      - eslint.config.js
+      - eslint.config.mjs
+      - eslint.config.cjs
+      - eslint.config.ts
+    class: quality
+    technology: ESLint
+  - paths:
+      - .prettierrc
+      - .prettierrc.json
+      - .prettierrc.yml
+      - .prettierrc.yaml
+      - prettier.config.js
+      - prettier.config.mjs
+    class: quality
+    technology: Prettier
+  - paths: [vitest.config.ts, vitest.config.js, vitest.config.mts]
+    class: test
+    technology: Vitest
+  - paths: [jest.config.js, jest.config.ts, jest.config.cjs]
+    class: test
+    technology: Jest
+  - paths: [playwright.config.ts, playwright.config.js]
+    class: test
+    technology: Playwright
+  - paths: [.gitlab-ci.yml]
+    class: ci
+    technology: GitLab CI
+  - paths: [Jenkinsfile]
+    class: ci
+    technology: Jenkins
+
+# このファイルがあるフォルダは、アプリとして扱う（調べた結果の単位）
+manifests:
+  [
+    package.json,
+    pyproject.toml,
+    requirements.txt,
+    manage.py,
+    go.mod,
+    Gemfile,
+    pom.xml,
+    build.gradle,
+    build.gradle.kts,
+  ]
+
+# .github/workflows/ にあるファイル名（.yml・.yaml）。ルートだけ
+ci_workflows:
+  directory: .github/workflows
+  technology: GitHub Actions
+
+# 実行環境の版のファイル（先頭の行の版だけを使う）。package.json の engines.node も見る
+version_files:
+  - { file: .node-version, technology: Node.js }
+  - { file: .nvmrc, technology: Node.js }
+  - { file: .python-version, technology: Python }
+
+# .env.example のキーの名前（値は使わない・記録しない）
+env_keys:
+  DATABASE_URL: { class: db, technology: データベース（DATABASE_URL） }
+  REDIS_URL: { class: db, technology: Redis }
+
+# 技術プロファイル（templates/profiles/<key>/）を当てる、必須の手がかり。
+# needs：すべて満たすときだけ当てる。内側の一覧は「どれか1つ」（package.json の依存の名前）。
+# primary：当てられなかったとき、同じ分類の技術を「プロファイルなし」として表示する。
+# requires_only：手がかりがなく、ほかのプロファイルの requires から当たるもの（ライブラリを使わない自作の部品）。
+# requires は、プロファイルの profile.yaml から読む。
+# auth の各プロファイルは、ライブラリで判定できないため、ここには書かない
+profiles:
+  - profile: backend-framework/hono
+    class: backend
+    primary: true
+    needs: [[hono]]
+  - profile: frontend-build/vite-react-router
+    class: frontend
+    primary: true
+    needs: [[vite], [react-router, react-router-dom]]
+  - profile: test-framework/vitest-playwright
+    class: test
+    primary: true
+    needs: [[vitest]]
+  - profile: quality/typescript-standard
+    class: quality
+    primary: true
+    needs: [[typescript]]
+  - profile: data-access/drizzle
+    class: db
+    primary: true
+    needs: [[drizzle-orm]]
+  - profile: frontend-state/tanstack-query-rhf-zod
+    class: frontend
+    needs: [["@tanstack/react-query"]]
+  - profile: http-client/axios
+    class: frontend
+    needs: [[axios]]
+  - profile: logger/structured-logger
+    class: backend
+    requires_only: true
+    needs: []

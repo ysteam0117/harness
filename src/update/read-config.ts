@@ -1,5 +1,7 @@
 import semver from "semver";
 import { parse, stringify } from "yaml";
+import type { ProfileMatch } from "../adopt/detect.js";
+import { readDetectedStack, readProfiles, type RecordedStack } from "../adopt/record.js";
 import type { AcceptedWarning } from "../checks/review.js";
 import type { SecretScanRecord } from "../generate/config.js";
 import { GenerateError } from "../generate/errors.js";
@@ -37,6 +39,10 @@ export interface RecordedConfig {
   markedFiles: string[];
   /** 導入のときの秘密情報の確認の記録（harness adopt のときだけ。形が違えば無い） */
   secretScan?: SecretScanRecord;
+  /** 導入のときの既存の技術の判定の結果（harness adopt のときだけ。無い・形が違えば無い。更新では判定し直さない） */
+  detectedStack?: RecordedStack;
+  /** 導入のときの技術プロファイルの判定の結果（同上） */
+  profiles?: ProfileMatch;
 }
 
 export type ConfigMode = "create" | "update" | "adopt";
@@ -209,6 +215,8 @@ export function parseConfig(text: string): RecordedConfig {
   }
 
   const secretScan = readSecretScan(raw["secret_scan"]);
+  const detectedStack = readDetectedStack(raw["detected_stack"]);
+  const profiles = readProfiles(raw["profiles"]);
 
   return {
     mode: mode as ConfigMode,
@@ -223,6 +231,8 @@ export function parseConfig(text: string): RecordedConfig {
     ignored,
     markedFiles,
     ...(secretScan !== undefined ? { secretScan } : {}),
+    ...(detectedStack !== undefined ? { detectedStack } : {}),
+    ...(profiles !== undefined ? { profiles } : {}),
   };
 }
 

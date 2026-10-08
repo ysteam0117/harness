@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import type { DetectedStack, ProfileMatch } from "../adopt/detect.js";
+import { detectedStackEntry, profilesEntry, type RecordedStack } from "../adopt/record.js";
 import type { AcceptedWarning } from "../checks/review.js";
 import type { Answers } from "../questions/answers.js";
 import { questionDefinitions } from "../questions/definitions.js";
@@ -74,6 +76,10 @@ export interface BuildConfigInput {
   markedFiles?: string[];
   /** 秘密情報の確認の記録（adopt のときだけ） */
   secretScan?: SecretScanRecord;
+  /** 既存の技術の判定の結果（adopt のときだけ、#18） */
+  detectedStack?: DetectedStack;
+  /** 技術プロファイルの判定の結果（adopt のときだけ、#18。applied は当てる予定のもの） */
+  profiles?: ProfileMatch;
 }
 
 const HEADER = `# ハーネス（harness）が生成した記録です。ハーネスの更新（harness update）に使います。
@@ -126,6 +132,10 @@ export function buildConfigText(input: BuildConfigInput): string {
       ? { marked_files: [...input.markedFiles].sort((a, b) => (a < b ? -1 : 1)) }
       : {}),
     ...(input.secretScan !== undefined ? { secret_scan: secretScanEntry(input.secretScan) } : {}),
+    ...(input.detectedStack !== undefined
+      ? { detected_stack: detectedStackEntry(input.detectedStack) }
+      : {}),
+    ...(input.profiles !== undefined ? { profiles: profilesEntry(input.profiles) } : {}),
   };
   return HEADER + stringifyYaml(doc, { lineWidth: 0 });
 }
@@ -143,6 +153,10 @@ export interface UpdateConfigInput {
   mode?: "update" | "adopt";
   /** 導入のときの秘密情報の確認の記録（harness adopt で導入したアプリは、そのまま引き継ぐ） */
   secretScan?: SecretScanRecord;
+  /** 導入のときの既存の技術の判定の結果（harness adopt で導入したアプリは、そのまま引き継ぐ。更新では判定し直さない） */
+  detectedStack?: RecordedStack;
+  /** 導入のときの技術プロファイルの判定の結果（同上） */
+  profiles?: ProfileMatch;
 }
 
 /** 新しいハーネスで作った config.yaml の中身を、更新の記録に直す */
@@ -170,6 +184,12 @@ export function toUpdateConfigText(createdText: string, input: UpdateConfigInput
   }
   if (input.secretScan !== undefined && !("secret_scan" in doc)) {
     doc["secret_scan"] = secretScanEntry(input.secretScan);
+  }
+  if (input.detectedStack !== undefined && !("detected_stack" in doc)) {
+    doc["detected_stack"] = detectedStackEntry(input.detectedStack);
+  }
+  if (input.profiles !== undefined && !("profiles" in doc)) {
+    doc["profiles"] = profilesEntry(input.profiles);
   }
   return HEADER + stringifyYaml(doc, { lineWidth: 0 });
 }

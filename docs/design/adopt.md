@@ -32,6 +32,9 @@
 | `src/adopt/build.ts` | `buildAdoptFiles`：導入するファイルを、メモリ上で組み立てる。技術プロファイルを使わず、AI 向けのファイルだけ |
 | `src/adopt/plan.ts` | `planAdopt`：ファイルごとに doc-merge・add・same・choose を決める。純粋な関数 |
 | `src/adopt/secret-scan.ts` | 秘密情報の確認（#17）：`scanSecrets`（docker・git の実行役は差し替え可）、`parseLeakReport`（レポートから場所・行・コミット・種類だけを取り出す）、`formatLeaks`、`gitleaksImage` |
+| `src/adopt/detect.ts` | 既存の技術の判定（#18）：`detectStack`（ディスクを読む。fs は注入）、`matchProfiles`（プロファイルの判定。純粋な関数）、`loadDetectionRules` |
+| `src/adopt/record.ts` | `detected_stack`・`profiles` の config.yaml への記録（`detectedStackEntry`・`profilesEntry`）と読み戻し（`readDetectedStack`・`readProfiles`） |
+| `data/adopt-detection.yaml` | 判定のルール（C-38）：package.json の依存の名前・言語のファイル・版のファイル・プロファイルごとの必須の手がかり |
 | `src/commands/adopt.ts` | `harness adopt`。差し込み口は `AdoptDeps`（prompter・cwd・interactive・stderr・stdout・now・fs・secretScan・runner） |
 | `data/adopt-values.yaml` | 導入のときだけ、`data/template-values.yaml` の値の代わりに使う値 |
 | `src/update/apply.ts` | 原子的な書き込み（`harness update` と共通） |
@@ -83,6 +86,18 @@
 - `secret_scan`：秘密情報の確認の記録。確認したら `{status: passed, scope: history+worktree | worktree, checked_on}`、省いたら `{status: skipped, checked_on}`。`harness update` は、導入のときの記録をそのまま引き継ぐ
 - 記録の `mode` は `create`・`update`・`adopt` を読める（無ければ `create`）
 
+## 既存の技術の判定（Issue #18 の PR-A）
+
+秘密情報の確認の後、足りない項目の質問の前に、ファイルから機械的に判定する（回答は使わない。`Answers` の frontend・backend・infra はプロファイル選びに使わない）。結果は `DetectedStack`（アプリ（フォルダ）ごとの、分類・技術・版・根拠のファイル）。`--dry-run` でも表示する。
+
+- 調べる範囲：ルート、`frontend/`・`backend/`・`apps/*`・`packages/*`、package.json の `workspaces`（深さ2まで）。`node_modules`・`.git`・隠しフォルダは見ない
+- 読むファイルは、ルールで決めたものだけ（package.json・go.mod の go 行・版のファイル・`.env.example`・`.github/workflows/` のファイル名）。`.env`・`.env.*`・`.dev.vars` は、名前で先に除外して開かない。`.env.example` は、キーの名前だけを使い、値は捨てる
+- **Node.js 以外（Python・Go・Ruby・Java）は、ファイルの有無で言語だけを判定する**（`pyproject.toml`・`requirements.txt`・`setup.py`・`manage.py`・`go.mod`・`Gemfile`・`pom.xml`・`build.gradle(.kts)`）。フレームワーク・依存の名前（Django・pytest・Rails・Spring 等）は判定しない。ファイルの中身から名前を拾うと、説明文・コメント・URL まで拾うため。後の #19 で、AI が根拠つきで補う。表示は「プロファイルなし（Python）」の形
+- リンク（シンボリックリンク・ジャンクション）は、lstat で見つけて読まず、「リンクのため読まない」と記録する。探索先（workspaces の値を含む）は、`../`・絶対パス・realpath がルートの外になるものを読まない。壊れた package.json は止めずに「読めなかった」と記録する（中身・エラーの文は残さない）
+- プロファイルの判定は、アプリ（package.json などのあるフォルダ）単位。必須の手がかりは、そのアプリとルートの依存だけを合わせて見る（別のアプリは合算しない）。ルートを対象から外すのは、`package.json` に workspaces があり、自分自身はアプリの手がかり（バックエンド・フロント・DB、go.mod・pyproject.toml 等の言語のファイル）を持たない管理用のルートだけ。workspaces の無い独立したルートや、言語のファイルがあるルートは、実アプリとして対象に残す。ルートの依存を子に合算するのは、ルートに workspaces があり、その所属の子だけ。一部だけ合うときは当てず、「プロファイルなし（一部一致：…）」にする。`requires`（例：Hono → 共通ロガー）は profile.yaml から読んで解決する
+- 当てるプロファイルは、`applied: [{ profile, apps }]`（対象のアプリのフォルダ付き）。**PR-A では Skill はまだ入れない**。表示は「当てる予定（#18 の続きで入れる）」。プロファイルのない技術は「プロファイルなし」として出し、ハーネスの改善の提案（C-78）として、プロファイルを作る提案の文を出す（CLI は Issue を作らない）
+- 記録：`detected_stack`（apps・notes）と `profiles`（applied・none）を、導入のときだけ config.yaml に書く。`harness update` は判定し直さず、この記録を引き継ぐ。無い記録（古い config）も読める
+
 ## 秘密情報の確認（Issue #17）
 
 - 道具：gitleaks の Docker イメージ。`harness create` のセキュリティのテスト（#42）と同じ固定のイメージを、技術プロファイル（`profile.yaml` の `container_images.gitleaks`）から取る（値を二重に持たない）。`--network none`・対象は `:ro`
@@ -123,4 +138,4 @@
 
 ## テスト
 
-`test/adopt/`（印・判定・組み立て・秘密情報の確認 `secret-scan.test.ts`）、`test/commands/adopt-secret-scan.test.ts`（確認の道具を差し替えた結果の扱い）、`test/scripts/smoke-generated-secret-scan.test.ts`（実際の Docker の gitleaks。`npm run test:smoke`。Docker が無ければ飛ばす）、`test/commands/adopt.test.ts`（架空の既存のアプリ `test/fixtures/adopt-sample/` を一時フォルダに写して実行）。`test/commands/update.test.ts`・`status.test.ts`・`test/update/read-config.test.ts` に、導入済みのアプリの扱いを足した。
+`test/adopt/`（印・判定・組み立て・秘密情報の確認 `secret-scan.test.ts`）、`test/commands/adopt-secret-scan.test.ts`（確認の道具を差し替えた結果の扱い）、`test/scripts/smoke-generated-secret-scan.test.ts`（実際の Docker の gitleaks。`npm run test:smoke`。Docker が無ければ飛ばす）、`test/adopt/detect*.test.ts`・`match-profiles.test.ts`（技術の判定。偽の fs で、読んだパスを記録して .env・リンク・ルートの外を確かめる）、`test/commands/adopt-detect.test.ts`（`test/fixtures/adopt-hono-react`・`adopt-django`・`adopt-go`・`adopt-mixed` を写して実行）、`test/commands/adopt.test.ts`（架空の既存のアプリ `test/fixtures/adopt-sample/` を一時フォルダに写して実行）。`test/commands/update.test.ts`・`status.test.ts`・`test/update/read-config.test.ts` に、導入済みのアプリの扱いを足した。
