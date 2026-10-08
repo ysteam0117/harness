@@ -1,0 +1,16 @@
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: "24"
+      # 導入のときに記録した、Node.js のアプリのフォルダごとに、依存を入れる（package-lock.json の通り。インストールのスクリプトは動かさない）。
+{{install_steps}}
+      # 導入のときに記録した Lint・型・書式の違反の件数（.harness/baseline.json）より増えていたら失敗する。減ったときは通り、下げる案内を出す。
+      # 件数・種類・フォルダだけを表示する（ソースの中身は出さない）。
+      - name: 基準線の確認
+        run: node .harness/scripts/baseline-check.mjs

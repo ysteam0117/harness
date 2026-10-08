@@ -113,12 +113,12 @@ describe("#18-B：harness-check.yml の中身（秘密情報の確認）", () =>
     expect(text).not.toContain("--no-git");
   });
 
-  it("Lint・型・テストの job を入れず、#21 で足すとコメントに書く", async () => {
+  it("Node のアプリがないとき：Lint・型・テストの job を入れず、基準線のことはコメントに書く", async () => {
     const text = (await build())?.content ?? "";
     const wf = workflow(text);
     expect(Object.keys(wf.jobs)).toEqual(["secret-scan"]);
     expect(text).not.toMatch(/eslint|tsc|npm test|npm run (lint|check|test)/);
-    expect(text).toContain("#21");
+    expect(text).toContain("基準線");
   });
 
   it("置き換えの名前（{{...}}）が残らない（Go のテンプレートの {{ ... }} は値の中にある）", async () => {
@@ -145,7 +145,7 @@ describe("#18-B：harness-check.yml の npm audit（Node のアプリのとき�
   it("Node のアプリがある：npm-audit の job が加わる。本番の依存・high 以上で失敗する", async () => {
     const text = (await build({}, ["."]))?.content ?? "";
     const wf = workflow(text);
-    expect(Object.keys(wf.jobs)).toEqual(["secret-scan", "npm-audit"]);
+    expect(Object.keys(wf.jobs)).toEqual(["secret-scan", "npm-audit", "baseline"]);
     const run = wf.jobs["npm-audit"]?.steps.map((s) => s.run ?? "").join("\n") ?? "";
     expect(run).toContain("npm audit --omit=dev --audit-level=high");
     // lock が無ければ旨を出して失敗にしない
@@ -247,5 +247,68 @@ describe("#18-B npm audit は、記録したアプリのフォルダだけを確
   it("安全なフォルダが1つもなければ、npm-audit の job を出さない", async () => {
     const text = (await build({}, ["../x", "/y"]))?.content ?? "";
     expect(Object.keys(workflow(text).jobs)).toEqual(["secret-scan"]);
+  });
+});
+
+describe("#21：harness-check.yml の baseline の job（Node のアプリのときだけ）", () => {
+  interface Job {
+    needs?: unknown;
+    "continue-on-error"?: unknown;
+    steps: (Step & { "working-directory"?: string })[];
+  }
+  const jobsOf = (text: string): Record<string, Job> =>
+    (parseYaml(text) as { jobs: Record<string, Job> }).jobs;
+
+  it("Node のアプリがない：baseline の job が無い", async () => {
+    const text = (await build({}, []))?.content ?? "";
+    expect(Object.keys(workflow(text).jobs)).toEqual(["secret-scan"]);
+    expect(text).not.toContain("baseline-check");
+  });
+
+  it("Node のアプリがある：baseline の job が加わり、secret-scan・npm-audit とは独立（needs・continue-on-error なし）", async () => {
+    const text = (await build({}, ["."]))?.content ?? "";
+    const jobs = jobsOf(text);
+    expect(Object.keys(jobs)).toEqual(["secret-scan", "npm-audit", "baseline"]);
+    for (const job of Object.values(jobs)) {
+      expect(job).not.toHaveProperty("needs");
+      expect(job).not.toHaveProperty("continue-on-error");
+    }
+    const base = workflow((await build({}, []))?.content ?? "");
+    expect(workflow(text).jobs["secret-scan"]).toEqual(base.jobs["secret-scan"]);
+  });
+
+  it("checkout は認証情報を残さず、setup-node は create の check.yml と同じタグの固定。依存はスクリプトを動かさずに入れ、基準線の確認を動かす", async () => {
+    const text = (await build({}, ["backend", "frontend"]))?.content ?? "";
+    const job = jobsOf(text)["baseline"] as Job;
+    const checkout = job.steps.find((s) => s.uses?.startsWith("actions/checkout@"));
+    expect(checkout?.uses).toMatch(/^actions\/checkout@v\d+\.\d+\.\d+$/);
+    expect(checkout?.with?.["persist-credentials"]).toBe(false);
+    const setup = job.steps.find((s) => s.uses?.startsWith("actions/setup-node@"));
+    expect(setup?.uses).toMatch(/^actions\/setup-node@v\d+\.\d+\.\d+$/);
+    const installs = job.steps.filter((s) => s.run === "npm ci --ignore-scripts");
+    expect(installs.map((s) => s["working-directory"])).toEqual(["backend", "frontend"]);
+    const last = job.steps[job.steps.length - 1];
+    expect(last?.run).toBe("node .harness/scripts/baseline-check.mjs");
+    expect(text).not.toMatch(/npx|continue-on-error/);
+  });
+
+  it("危険なフォルダ名は入らない。日本語・スペースのフォルダは YAML として読める", async () => {
+    const dirs = ["../outside", "a${{ secrets.X }}", "apps/顧客 管理", "ok"];
+    const text = (await build({}, dirs))?.content ?? "";
+    expect(text).not.toContain("outside");
+    expect(text).not.toContain("secrets.X");
+    const job = jobsOf(text)["baseline"] as Job;
+    expect(
+      job.steps
+        .filter((s) => s.run === "npm ci --ignore-scripts")
+        .map((s) => s["working-directory"]),
+    ).toEqual(["apps/顧客 管理", "ok"]);
+  });
+
+  it("置き換えの名前が残らず、ファイルは1つの YAML で末尾の改行は1つ", async () => {
+    const text = (await build({}, ["."]))?.content ?? "";
+    expect(text).not.toMatch(/\{\{[a-z][a-z0-9_]*\}\}/);
+    expect(text.endsWith("\n")).toBe(true);
+    expect(text.endsWith("\n\n")).toBe(false);
   });
 });

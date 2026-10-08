@@ -9,7 +9,14 @@ import { loadProfile, selectProfileFiles } from "../generate/profile.js";
 import { isManagedPath } from "../generate/project.js";
 import { findTemplatesDir } from "../generate/templates-dir.js";
 import { buildValues, chooseValues, parseValueDefinitions } from "../generate/values.js";
-import { buildHarnessCheck, HARNESS_CHECK_PATH } from "./ci.js";
+import { harnessVersion } from "../generate/config.js";
+import {
+  BASELINE_SCRIPT_PATH,
+  buildBaselineScript,
+  buildHarnessCheck,
+  HARNESS_CHECK_PATH,
+  safeDirs,
+} from "./ci.js";
 import type { AppliedProfile } from "./detect.js";
 import { applyProfileSkillValues, usableProfiles } from "./profiles.js";
 
@@ -39,6 +46,10 @@ export interface BuildAdoptInput {
   nodeDirs?: readonly string[];
 }
 
+/** AGENTS.md の「プロジェクト固有のルール」の節に足す1行（Node.js のアプリがあるとき）。印の文字列は書かない */
+const BASELINE_RULE =
+  "- 品質チェックの基準線：導入のときの Lint・型・書式の違反の件数は `.harness/baseline.json` に記録している。各アプリで依存を入れた（`npm ci`）あとに `node .harness/scripts/baseline-check.mjs` を実行して、件数が増えていないか確かめる。減ったら `--update` を付けて基準線を下げる。上げるのは、ADRに記録し、利用者の承認を得たときだけ";
+
 const ADOPT_VALUES_FILE = "adopt-values.yaml";
 
 /** 印で囲んで、既存の文書に統合するファイル */
@@ -48,7 +59,8 @@ const DOC_PATHS = ["AGENTS.md", "CLAUDE.md"];
  * 導入先に置くファイル（AI 向けのものだけ）をメモリ上で組み立てる。ディスクには書かない。
  * AGENTS.md・CLAUDE.md・共通の Skill（知見の写しを含む）・エージェントの定義・AI の権限の設定。
  * 技術プロファイルは、当てたものの Skill だけを含める（コード・設定のファイルは含めない）。
- * 文書・スクリプトは含めない。CI は、GitHub で品質チェックを GitHub Actions で行うときだけ、harness-check.yml を含める。
+ * 文書は含めない。CI は、GitHub で品質チェックを GitHub Actions で行うときだけ、harness-check.yml を含める。
+ * Node.js のアプリがあるときは、基準線の確認のスクリプト（.harness/scripts/baseline-check.mjs）を含め、AGENTS.md に実行方法を1行足す（#21）。
  * 生成したアプリにだけあるコマンド・文書を書かないよう、data/adopt-values.yaml の値で入れ替える。
  * パスの順に並べ、同じ入力なら同じ結果になる。誤りは GenerateError。
  */
@@ -75,6 +87,13 @@ export function buildAdoptFiles(input: BuildAdoptInput): AdoptFile[] {
       );
     }
     values[name] = value;
+  }
+
+  // 基準線の確認（#21）：Node.js のアプリがあるときだけ、AGENTS.md に実行方法を書く（手元で確かめられるように）
+  const baselineDirs = safeDirs(input.nodeDirs ?? []);
+  if (baselineDirs.length > 0) {
+    values["project_rules_section"] = `${values["project_rules_section"] ?? ""}
+${BASELINE_RULE}`;
   }
 
   // 当てたプロファイル：今のハーネスで使えるものだけ。Skill を AGENTS.md の表に書く
@@ -118,6 +137,18 @@ export function buildAdoptFiles(input: BuildAdoptInput): AdoptFile[] {
     outputs.push({
       path: HARNESS_CHECK_PATH,
       content: buildHarnessCheck({ templatesDir, nodeDirs: input.nodeDirs ?? [] }),
+    });
+  }
+
+  // 基準線の確認のスクリプト：Node.js のアプリがあるとき。確認の場所（手元・GitHub Actions）によらず置く
+  if (baselineDirs.length > 0) {
+    outputs.push({
+      path: BASELINE_SCRIPT_PATH,
+      content: buildBaselineScript({
+        templatesDir,
+        dirs: baselineDirs,
+        harnessVersion: harnessVersion(),
+      }),
     });
   }
 

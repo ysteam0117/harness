@@ -174,7 +174,7 @@ describe("#18-B adopt：TypeScript（Hono・React）に、当てた6つのプロ
     expect(text).toContain("--redact");
     expect(text).toContain("2>/dev/null");
     const jobs = Object.keys((parse(text) as { jobs: object }).jobs);
-    expect(jobs).toEqual(["secret-scan", "npm-audit"]);
+    expect(jobs).toEqual(["secret-scan", "npm-audit", "baseline"]);
     expect(text).toContain("npm audit --omit=dev --audit-level=high");
   });
 
@@ -247,6 +247,7 @@ describe("#18-B adopt：プロファイルのないアプリ・一部だけの�
     expect(Object.keys((parse(read(dir, CHECK)) as { jobs: object }).jobs)).toEqual([
       "secret-scan",
       "npm-audit",
+      "baseline",
     ]);
   });
 });

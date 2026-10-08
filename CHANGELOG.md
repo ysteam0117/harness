@@ -22,6 +22,8 @@
 - 差の一覧と新しいブランチ（Issue #20）：`harness adopt` が、共通仕様（C-xx）との差の一覧 `docs/harness-adoption.md` を作る。判定は「満たしている／一部／満たしていない／対象外／未確認」。CLI は機械的に分かる項目（導入したファイル・CI・判定した技術・秘密情報の確認・回答で当てはまらない条件つきのルール）だけ判定し、ほかは「未確認」にする（回答が「未定」の項目は、対象外にしない）。導入のあとに AI が Skill「既存のプロジェクトへの導入」の節に従って「未確認」を根拠つきで埋め、Issue にする。文書にはファイルのパスと名前だけを書き、導入のときの記録として `harness update` は書き換えない。共通仕様の一覧は `data/adoption-checks.yaml`
 - `harness adopt --issue <番号>`（適用するときは必須。`--dry-run` では不要）：承認のあと、書く前に、新しいブランチ `chore/<番号>-adopt-harness` に移る。Git のフォルダでない・作業ツリーが汚れている・同じ名前のブランチが別にある、のときは、何も書かずに止まる（今いるブランチがちょうど同名なら続ける）。`main` 以外にいるときは、今の HEAD から分ける。コミット・push・PR はせず、手順を表示する。`harness create` の出力は変わらない
 
+- 基準線（Issue #21）：Node.js のアプリがあるとき、`harness adopt` が `.harness/scripts/baseline-check.mjs` を置く（確認の場所によらず。`harness update` で置き換わる）。導入のときの Lint・型・書式の違反の件数（ESLint のエラーと警告・tsc の型エラー・Prettier の整形が要るファイル。各アプリの `node_modules` に道具と設定があるものだけ。ハーネス自身の `.harness/` の下は数えない）を `.harness/baseline.json` に記録し、増えたら失敗する。`harness adopt` は件数を測らない。導入のあと、各アプリで `npm ci` をしてから `node .harness/scripts/baseline-check.mjs --init` を実行し、できた `baseline.json` をコミットする。減ったら `--update` で下げる。上げるのは `--update --allow-increase` のときだけで、ADR に記録し承認を得る（C-80）。道具の異常終了は 0 件にせず失敗にする。表示は件数・種類・フォルダだけで、シェルも `npx` も使わない。GitHub Actions で確認するときは、`harness-check.yml` に `baseline` の job も加わる（依存は `npm ci --ignore-scripts`）。`AGENTS.md` の印の中に実行方法の1行が足される。`harness create` の出力は変わらない
+
 ### 互換性が壊れる変更
 
 - `harness adopt` の適用に `--issue <番号>` が必須になり、Git のフォルダで作業ツリーがきれいなときだけ実行できる（新しいブランチに導入するため）。`--dry-run` は、これまでどおり、どこでも実行できる

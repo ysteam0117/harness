@@ -123,6 +123,29 @@ describe("#20 AC-2: 差の一覧の判定", () => {
     expect(verdictOf(none, "C-61")).toBe("unmet");
   });
 
+  it("#21: CI の根拠に、基準線のスクリプトを導入したことを書く。置かないときは Node.js のアプリだけが対象と書く", () => {
+    const check: AdoptionCheck = { id: "C-61", title: "CI", method: "ci" };
+    const withScript = assessAdoption(
+      input({
+        checks: [check],
+        files: {
+          ...FILES,
+          added: [".github/workflows/harness-check.yml", ".harness/scripts/baseline-check.mjs"],
+        },
+      }),
+    );
+    const basis = withScript.results[0]?.basis ?? "";
+    expect(basis).toContain(".harness/scripts/baseline-check.mjs");
+    expect(basis).not.toContain("Node.js のアプリだけが対象");
+    const without = assessAdoption(
+      input({
+        checks: [check],
+        files: { ...FILES, added: [".github/workflows/harness-check.yml"] },
+      }),
+    );
+    expect(without.results[0]?.basis).toContain("Node.js のアプリだけが対象");
+  });
+
   it("#20 AC-2: 技術の項目:判定できていれば一部(設定の差は未確認と書く)、できていなければ満たしていない", () => {
     const check: AdoptionCheck = {
       id: "C-57",

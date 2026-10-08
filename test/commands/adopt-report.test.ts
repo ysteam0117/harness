@@ -1,6 +1,6 @@
 // #20 harness adopt：差の一覧(docs/harness-adoption.md)と、新しいブランチ(--issue)。偽の git で確かめる(実際の git は adopt-branch.test.ts)。
 // 架空の既存のアプリ(test/fixtures/adopt-sample/)を一時フォルダに写して実行する。実データ・個人名は使わない(架空の値だけ)。
-import { cpSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { rename as realRename } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -416,5 +416,31 @@ describe("#20 AC-5: 既存の記録", () => {
     ).toBe(1);
     expect(read(dir, DOC)).toBe(doc);
     expect(fingerprint(doc)).toBe(fingerprint(read(dir, DOC)));
+  });
+});
+
+describe("#21: 基準線の手順を表示する", () => {
+  it("Node のアプリがある：次にすること に npm ci → --init → コミットの手順が出る。adopt は baseline.json を作らない", async () => {
+    const dir = sampleApp();
+    const s = setup(dir, fakeGit());
+    const out = await runAdoptReal({ answers: answersFile(), yes: true, issue: 12 }, s.deps);
+    expect(out.exitCode, s.err()).toBe(0);
+    expect(s.out()).toContain("node .harness/scripts/baseline-check.mjs --init");
+    expect(s.out()).toContain("npm ci");
+    expect(s.out().indexOf("--init")).toBeLessThan(s.out().indexOf("git add -A"));
+    expect(has(dir, ".harness/baseline.json")).toBe(false);
+    expect(has(dir, ".harness/scripts/baseline-check.mjs")).toBe(true);
+  });
+
+  it("Node のアプリがない：基準線の手順は出ず、対象外と表示する。スクリプトも置かない", async () => {
+    const dir = sampleApp();
+    write(dir, "package.json", "");
+    rmSync(path.join(dir, "package.json"));
+    write(dir, "requirements.txt", "flask\n");
+    const s = setup(dir, fakeGit());
+    const out = await runAdoptReal({ answers: answersFile(), yes: true, issue: 12 }, s.deps);
+    expect(out.exitCode, s.err()).toBe(0);
+    expect(s.out()).not.toContain("--init");
+    expect(has(dir, ".harness/scripts/baseline-check.mjs")).toBe(false);
   });
 });
