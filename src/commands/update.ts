@@ -905,6 +905,11 @@ async function update(
       removedFiles: [...removedAfter],
       mode: adopted ? "adopt" : "update",
       ...(adopted && recorded.secretScan !== undefined ? { secretScan: recorded.secretScan } : {}),
+      // 技術の判定の結果は、導入のときの記録を引き継ぐ（更新では判定し直さない）
+      ...(adopted && recorded.detectedStack !== undefined
+        ? { detectedStack: recorded.detectedStack }
+        : {}),
+      ...(adopted && recorded.profiles !== undefined ? { profiles: recorded.profiles } : {}),
     },
   );
   const configOp: ApplyOp = {

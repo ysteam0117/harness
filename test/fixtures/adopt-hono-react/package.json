@@ -1,0 +1,11 @@
+{
+  "name": "sample-app",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "devDependencies": {
+    "typescript": "^6.0.0"
+  }
+}

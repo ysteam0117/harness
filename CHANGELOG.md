@@ -13,6 +13,8 @@
 - `.harness/config.yaml` に `mode: adopt`・`marked_files` を記録する。`harness status` は、印で囲んだ文書を、印の中の本文の指紋で比べる。導入したアプリの `harness update` は、印の中だけを新しい内容にする（印の外は変えない。Issue #16）
 - 導入先の AI 向けの文書には、生成したアプリだけにあるコマンド・文書（`npm run env:check` など）を書かない。品質チェック・テストのコマンドは「未設定」とし、既存のコマンドを確かめさせる。`harness create` の出力は変わらない
 
+- 既存の技術の判定（Issue #18 の一部）：`harness adopt` が、ファイルから機械的に、言語・実行環境の版・バックエンド・フロント・DB・テスト・品質チェック・CI を判定して表示する（`--dry-run` でも）。`.env` 等の秘密情報のファイルは読まず、リンクはたどらず、ルートの外は読まない。必要な手がかりがすべて合うときだけ技術プロファイルを「当てる予定」とし、合わない技術は「プロファイルなし（一部一致：…）」とハーネスの改善の提案を表示する。結果は `.harness/config.yaml` の `detected_stack`・`profiles` に記録し、`harness update` はそれを引き継ぐ。Node.js 以外（Python・Go・Ruby・Java）は、ファイルの有無で言語だけを判定し、フレームワーク・依存の名前は判定しない（後の #19 で AI が根拠つきで補う。表示は「プロファイルなし（Python）」の形）。プロファイルの Skill の導入と CI は、続きの PR で入れる。出力のファイルは変わらない
+
 ### 互換性が壊れる変更
 
 - **生成したプロジェクトの品質チェック（`npm run check`）に Docker が必須になった**。D1・DB なしのプロジェクトでも、Semgrep・gitleaks・OSV-Scanner を Docker のイメージで実行する。Docker がないと `npm run check` は失敗する（スキップの環境変数はない）。Docker のコンテナの中では、Docker を使わない `npm run check:app` を実行する。`harness update` の後、Docker を入れて起動してから `npm run check` を実行する。Docker Desktop は、大きな会社が業務で使うときは有料になる

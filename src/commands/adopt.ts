@@ -3,6 +3,15 @@ import path from "node:path";
 import { Command } from "commander";
 import { buildAdoptFiles, type AdoptFile } from "../adopt/build.js";
 import {
+  CLASS_ORDER,
+  detectStack,
+  loadDetectionRules,
+  matchProfiles,
+  type DetectClass,
+  type DetectedStack,
+  type ProfileMatch,
+} from "../adopt/detect.js";
+import {
   formatLeaks,
   scanSecrets,
   type Runner,
@@ -348,12 +357,95 @@ function tally(d: AdoptDecision, o: Outcome): void {
   }
 }
 
+const CLASS_LABEL: Record<DetectClass, string> = {
+  language: "言語",
+  runtime: "実行環境",
+  backend: "バックエンド",
+  frontend: "フロントエンド",
+  db: "DB",
+  test: "テスト",
+  quality: "品質チェック",
+  ci: "CI",
+};
+const WILL_APPLY = "当てる予定（#18 の続きで入れる）";
+
+const dirLabel = (dir: string): string => (dir === "." ? "ルート" : `\`${dir}\``);
+const dirsLabel = (dirs: string[]): string => dirs.map(dirLabel).join("、");
+
+/** 技術の判定・プロファイル・プロファイルなしの節（F-29 の「既存の技術の扱い」）。技術プロファイルの Skill は、まだ入れない */
+function detectionLines(stack: DetectedStack, match: ProfileMatch): string[] {
+  const lines: string[] = [];
+  const found = stack.apps.flatMap((a) => a.items.map((i) => ({ dir: a.dir, item: i })));
+  if (found.length > 0) {
+    lines.push("### 技術の判定", "");
+    lines.push(
+      "ファイルから機械的に判定しました（.env 等の秘密情報のファイルは読んでいません）。",
+      "",
+    );
+    for (const { dir, item } of found) {
+      const version = item.version === undefined ? "" : ` ${item.version}`;
+      const evidence = item.evidence.map((e) => `\`${e}\``).join("、");
+      lines.push(
+        `- ${dirLabel(dir)}：${CLASS_LABEL[item.class]} ${item.technology}${version}（根拠：${evidence}）`,
+      );
+    }
+    lines.push("");
+  }
+  if (stack.notes.length > 0) {
+    lines.push("### 読まなかったもの", "");
+    for (const n of stack.notes) lines.push(`- \`${n.path}\`：${n.reason}`);
+    lines.push("");
+  }
+  if (match.applied.length > 0) {
+    lines.push("### 技術プロファイル", "");
+    lines.push(
+      "必要な手がかりがすべて合った技術プロファイルです。今は技術によらない共通のルールだけを入れます。プロファイルの Skill は、まだ入れません。",
+      "",
+    );
+    for (const a of match.applied) {
+      lines.push(`- ${a.profile}：${WILL_APPLY}（対象：${dirsLabel(a.apps)}）`);
+    }
+    lines.push("");
+  }
+  if (match.none.length > 0) {
+    lines.push("### プロファイルなし", "");
+    lines.push(
+      "技術ごとのルールは入れず、技術によらない共通のルールだけを入れます。技術プロファイルを作る提案は、ハーネスの改善の提案（C-78）として出します。",
+      "",
+    );
+    const ordered = [...match.none].sort(
+      (a, b) => CLASS_ORDER.indexOf(a.category) - CLASS_ORDER.indexOf(b.category),
+    );
+    for (const n of ordered) {
+      const partial =
+        n.partial !== undefined && n.partial.length > 0
+          ? `（一部一致：${n.partial.join("・")}）`
+          : "";
+      lines.push(
+        n.category === "language"
+          ? `- プロファイルなし（${n.technology}）（対象：${dirsLabel(n.apps)}）`
+          : `- ${CLASS_LABEL[n.category]} ${n.technology}：プロファイルなし${partial}（対象：${dirsLabel(n.apps)}）`,
+      );
+    }
+    lines.push("");
+    for (const n of ordered) {
+      lines.push(
+        `- ${n.technology} の技術プロファイルを作る提案：ハーネスのリポジトリに Issue を作ってください（harness は Issue を作りません）`,
+      );
+    }
+    lines.push("");
+  }
+  return lines;
+}
+
 function renderReport(input: {
   dryRun: boolean;
   outcome: Outcome;
   diffs: { path: string; text: string }[];
   appName: string;
   scan: ScanOutcome;
+  stack: DetectedStack;
+  match: ProfileMatch;
 }): string {
   const o = input.outcome;
   const lines: string[] = [];
@@ -399,6 +491,7 @@ function renderReport(input: {
     "すでに同じ内容のファイルです（書き換えません）。",
     o.same.map((p) => `\`${p}\``),
   );
+  lines.push(...detectionLines(input.stack, input.match));
   if (input.dryRun && input.diffs.length > 0) {
     lines.push("### 差分", "");
     for (const d of input.diffs) lines.push(`#### ${d.path}`, "", "```diff", d.text, "```", "");
@@ -444,6 +537,19 @@ async function adopt(
     ].join("\n"),
     "導入を始めます",
   );
+
+  // 既存の技術の判定（ファイルから機械的に。回答は使わない。.env 等は読まない）
+  let stack: DetectedStack;
+  let match: ProfileMatch;
+  try {
+    const rules = loadDetectionRules();
+    stack = await detectStack(root, fs, rules);
+    match = matchProfiles(stack, rules);
+  } catch (e) {
+    if (e instanceof GenerateError) return fail(e.message);
+    throw e;
+  }
+  if (signal.aborted) throw new CancelledError();
 
   // 足りない項目だけ質問する
   const quiet: Prompter = Object.create(prompter, { note: { value: () => undefined } }) as Prompter;
@@ -530,7 +636,9 @@ async function adopt(
 
   // --dry-run：一覧と差分だけ
   if (dryRun) {
-    deps.stdout(renderReport({ dryRun: true, outcome, diffs, appName: answers.app_name, scan }));
+    deps.stdout(
+      renderReport({ dryRun: true, outcome, diffs, appName: answers.app_name, scan, stack, match }),
+    );
     return { exitCode: 0 };
   }
 
@@ -643,6 +751,8 @@ async function adopt(
     mode: "adopt",
     markedFiles,
     secretScan: secretScanRecord(scan, now),
+    detectedStack: stack,
+    profiles: match,
   });
   ops.push({ kind: "create", path: CONFIG_PATH, content: configText });
 
@@ -661,7 +771,17 @@ async function adopt(
     return reportApplyError(e, deps);
   }
 
-  deps.stdout(renderReport({ dryRun: false, outcome, diffs: [], appName: answers.app_name, scan }));
+  deps.stdout(
+    renderReport({
+      dryRun: false,
+      outcome,
+      diffs: [],
+      appName: answers.app_name,
+      scan,
+      stack,
+      match,
+    }),
+  );
   prompter.note(
     `導入しました（${localDay(now)}）。差分を Git で確かめ、既存のテストと品質チェックを実行してください。上の一覧は、PR の本文に貼れます。`,
     "導入しました",
