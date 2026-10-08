@@ -126,6 +126,7 @@ const SKILL_FOLDERS: Record<string, string> = {
   "環境・デプロイ": "env-deploy",
   レビュー: "review",
   知見: "knowledge",
+  既存のプロジェクトへの導入: "adopt-existing",
 };
 
 /** 文書の中のリンクの番号（[C-12](…)・範囲 [C-12](…)〜[C-20](…)）を集める */

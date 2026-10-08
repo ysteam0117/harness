@@ -115,6 +115,14 @@
   - 同じ名前のファイルがあれば、差分を見せて選ばせる（`--yes` では残す）
 - smoke（`test/scripts/smoke-generated-harness-check.test.ts`）：生成した `secret-scan` の `run` を、実際の Docker の gitleaks で動かす（Linux コンテナを動かせる Docker と bash があるときだけ）。値は出ない。GitHub のランナー上の動き（権限・`GITHUB_WORKSPACE`）は、手元では確かめていない
 
+## 回答の案を作る Skill（Issue #19）
+
+- `templates/skills/adopt-existing/SKILL.md`：導入の前に、AI が既存の要件定義書・README・設計書・コードを読み、`--answers` の回答のファイルを根拠つきで作るための手順（F-29 の手順3）。もとになった共通仕様は C-05・C-76。F-21 の Skill の表に行がある（`scripts/check-spec-coverage.ts` の `SKILL_FOLDERS`）
+- **導入物に入れない**：ハーネスを使う人だけが読む Skill のため、`src/generate/adapter.ts` の `HARNESS_ONLY_SKILLS` に入れ、`harness create`・`harness adopt`・`harness update` の出力に出さない（`.claude/skills/`・`.agents/skills/` に出ない。`create` のスナップショットは変わらない）。配布物（`templates/`）には入る
+- 回答の形は変えない：CLI の質問処理（`src/questions`）は変えず、技術プロファイルの候補・根拠は YAML のコメントに書く（CLI は無視する）。プロファイルは #18 の自動判定
+- Skill が書く質問は `interactive: false` の質問だけ。値は `src/questions/definitions.ts` と同じ。`undecided` を書けるのは、選択肢に `undecided` がある質問だけ。`idp`・`critical_ops_kinds`・`file_kinds` は、既定値がなく省略しても質問されないので、分からなければ書かず、利用者への報告に「未記入の補足」として一覧にする。分かったら `.harness/config.yaml` の `answers` に追記して `harness update` で反映する
+- 秘密情報（`.env` など）は開かず、回答・コメントに値や個人情報を書かない
+
 ## 秘密情報の確認（Issue #17）
 
 - 道具：gitleaks の Docker イメージ。`harness create` のセキュリティのテスト（#42）と同じ固定のイメージを、技術プロファイル（`profile.yaml` の `container_images.gitleaks`）から取る（値を二重に持たない）。`--network none`・対象は `:ro`
@@ -155,4 +163,4 @@
 
 ## テスト
 
-`test/adopt/`（印・判定・組み立て・秘密情報の確認 `secret-scan.test.ts`。プロファイルの Skill `build-profiles.test.ts`、`harness-check.yml` `harness-check.test.ts`）、`test/commands/adopt-profiles.test.ts`（Skill・`harness-check.yml` の導入と、update が記録した `applied` で組み直すこと）、`test/scripts/smoke-generated-harness-check.test.ts`（実際の Docker の gitleaks で、生成した確認の `run` を動かす）、`test/commands/adopt-secret-scan.test.ts`（確認の道具を差し替えた結果の扱い）、`test/scripts/smoke-generated-secret-scan.test.ts`（実際の Docker の gitleaks。`npm run test:smoke`。Docker が無ければ飛ばす）、`test/adopt/detect*.test.ts`・`match-profiles.test.ts`（技術の判定。偽の fs で、読んだパスを記録して .env・リンク・ルートの外を確かめる）、`test/commands/adopt-detect.test.ts`（`test/fixtures/adopt-hono-react`・`adopt-django`・`adopt-go`・`adopt-mixed` を写して実行）、`test/commands/adopt.test.ts`（架空の既存のアプリ `test/fixtures/adopt-sample/` を一時フォルダに写して実行）。`test/commands/update.test.ts`・`status.test.ts`・`test/update/read-config.test.ts` に、導入済みのアプリの扱いを足した。
+`test/adopt/`（印・判定・組み立て・Skill「既存のプロジェクトへの導入」`adoption-skill.test.ts`・秘密情報の確認 `secret-scan.test.ts`。プロファイルの Skill `build-profiles.test.ts`、`harness-check.yml` `harness-check.test.ts`）、`test/commands/adopt-profiles.test.ts`（Skill・`harness-check.yml` の導入と、update が記録した `applied` で組み直すこと）、`test/scripts/smoke-generated-harness-check.test.ts`（実際の Docker の gitleaks で、生成した確認の `run` を動かす）、`test/commands/adopt-secret-scan.test.ts`（確認の道具を差し替えた結果の扱い）、`test/scripts/smoke-generated-secret-scan.test.ts`（実際の Docker の gitleaks。`npm run test:smoke`。Docker が無ければ飛ばす）、`test/adopt/detect*.test.ts`・`match-profiles.test.ts`（技術の判定。偽の fs で、読んだパスを記録して .env・リンク・ルートの外を確かめる）、`test/commands/adopt-detect.test.ts`（`test/fixtures/adopt-hono-react`・`adopt-django`・`adopt-go`・`adopt-mixed` を写して実行）、`test/commands/adopt.test.ts`（架空の既存のアプリ `test/fixtures/adopt-sample/` を一時フォルダに写して実行）。`test/commands/update.test.ts`・`status.test.ts`・`test/update/read-config.test.ts` に、導入済みのアプリの扱いを足した。

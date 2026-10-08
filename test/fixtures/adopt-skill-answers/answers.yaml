@@ -1,0 +1,34 @@
+# 架空のアプリ（sample-app）について、Skill「既存のプロジェクトへの導入」が作る回答の例。
+# 実データ・個人名は使わない。app_name は書かない（フォルダの名前から決まる）。
+
+# 根拠: docs/requirements.md の「認証」の節（Google アカウントで OIDC ログイン）
+auth: oidc
+# 根拠: docs/requirements.md の「認証」の節（Google）
+idp: google
+# 根拠: docs/requirements.md の「扱う情報」の節（氏名・連絡先を保存する）
+personal_data: basic
+# 根拠: README.md の「管理画面」の節
+admin: yes
+# 根拠: src/routes/articles.ts（記事の削除と、公開範囲の変更がある）
+critical_ops: yes
+# 根拠: src/routes/articles.ts
+critical_ops_kinds:
+  - delete
+  - publish
+# 根拠: なし（判定できない）
+collaborative: undecided
+# 根拠: docs/requirements.md の「データ」の節（組織の区別はない）
+org_separation: no
+# 根拠: なし（判定できない）
+realtime: undecided
+# 根拠: なし（判定できない）
+availability: undecided
+# 根拠: src/routes/uploads.ts（画像のアップロード）
+file_upload: yes
+# 根拠: src/routes/uploads.ts
+file_kinds:
+  - image
+
+# 技術プロファイルの候補（CLI は読まない。プロファイルは harness adopt が自動で判定する）
+# - backend-framework/hono：package.json の dependencies に hono がある
+# - frontend-build/vite-react-router：package.json の dependencies に vite・react-router がある

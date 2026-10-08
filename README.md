@@ -287,6 +287,8 @@ harness adopt --answers answers.yaml --skip-secret-scan   # 秘密情報の確�
 | 1 | エラー（回答ファイルの問題、アプリ名、導入済み、秘密情報が見つかった、Docker が使えない、印が壊れている、文字コード、判定の後にファイルが変わった、失敗など） |
 | 130 | Ctrl+C で中断した（書いた分は元に戻します） |
 
+**回答のファイルを AI に作らせる：** 既存の要件定義書・README・コードから、回答の案を根拠つきで作る Skill「既存のプロジェクトへの導入」があります。インストールしたハーネスの `templates/skills/adopt-existing/SKILL.md` を AI に読ませて、「この Skill に従って、このプロジェクトの `harness adopt` の回答のファイルを作って」と頼みます。この Skill は導入先のプロジェクトには入りません（`harness create`・`harness adopt` の出力に含まれません）。AI は、`.env` などの秘密情報のファイルを開かず、判定できない項目は `undecided` にし、各項目に根拠（読んだファイル）をコメントで付けます。分からない補足（外部IdP・重要な操作の種類・扱うファイルの種類）は書かずに残すので、分かった時点で `.harness/config.yaml` の `answers` に追記して、`harness update` を実行してください（`harness update` は回答のファイルを受け取らず、`.harness/config.yaml` を読みます）。
+
 設計の詳細は[既存のプロジェクトへの導入](docs/design/adopt.md)を参照してください。
 
 ## `harness status` の使い方

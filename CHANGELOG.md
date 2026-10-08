@@ -17,6 +17,8 @@
 
 - 当てたプロファイルの Skill と CI の確認（Issue #18）：`harness adopt` は、当てた技術プロファイルの Skill だけを入れる（`.claude/skills/<名前>/`・`.agents/skills/<名前>/`。プロファイルのコード・設定は入れず、ESLint・Prettier・tsconfig などの設定は作らず、上書きもしない）。`AGENTS.md` の「ルールを読んで従う」の表に Skill の行を足し、どのフォルダに当たるかを書く。既存のアプリがハーネスと違う技術なら、共通のルールだけ。`harness update` は、判定し直さず、記録した `profiles.applied` で組み直す（今のハーネスに無いプロファイルは、除いて報告する）。GitHub で品質チェックを GitHub Actions で行うときは、`.github/workflows/harness-check.yml` を追加する（秘密情報の確認を常に、`npm audit --omit=dev --audit-level=high` を Node.js のアプリのときだけ。Lint・型・テストは入れない。既存のワークフローは変えない）。`harness create` の出力は変わらない
 
+- Skill「既存のプロジェクトへの導入」（Issue #19）：`templates/skills/adopt-existing/SKILL.md`。導入の前に、AI が既存の要件定義書・README・設計書・コードを読み、`harness adopt --answers` に渡す回答のファイルを、根拠（読んだファイル）つきで作る手順。判定できない項目は `undecided` にし、技術プロファイルの候補は YAML のコメントで書く（CLI は読まない）。`.env` などの秘密情報は開かない。この Skill はハーネスを使う人だけが読むもので、`harness create`・`harness adopt`・`harness update` の出力には入らない。回答の形・CLI の質問は変わらない
+
 ### 互換性が壊れる変更
 
 - **生成したプロジェクトの品質チェック（`npm run check`）に Docker が必須になった**。D1・DB なしのプロジェクトでも、Semgrep・gitleaks・OSV-Scanner を Docker のイメージで実行する。Docker がないと `npm run check` は失敗する（スキップの環境変数はない）。Docker のコンテナの中では、Docker を使わない `npm run check:app` を実行する。`harness update` の後、Docker を入れて起動してから `npm run check` を実行する。Docker Desktop は、大きな会社が業務で使うときは有料になる
