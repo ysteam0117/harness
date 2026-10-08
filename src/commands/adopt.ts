@@ -299,6 +299,10 @@ async function checkSecrets(
       return fail(
         "秘密情報の確認に Docker が必要です（Docker が見つからないか、動いていません）。Docker を起動してください。確認を省くなら --skip-secret-scan を付けます（確認していないと記録されます）。何も書いていません",
       );
+    case "docker-not-linux":
+      return fail(
+        "秘密情報の確認に、Linux コンテナを動かせる Docker が必要です（今の Docker は Windows コンテナのモードです）。Linux コンテナに切り替えてください。確認を省くなら --skip-secret-scan を付けます（確認していないと記録されます）。何も書いていません",
+      );
     case "failed":
       return fail(`${result.message}。何も書いていません`);
     case "unreadable":

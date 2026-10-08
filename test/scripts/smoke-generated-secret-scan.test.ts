@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import { stringify } from "yaml";
 import { decideDockerStep } from "../../scripts/smoke-generated.js";
+import { linuxDockerAvailable } from "./docker-helpers.js";
 import { scanSecrets } from "../../src/adopt/secret-scan.js";
 import { runAdopt, type AdoptDeps } from "../../src/commands/adopt.js";
 import { FakePrompter, baseAnswers } from "../questions/helpers.js";
@@ -32,8 +33,7 @@ const FIXTURE = path.resolve(
   "adopt-sample",
 );
 
-const docker = spawnSync("docker", ["info"], { stdio: "ignore", windowsHide: true });
-const run = decideDockerStep(docker.status === 0, process.env) === "run";
+const run = decideDockerStep(linuxDockerAvailable(), process.env) === "run";
 
 /** GitHub のトークンの形の架空の値（連結して作る。ソースに直接書かない） */
 const fakeToken = (tail: string): string => ["gh", "p_", tail].join("");

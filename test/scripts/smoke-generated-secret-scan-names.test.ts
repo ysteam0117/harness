@@ -3,22 +3,20 @@
 // 中の sh と git で作る（Windows のファイルシステムでは作れない名前があるため）。Docker が使えなければ飛ばす。
 // ダミーの値は、実行時に連結して作る。実データ・個人名は使わない（架空の値だけ）。
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { decideDockerStep } from "../../scripts/smoke-generated.js";
+import { linuxDockerAvailable, removeWithContainer } from "./docker-helpers.js";
 import { gitleaksImage, scanSecrets } from "../../src/adopt/secret-scan.js";
 
-const docker = spawnSync("docker", ["info"], { stdio: "ignore", windowsHide: true });
-const run = decideDockerStep(docker.status === 0, process.env) === "run";
+const run = decideDockerStep(linuxDockerAvailable(), process.env) === "run";
 
 const TAIL = ["aB3dE5gH7j", "K9mN1pQ3sT", "5vW7yZ9bC1", "dE3fG5"].join("");
 const roots: string[] = [];
 afterAll(() => {
-  for (const dir of roots) {
-    rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
-  }
+  for (const dir of roots) removeWithContainer(dir, [path.join(dir, "repo")]);
 });
 
 // sh の printf の書式。日本語（UTF-8 の8進数）・空白・"・\・ESC(\033)・ベル(\007)・改行(\n)
