@@ -19,6 +19,9 @@ export type BuildAiOutputsInput = {
   values: Record<string, string>;
 };
 
+/** ハーネスを使う人だけが読む Skill（create・adopt の出力には入れない）。templates/skills/ にあるが、導入先には配らない */
+export const HARNESS_ONLY_SKILLS: readonly string[] = ["adopt-existing"];
+
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 const AGENT_FIELDS = ["name", "description", "claude", "codex"];
 
@@ -185,7 +188,7 @@ export function buildAiOutputs(input: BuildAiOutputsInput): OutputFile[] {
 
   const skills: { name: string; content: string }[] = [];
   for (const entry of listDir(path.join(templatesDir, "skills"), "skills/")) {
-    if (!entry.isDirectory()) continue;
+    if (!entry.isDirectory() || HARNESS_ONLY_SKILLS.includes(entry.name)) continue;
     const rel = `skills/${entry.name}/SKILL.md`;
     const text = readText(path.join(templatesDir, rel), rel);
     skills.push({ name: entry.name, content: render(stripHarnessComments(text, rel), rel) });
