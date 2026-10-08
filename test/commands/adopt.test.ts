@@ -133,10 +133,12 @@ describe("#15 AC-1: 既存のアプリに、AI 向けのルールを印で囲ん
         (rel) =>
           rel === "CLAUDE.md" ||
           rel.startsWith(".claude/") ||
+          rel === ".github/workflows/harness-check.yml" ||
           rel === ".harness/config.yaml" ||
           rel === ".harness/baseline.json",
       ),
     ).toBe(true);
+    expect(added).toContain(".github/workflows/harness-check.yml");
     // 技術プロファイルの Skill は入らない
     expect(added.some((rel) => rel.includes("backend-hono"))).toBe(false);
     expect(existsSync(path.join(dir, ".harness", ".update-lock"))).toBe(false);

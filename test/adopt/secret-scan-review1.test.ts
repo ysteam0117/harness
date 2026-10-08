@@ -18,14 +18,14 @@ afterEach(() => {
   for (const dir of tmpRoots.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-describe("#17 R1：レポートの生成の時点で、許可した4項目だけを出す", () => {
-  it("テンプレートが参照するのは File・StartLine・Commit・RuleID だけ", () => {
+describe("#17 R1：レポートの生成の時点で、許可した3項目だけを出す（種類は、独自ルールの id に値が入りうるため出さない）", () => {
+  it("テンプレートが参照するのは File・StartLine・Commit だけ", () => {
     const used = [...REPORT_TEMPLATE.matchAll(/\$f\.(\w+)/g)].map((m) => m[1] ?? "");
-    expect([...new Set(used)].sort()).toEqual(["Commit", "File", "RuleID", "StartLine"]);
+    expect([...new Set(used)].sort()).toEqual(["Commit", "File", "StartLine"]);
     // テンプレートの中で、$f の項目はこの4つ以外に出てこない
     const dots = [...REPORT_TEMPLATE.matchAll(/\.(\w+)/g)].map((m) => m[1] ?? "");
     for (const name of dots) {
-      expect(["Commit", "File", "RuleID", "StartLine"]).toContain(name);
+      expect(["Commit", "File", "StartLine"]).toContain(name);
     }
     for (const banned of [
       "Secret",
@@ -238,7 +238,7 @@ describe("#17 R2-1：レポートの文字列は JSON としてエンコード�
       "",
     );
     // gitleaks の mustToJson と同じ形（JSON のエンコード）の出力
-    const text = `[{"RuleID":"r","File":${JSON.stringify(name)},"StartLine":1,"Commit":""}]`;
+    const text = `[{"File":${JSON.stringify(name)},"StartLine":1,"Commit":""}]`;
     const leaks = parseLeakReport(text);
     expect(leaks).toHaveLength(1);
     const shown = leaks[0]?.file ?? "";

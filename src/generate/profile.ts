@@ -79,6 +79,12 @@ export type Profile = {
 
 const SEGMENT = "[A-Za-z0-9][A-Za-z0-9_-]*";
 const KEY_RE = new RegExp(`^(${SEGMENT})/(${SEGMENT})$`);
+
+/** "<分類>/<id>" の形か（フォルダの名前に使えない文字・".." を含まない） */
+export function isProfileKey(key: string): boolean {
+  return KEY_RE.test(key);
+}
+
 const SHARED_RE = new RegExp(`^(${SEGMENT})/_shared$`);
 const SKILL_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 

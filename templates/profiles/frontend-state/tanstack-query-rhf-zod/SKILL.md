@@ -7,7 +7,7 @@ description: 画面の状態・サーバーのデータ・フォームの扱い�
 
 # 状態とフォーム（TanStack Query・React Hook Form・Zod）
 
-作業の過程と結果は、すべて日本語で書く。
+作業の過程と結果は、すべて日本語で書く。{{profile_skill_note}}
 
 ## サーバーのデータ（TanStack Query）
 
@@ -50,7 +50,7 @@ const form = useForm<z.infer<typeof schema>>({ resolver: zodResolver(schema) });
 
 ## 良い例・悪い例
 
-例は、テスト（`frontend/src/rules-examples/server-state.test.tsx`・`form.test.tsx`）で動作を確かめてある。悪い例は、問題が起きることもテストで確かめてある。コードを書く前に読み、良い例の書き方に合わせる。
+{{frontend_state_examples_intro}}
 
 ### サーバーのデータは`useQuery`の`data`をそのまま使う
 

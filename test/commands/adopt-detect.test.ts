@@ -93,7 +93,8 @@ describe("#18 adopt：TypeScript（Hono・React）", () => {
     expect(text).toContain("Hono");
     expect(text).toContain("backend/package.json");
     expect(text).toContain("### 技術プロファイル");
-    expect(text).toContain("当てる予定（#18 の続きで入れる）");
+    expect(text).toContain("当てたプロファイル");
+    expect(text).not.toContain("当てる予定");
     for (const key of [
       "backend-framework/hono",
       "logger/structured-logger",
@@ -234,7 +235,7 @@ describe("#18 adopt：技術プロファイルのない既存のアプリ", () =
     expect(s.out()).toContain("プロファイルなし（一部一致：vite）");
   });
 
-  it("出力のファイルは、判定の結果によらず同じ（技術のないアプリと比べて）", async () => {
+  it("プロファイルのない既存のアプリ（Python・Go）は、共通のルールだけで、出力が同じ。当てたプロファイルの Skill は、それに足されるだけ", async () => {
     const files = async (fixture: string) => {
       const dir = app(fixture);
       const s = setup(dir);
@@ -248,7 +249,22 @@ describe("#18 adopt：技術プロファイルのない既存のアプリ", () =
     const react = await files("adopt-hono-react");
     const django = await files("adopt-django");
     const go = await files("adopt-go");
-    expect([...django.entries()]).toEqual([...react.entries()]);
-    expect([...go.entries()]).toEqual([...react.entries()]);
+    expect([...go.entries()]).toEqual([...django.entries()]);
+    const profileSkills = [
+      "backend-hono",
+      "data-access-drizzle",
+      "frontend-build",
+      "logger",
+      "quality-tools",
+      "test-tools",
+    ];
+    const common = [...react.keys()].filter(
+      (rel) => !profileSkills.some((name) => rel.startsWith(`.claude/skills/${name}/`)),
+    );
+    expect(common).toEqual([...django.keys()]);
+    for (const name of profileSkills) {
+      expect(react.has(`.claude/skills/${name}/SKILL.md`), name).toBe(true);
+      expect(django.has(`.claude/skills/${name}/SKILL.md`), name).toBe(false);
+    }
   });
 });

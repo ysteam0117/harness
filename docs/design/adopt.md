@@ -12,7 +12,7 @@
 | --- | --- |
 | AC-1 | `AGENTS.md`・`CLAUDE.md` は、既存の内容を残し、ハーネスの部分を印（`<!-- harness:begin -->`〜`<!-- harness:end -->`）で囲んで追加する。印の外は1文字も変えない |
 | AC-2 | 共通の Skill・エージェントの定義・AI の権限の設定は、同じ名前のファイルがなければ追加する。ある場合は、差分を見せて利用者が選ぶ（`--yes` では既存を残す） |
-| AC-3 | 技術プロファイルの Skill は入れない。生成したアプリにだけあるコマンド・文書を、導入先の文書に書かない |
+| AC-3 | 技術プロファイルの Skill は、当てたものだけ入れる（#18。最初の版では入れない）。生成したアプリにだけあるコマンド・文書を、導入先の文書に書かない |
 | AC-4 | `--dry-run` は何も書かない。取り消しでも何も書かない |
 | AC-5 | `--answers` は必須。足りない項目だけ質問する。アプリ名はフォルダの名前から決める（回答ファイルの `app_name` が違えば止める） |
 | AC-6 | 書き込みは一括で、失敗・中断では元のバイト列に戻る |
@@ -29,9 +29,12 @@
 | ファイル | 役割 |
 | --- | --- |
 | `src/adopt/markers.ts` | 印の検出（`extractBlock`）と統合（`mergeBlock`）。純粋な関数。印の文字列は `BEGIN`・`END` |
-| `src/adopt/build.ts` | `buildAdoptFiles`：導入するファイルを、メモリ上で組み立てる。技術プロファイルを使わず、AI 向けのファイルだけ |
+| `src/adopt/build.ts` | `buildAdoptFiles`：導入するファイルを、メモリ上で組み立てる。AI 向けのファイルと、当てたプロファイルの Skill、`harness-check.yml` だけ（プロファイルのコード・設定は入れない） |
+| `src/adopt/profiles.ts` | 当てたプロファイルの扱い（#18 の PR-B）：`usableProfiles`（今のハーネスで使えるものを選ぶ）、`applyProfileSkillValues`（Skill を AGENTS.md の表に書く値にする）、`hasNodeApp` |
+| `src/adopt/ci.ts` | `buildHarnessCheck`：`.github/workflows/harness-check.yml` の中身（ひな形は `templates/adopt/`） |
+| `data/adopt-profile-skills.yaml` | プロファイルの分類ごとの、AGENTS.md の表の欄（C-38） |
 | `src/adopt/plan.ts` | `planAdopt`：ファイルごとに doc-merge・add・same・choose を決める。純粋な関数 |
-| `src/adopt/secret-scan.ts` | 秘密情報の確認（#17）：`scanSecrets`（docker・git の実行役は差し替え可）、`parseLeakReport`（レポートから場所・行・コミット・種類だけを取り出す）、`formatLeaks`、`gitleaksImage` |
+| `src/adopt/secret-scan.ts` | 秘密情報の確認（#17）：`scanSecrets`（docker・git の実行役は差し替え可）、`parseLeakReport`（レポートから場所・行・コミットだけを取り出す）、`formatLeaks`、`gitleaksImage` |
 | `src/adopt/detect.ts` | 既存の技術の判定（#18）：`detectStack`（ディスクを読む。fs は注入）、`matchProfiles`（プロファイルの判定。純粋な関数）、`loadDetectionRules` |
 | `src/adopt/record.ts` | `detected_stack`・`profiles` の config.yaml への記録（`detectedStackEntry`・`profilesEntry`）と読み戻し（`readDetectedStack`・`readProfiles`） |
 | `data/adopt-detection.yaml` | 判定のルール（C-38）：package.json の依存の名前・言語のファイル・版のファイル・プロファイルごとの必須の手がかり |
@@ -95,14 +98,28 @@
 - **Node.js 以外（Python・Go・Ruby・Java）は、ファイルの有無で言語だけを判定する**（`pyproject.toml`・`requirements.txt`・`setup.py`・`manage.py`・`go.mod`・`Gemfile`・`pom.xml`・`build.gradle(.kts)`）。フレームワーク・依存の名前（Django・pytest・Rails・Spring 等）は判定しない。ファイルの中身から名前を拾うと、説明文・コメント・URL まで拾うため。後の #19 で、AI が根拠つきで補う。表示は「プロファイルなし（Python）」の形
 - リンク（シンボリックリンク・ジャンクション）は、lstat で見つけて読まず、「リンクのため読まない」と記録する。探索先（workspaces の値を含む）は、`../`・絶対パス・realpath がルートの外になるものを読まない。壊れた package.json は止めずに「読めなかった」と記録する（中身・エラーの文は残さない）
 - プロファイルの判定は、アプリ（package.json などのあるフォルダ）単位。必須の手がかりは、そのアプリとルートの依存だけを合わせて見る（別のアプリは合算しない）。ルートを対象から外すのは、`package.json` に workspaces があり、自分自身はアプリの手がかり（バックエンド・フロント・DB、go.mod・pyproject.toml 等の言語のファイル）を持たない管理用のルートだけ。workspaces の無い独立したルートや、言語のファイルがあるルートは、実アプリとして対象に残す。ルートの依存を子に合算するのは、ルートに workspaces があり、その所属の子だけ。一部だけ合うときは当てず、「プロファイルなし（一部一致：…）」にする。`requires`（例：Hono → 共通ロガー）は profile.yaml から読んで解決する
-- 当てるプロファイルは、`applied: [{ profile, apps }]`（対象のアプリのフォルダ付き）。**PR-A では Skill はまだ入れない**。表示は「当てる予定（#18 の続きで入れる）」。プロファイルのない技術は「プロファイルなし」として出し、ハーネスの改善の提案（C-78）として、プロファイルを作る提案の文を出す（CLI は Issue を作らない）
+- 当てるプロファイルは、`applied: [{ profile, apps }]`（対象のアプリのフォルダ付き）。Skill の導入は次の節（PR-B）。表示は「当てたプロファイル」。プロファイルのない技術は「プロファイルなし」として出し、ハーネスの改善の提案（C-78）として、プロファイルを作る提案の文を出す（CLI は Issue を作らない）
 - 記録：`detected_stack`（apps・notes）と `profiles`（applied・none）を、導入のときだけ config.yaml に書く。`harness update` は判定し直さず、この記録を引き継ぐ。無い記録（古い config）も読める
+
+## 当てたプロファイルの Skill と CI（Issue #18 の PR-B）
+
+- 入れるのは、**当てたプロファイルの Skill（`SKILL.md`）だけ**。プロファイルの `files`（コード・設定）は入れず、ESLint・Prettier・tsconfig などの品質チェックの道具の設定は作らず、上書きもしない。既存のアプリがハーネスと違う技術なら、`applied` が空で、共通のルールだけ（出力は変わらない）。Skill は `.claude/skills/<名前>/`・`.agents/skills/<名前>/`（選んだ AI の分）に入り、管理するファイルになる
+- 組み立て：`buildOutputs` にプロファイルを渡し（良い例の差し込み `{{example:...}}` のため、プロファイルの `files` も一度は描く）、出力のうちプロファイルの `files` の出力先だけを捨てる。`applied` のうち今のハーネスに無いプロファイルは、除いて報告する。除いたものを `requires` している適用済みのプロファイルも、連鎖して除く（Skill だけを入れるので、`requires` の検証は「足りないものを除く」で扱う。`resolveProfiles` の例外で止めない）
+- `AGENTS.md` の「ルールを読んで従う」の表：`data/adopt-profile-skills.yaml` の分類ごとの欄に、当てた Skill を足す（`append`＝末尾に足す、`replace`＝「該当する技術の Skill はない」を置き換える、`row`＝DB の行を置き換える）。どのフォルダ（`applied` の `apps`）に当たるかは、Skill の名前の後ろに「（`backend/` のみ）」と書く（ルート全体なら書かない）。良い例・悪い例の案内（`example_skills`・`frontend_example_skills`）も、入れた Skill に合わせる。表に書けない分類のプロファイルは、導入できない（入れた Skill はすべて表にある）
+- プロファイルの Skill は、生成したアプリだけにあるコマンド・文書・フォルダ構成・共通の部品を前提にした箇所（導入しない部品を「必須（MUST）」として使わせる指示を含む）を、`data/template-values.yaml` の値にした（`harness create` の値は、これまでの文言のまま）。導入のときは `data/adopt-values.yaml` で入れ替え、各 Skill の冒頭に「このプロジェクトにないものは、既存のものに読み替える」という案内（`profile_skill_note`。`harness create` では空）を足す。テストは、プロファイルの Skill を含む導入の出力全体に、生成したアプリ専用のコマンド・文書・フォルダ構成が無いことを確かめる
+- `harness update`：判定し直さず、config の `profiles.applied` を使う。`detected_stack` に JavaScript・TypeScript の言語の項目があれば Node.js のアプリとする。記録の無い古い config は、プロファイルの Skill を入れない
+- `.github/workflows/harness-check.yml`（管理するファイル）：`repository: github` かつ `check_location` が `github_actions`・`both` のときだけ出す。`on` は `pull_request` と `push`（main）、`permissions` は `contents: read`、actions は既存のワークフローと同じくタグで固定する。
+  - `secret-scan`：履歴をすべて取得し、#17 と同じ固定の gitleaks のイメージ（`gitleaks_image`。profile.yaml の値を差し込む）を `--network none`・`:ro`・`--redact` で動かす。標準エラーは捨て（`2>/dev/null`）、レポートは #17 と同じ3項目だけのテンプレート（`REPORT_TEMPLATE`）で標準出力（`--report-path -`）に出す。終了コード 0 は固定の文、1 で中身があれば一覧と固定の案内、それ以外は固定の文「確認を完了できませんでした」で失敗する。一覧は `jq` で検証してから出す：種類（RuleID）は出さない（独自ルールの id に値が入りうるため。文字種や長さでは秘密と見分けられない。#17 の CLI も同じ）。場所（File）は JSON の文字列として出し、制御文字は逃がす（#17 の CLI と同じく、場所は出す）。**ファイル名そのものに秘密の値を書いていた場合は、その名前が表示される**このリポジトリの `.gitleaks.toml` は gitleaks が使う
+  - `npm-audit`：Node.js のアプリのときだけ、別のひな形の断片を値（`npm_audit_job`）として差し込む（ひな形に分岐を作らない）。対象は、`detected_stack` に記録した JavaScript・TypeScript のアプリのフォルダだけ（リポジトリ全体を `find` で探さない）。フォルダの一覧は matrix の配列で渡し、シェルには環境変数（`AUDIT_DIR`）として渡す。フォルダの名前は matrix の JSON（`JSON.stringify` で引用）で渡すので、日本語・括弧・スペースなどは、そのまま使える。使えないのは、絶対パス・`..`・空の名前・`${{`（GitHub の式の注入）・制御文字（改行など）を含むものだけで、一覧に入れず、`harness adopt` の表示（`harness update` では警告）に「npm audit の対象にできないフォルダ：<逃がした名前>（理由）」と出す。`cd` は `cd --` で行う（config を書き換えられても、注入にならない）。フォルダごとに `npm audit --omit=dev --audit-level=high`（既存の脆弱性でも最初から失敗する）。そのフォルダに `package-lock.json` が無ければ、旨を出して失敗にしない
+  - Lint・型・テストは入れない（既存のアプリの基準線を決めてから足す。Issue #21）
+  - 同じ名前のファイルがあれば、差分を見せて選ばせる（`--yes` では残す）
+- smoke（`test/scripts/smoke-generated-harness-check.test.ts`）：生成した `secret-scan` の `run` を、実際の Docker の gitleaks で動かす（Linux コンテナを動かせる Docker と bash があるときだけ）。値は出ない。GitHub のランナー上の動き（権限・`GITHUB_WORKSPACE`）は、手元では確かめていない
 
 ## 秘密情報の確認（Issue #17）
 
 - 道具：gitleaks の Docker イメージ。`harness create` のセキュリティのテスト（#42）と同じ固定のイメージを、技術プロファイル（`profile.yaml` の `container_images.gitleaks`）から取る（値を二重に持たない）。`--network none`・対象は `:ro`
 - 範囲：Git のリポジトリなら、履歴（`gitleaks git`。`--dir` がサブフォルダでも、リポジトリ全体）と、作業フォルダ（`gitleaks dir`。未コミット・未追跡のファイルを含む。`.git` の中は gitleaks の既定で調べない）の2回。どちらかで見つかれば止め、どちらかが失敗しても止める。Git でなければ作業フォルダだけで、その旨を表示・記録する
-- 値を出さない：`--redact` に加え、レポートはテンプレート（`--report-format template`。`REPORT_TEMPLATE`）で、生成の時点から場所（File）・行（StartLine）・コミット（Commit）・種類（RuleID）の4項目だけを出す（`--redact` は Message＝コミットメッセージを伏せないため）。レポートは一時フォルダにだけ出し（終了時に消す）、読むときも型を確かめて新しいオブジェクトに写す（コミットは先頭7桁）。実行の出力（stdout・stderr）は残さず、失敗の文は決まった文だけ（実行の出力・例外の文を入れない）。File の制御文字は逃がす
+- 値を出さない：`--redact` に加え、レポートはテンプレート（`--report-format template`。`REPORT_TEMPLATE`）で、生成の時点から場所（File）・行（StartLine）・コミット（Commit）の3項目だけを出す。種類（RuleID）は、独自ルールの id に値が入りうるため出さない（`--redact` は Message＝コミットメッセージを伏せないため）。レポートは一時フォルダにだけ出し（終了時に消す）、読むときも型を確かめて新しいオブジェクトに写す（コミットは先頭7桁）。実行の出力（stdout・stderr）は残さず、失敗の文は決まった文だけ（実行の出力・例外の文を入れない）。File の制御文字は逃がす
 - 結果：exit 0 かつ空 → 問題なし。exit 1 かつ中身あり → 見つかった（何も書かずに exit 1）。それ以外（起動できない・時間切れ 10 分・別の終了コード・レポートが読めない）→ 確認できなかったとして止める。Docker が無い・動いていない → 止める（`--skip-secret-scan` のときだけ進める）
 - Git かどうかは `git rev-parse --show-toplevel`（`LC_ALL=C`）で判定する。「リポジトリではない」と確かめられたとき（終了コード 128 と固定の判定）だけ作業フォルダのみにし、起動失敗・時間切れ・所有権やアクセス権の拒否・想定外の出力は、確認できなかったとして止める
 - 後始末：中断・時間切れ・起動失敗のときは、`finally` でコンテナを名前で探して `docker rm -f` で消す。消せなかった可能性・一時フォルダを消せなかったことは、固定の文で警告する（値は入れない）
@@ -126,11 +143,11 @@
 
 ## 生成したアプリ専用のものを書かない
 
-導入先には、`harness create` が生成するアプリだけにあるもの（`npm run env:check`・`check:app`・`security` などのコマンド、`docs/project-rules.md`・`docs/secrets.md`・`docs/testing/` などの文書、テストが開発・本番の DB と分かれていることの保証、技術プロファイルの Skill）が無い。ひな形には分岐を入れず（F-28）、`data/template-values.yaml` の値を、導入のときだけ `data/adopt-values.yaml` で入れ替える。
+導入先には、`harness create` が生成するアプリだけにあるもの（`npm run env:check`・`check:app`・`security` などのコマンド、`docs/project-rules.md`・`docs/secrets.md`・`docs/testing/` などの文書、テストが開発・本番の DB と分かれていることの保証、技術プロファイルのコード）が無い。ひな形には分岐を入れず（F-28）、`data/template-values.yaml` の値を、導入のときだけ `data/adopt-values.yaml` で入れ替える。
 
 - `harness create` の値は、これまでの文言のまま（1文字も変えない）
 - 品質チェック・テストのコマンドは「未設定」とする。実行する前に、既存のコマンド（`package.json` の `scripts`・README）と、テストが本番や共有の DB に接続しないことを確かめさせ、不明なら利用者に聞かせる
-- `AGENTS.md` の「ルールを読んで従う」の表は、出さない Skill を書かない（技術プロファイルの Skill の欄は、「該当する技術の Skill はない」とする）
+- `AGENTS.md` の「ルールを読んで従う」の表は、出さない Skill を書かない（技術プロファイルの Skill の欄は、当てたプロファイルがなければ「該当する技術の Skill はない」とし、当てたものがあれば、その Skill を書く）
 - 手元の Git だけで管理する場合（`repository: local`）も、`docs/issues/`・`npm run merge:check` などを前提にしない
 - `data/adopt-values.yaml` に、`data/template-values.yaml` にない名前は書けない（書き間違いは止まる）
 
@@ -138,4 +155,4 @@
 
 ## テスト
 
-`test/adopt/`（印・判定・組み立て・秘密情報の確認 `secret-scan.test.ts`）、`test/commands/adopt-secret-scan.test.ts`（確認の道具を差し替えた結果の扱い）、`test/scripts/smoke-generated-secret-scan.test.ts`（実際の Docker の gitleaks。`npm run test:smoke`。Docker が無ければ飛ばす）、`test/adopt/detect*.test.ts`・`match-profiles.test.ts`（技術の判定。偽の fs で、読んだパスを記録して .env・リンク・ルートの外を確かめる）、`test/commands/adopt-detect.test.ts`（`test/fixtures/adopt-hono-react`・`adopt-django`・`adopt-go`・`adopt-mixed` を写して実行）、`test/commands/adopt.test.ts`（架空の既存のアプリ `test/fixtures/adopt-sample/` を一時フォルダに写して実行）。`test/commands/update.test.ts`・`status.test.ts`・`test/update/read-config.test.ts` に、導入済みのアプリの扱いを足した。
+`test/adopt/`（印・判定・組み立て・秘密情報の確認 `secret-scan.test.ts`。プロファイルの Skill `build-profiles.test.ts`、`harness-check.yml` `harness-check.test.ts`）、`test/commands/adopt-profiles.test.ts`（Skill・`harness-check.yml` の導入と、update が記録した `applied` で組み直すこと）、`test/scripts/smoke-generated-harness-check.test.ts`（実際の Docker の gitleaks で、生成した確認の `run` を動かす）、`test/commands/adopt-secret-scan.test.ts`（確認の道具を差し替えた結果の扱い）、`test/scripts/smoke-generated-secret-scan.test.ts`（実際の Docker の gitleaks。`npm run test:smoke`。Docker が無ければ飛ばす）、`test/adopt/detect*.test.ts`・`match-profiles.test.ts`（技術の判定。偽の fs で、読んだパスを記録して .env・リンク・ルートの外を確かめる）、`test/commands/adopt-detect.test.ts`（`test/fixtures/adopt-hono-react`・`adopt-django`・`adopt-go`・`adopt-mixed` を写して実行）、`test/commands/adopt.test.ts`（架空の既存のアプリ `test/fixtures/adopt-sample/` を一時フォルダに写して実行）。`test/commands/update.test.ts`・`status.test.ts`・`test/update/read-config.test.ts` に、導入済みのアプリの扱いを足した。

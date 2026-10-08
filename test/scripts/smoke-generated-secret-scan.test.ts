@@ -99,7 +99,7 @@ describe.skipIf(!run)("#17 smoke：実際の gitleaks で秘密情報を確認�
     const before = snapshot(dir);
     const { out, all, err } = await adoptIn(dir);
     expect(out.exitCode, err).toBe(1);
-    expect(err).toMatch(/settings\.txt:1（コミット [0-9a-f]{7}・種類 [\w.-]+）/);
+    expect(err).toMatch(/settings\.txt:1（コミット [0-9a-f]{7}）/);
     expect(all).not.toContain(TAIL_HISTORY);
     expect(snapshot(dir)).toEqual(before);
     expect(existsSync(path.join(dir, ".harness"))).toBe(false);
@@ -162,7 +162,7 @@ describe.skipIf(!run)(
       const parsed = JSON.parse(report) as Record<string, unknown>[];
       expect(parsed.length).toBeGreaterThan(0);
       for (const item of parsed) {
-        expect(Object.keys(item).sort()).toEqual(["Commit", "File", "RuleID", "StartLine"]);
+        expect(Object.keys(item).sort()).toEqual(["Commit", "File", "StartLine"]);
       }
       // 一時フォルダに残るのは、テンプレートと最後の実行のレポートだけ（どちらにも値が無い）
       expect(files.sort()).toEqual(["report.json", "report.tmpl"]);

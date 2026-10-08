@@ -9,25 +9,25 @@ description: Drizzle ORMでDBにアクセスするときのルール。スキー
 
 # Drizzle ORM
 
-作業の過程と結果は、すべて日本語で書く。
+作業の過程と結果は、すべて日本語で書く。{{profile_skill_note}}
 
 このプロジェクトのDB：{{database}}
 
 ## スキーマの定義
 
-- テーブルの定義は、Drizzleのスキーマのファイル（`backend/db/schema.ts`）に書く。DB に触れる処理（Repository）は`backend/src/db/`に置く
+- {{drizzle_schema_places}}
 - スキーマの定義を変えたら、`drizzle-kit generate --name <内容をsnake_caseで>`でマイグレーションファイルを作る（例：`--name add_users_email_index` → `0003_add_users_email_index.sql`）。`--name`を付けないと意味のない名前になるため、必ず付ける。作られたSQLの内容を確かめてからコミットする
 - マイグレーションファイルを手で書き換えない。一度適用したものは変えず、新しいファイルを追加する
 
 ## マイグレーションの適用
 
 - Cloudflare D1：`drizzle-kit generate`で作ったファイルを、wranglerのマイグレーション機能で適用する。適用の記録はD1の`d1_migrations`テーブルに残る
-  - 開発：`npm run db:migrate:local`。検証：`npm run db:migrate:test`（環境別の一時保存先）
+  - {{drizzle_migrate_commands}}
   - 検証・本番：`--remote`を付ける。利用者の承認を得て行い、AIは実行しない
   - `wrangler.jsonc`の`d1_databases`に`migrations_dir`（マイグレーションファイルの置き場所）を書く
 - Vitestでは、`@cloudflare/vitest-pool-workers`の`readD1Migrations`で読み込み、`applyD1Migrations`でVitest専用の一時D1に適用する。この一時DBを外部の開発・検証DBと共有しない
 - PostgreSQL：{{postgres_migration_notes}}
-- 開発操作は`.env.development`、検証操作は`.env.test`を使う。PostgreSQLの検証DB名は`_test`で終わる必要がある。`npm run db:generate -- --name <名前>`は接続先を使わずマイグレーションを生成する
+- {{drizzle_env_notes}}
 
 ## CRUDの書き方（Repository）
 
@@ -61,7 +61,7 @@ description: Drizzle ORMでDBにアクセスするときのルール。スキー
 
 ## 良い例・悪い例
 
-書くときは、良い例の形に合わせる。例は`backend/src/rules-examples/`のテスト（`*.db.test.ts`）にあり、このプロジェクトのDB（{{database}}）で動作を確かめてある。悪い例も、問題が起きることをテスト（「悪い例の問題」）で確かめてある。このフォルダは、ハーネスが管理するため、消さない。
+{{drizzle_examples_intro}}
 
 ### SQLインジェクション：値はパラメータで渡し、並び替えの列は許可リストで決める
 
@@ -129,9 +129,7 @@ D1は`db.batch`、PostgreSQLは`db.transaction`で書く。次の例は、この
 
 ## テスト
 
-- 例のテスト（`backend/src/rules-examples/*.db.test.ts`）は、`npm run check`で毎回動く。例を書き換えたら、テストも通す
-  - D1：`npm test`（Workersのテスト）の中で、Vitest専用の一時D1に対して動く
-  - PostgreSQL：`pg`をWorkersのテストの中で読めないため、Node.jsの別の設定（`vitest.db.config.ts`）で動かす。`npm test`の後に自動で`npm run test:db`が実行される。検証用DBのコンテナ（`npm run docker:up:test`）の起動が要る。接続先は`.env.test`の`DATABASE_URL`で、手元の`_test`で終わるDBだけを許す。表はその接続だけの一時的なもの（`CREATE TEMP TABLE`）で、マイグレーション・シード・既存のデータには触れない。コンテナの中で実行するときは、検証用のコンテナ（`npm run docker:up:test`）の中で行う
+{{drizzle_example_tests}}
 - 結合テストは`@cloudflare/vitest-pool-workers`（`cloudflareTest`の設定）で、Workersと同じ実行エンジンで行う。ローカルのD1（またはテスト用のPostgreSQLのコンテナ）に、マイグレーションとシードを適用してから行う
 - `wrangler.jsonc`の`compatibility_date`は、テストの道具に同梱された実行エンジンが対応する日付以下にする（新しすぎると起動しない）
 - 実行計画は`EXPLAIN QUERY PLAN <SQL>`で取得し、インデックスが使われているか（`USING INDEX`）を確かめる

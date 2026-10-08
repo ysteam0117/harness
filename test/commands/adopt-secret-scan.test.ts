@@ -74,8 +74,8 @@ function setup(dir: string, over: Partial<AdoptDeps> = {}): Setup {
 const leaksResult: SecretScanResult = {
   kind: "leaks",
   scope: "history+worktree",
-  history: [{ file: "src/old.ts", line: 7, rule: "generic-api-key", commit: "abc1234" }],
-  worktree: [{ file: "notes/new.txt", line: 2, rule: "github-pat" }],
+  history: [{ file: "src/old.ts", line: 7, commit: "abc1234" }],
+  worktree: [{ file: "notes/new.txt", line: 2 }],
 };
 
 const options = (over: Partial<AdoptOptions> = {}): AdoptOptions => ({
@@ -85,7 +85,7 @@ const options = (over: Partial<AdoptOptions> = {}): AdoptOptions => ({
 });
 
 describe("#17 見つかった：止める", () => {
-  it("exit 1。場所・コミット・種類が出て、値はどこにも出ない。何も書かない（.harness も作らない）", async () => {
+  it("exit 1。場所・コミットが出て、値はどこにも出ない。何も書かない（.harness も作らない）", async () => {
     const dir = sampleApp();
     // 作業フォルダの中にダミーの値があっても、表示には出ない
     write(dir, "notes/new.txt", `memo ${DUMMY}\n`);
@@ -94,8 +94,8 @@ describe("#17 見つかった：止める", () => {
     const out = await runAdopt(options(), s.deps);
     expect(out.exitCode).toBe(1);
     const err = s.errs.join("");
-    expect(err).toContain("src/old.ts:7（コミット abc1234・種類 generic-api-key）");
-    expect(err).toContain("notes/new.txt:2（種類 github-pat）");
+    expect(err).toContain("src/old.ts:7（コミット abc1234）");
+    expect(err).toContain("notes/new.txt:2");
     expect(err).toContain("値の取り消し");
     expect(s.everything()).not.toContain(DUMMY);
     expect(s.outs.join("")).toBe("");

@@ -34,10 +34,12 @@ const labelOf = (id: string, value: string) =>
 describe("#34 AC-3: ひな形の値の決定（値の漏れがない）", () => {
   it("#34 AC-3: ひな形に出てくるすべての名前（fakeValues の名前）に、空でない値がある（両方の AI）", async () => {
     const v = await vals({ ais: ["claude", "codex"] });
-    for (const name of Object.keys(fakeValues())) {
+    // profile_skill_note は、作成では空（導入のときだけ、data/adopt-values.yaml で読み替えの案内にする。#18）
+    for (const name of Object.keys(fakeValues()).filter((n) => n !== "profile_skill_note")) {
       expect(v[name], name).toBeTypeOf("string");
       expect(v[name], name).not.toBe("");
     }
+    expect(v["profile_skill_note"]).toBe("");
   });
 
   it("#34 R6: データアクセスの案内の行（data_access_guide）にも値がある", async () => {

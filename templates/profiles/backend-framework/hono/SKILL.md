@@ -7,29 +7,21 @@ description: HonoでバックエンドのAPIを作るときのルール。ルー
 
 # Hono
 
-作業の過程と結果は、すべて日本語で書く。
+作業の過程と結果は、すべて日本語で書く。{{profile_skill_note}}
 
-## 用意されている共通の部品（`backend/src/lib/`）
-
-| ファイル | 役割 | 使い方 |
-| --- | --- | --- |
-| `app-error.ts` | 想定できるエラーの型（`AppError`） | 入力の誤り・権限不足・リソースなし・競合などは`throw new AppError("CONFLICT", "利用者向けのメッセージ")`で投げる |
-| `error-handler.ts` | グローバル例外ハンドリング | `app.onError(handleError)`・`app.notFound(handleNotFound)`で登録する。各層でエラーを`try`〜`catch`で変換しない |
-| `security.ts` | セキュリティヘッダー・送信元の確認・`no-store` | `app.use(securityHeaders)`・`app.use(originCheck(...))`を全体に、`noStore`を認証が必要なAPIに付ける |
-| `validation.ts` | 入力チェック | `validate("json", スキーマ)`を使う。`@hono/zod-validator`の`zValidator`を直接使わない |
-| `security.test.ts` | 必須のテスト | GETで状態が変わらない・送信元の拒否・入力の誤りの形式・セキュリティヘッダーを確かめる。APIを追加しても、ルーティングの定義から自動で対象になる |
+{{hono_parts_section}}
 
 ## 守ること
 
-- **MUST NOT**：Honoの`csrf`ミドルウェアだけでCSRF対策を済ませない。JSONの要求を確かめないため、`originCheck`を使う
+- **MUST NOT**：{{hono_csrf_rule}}
 - **MUST NOT**：`zValidator`を直接使わない。Zodの詳しいエラーが利用者に返ってしまう
 - **MUST**：Controller（ルートの処理）は、入力の受付と応答の返却だけにし、業務の処理はServiceに渡す
 - **MUST**：許可する送信元（`ALLOWED_ORIGINS`）は、環境ごとに環境変数で持つ
-- **MUST**：CSPに外部のサービスを追加する場合は、`security.ts`を直し、理由をADRに記録する
+- **MUST**：{{hono_csp_rule}}
 
 ## 良い例・悪い例
 
-書くときは、良い例の形に合わせる。例は`backend/src/rules-examples/`のテストにあり、動作を確かめてある。悪い例も、問題が起きることをテスト（「悪い例の問題」）で確かめてある。このフォルダは、ハーネスが管理するため、消さない。
+{{hono_examples_intro}}
 
 ### Controller は入力の受け取りと応答だけ、業務のルールは Service
 

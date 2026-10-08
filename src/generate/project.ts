@@ -216,6 +216,8 @@ export function isManagedPath(p: string): boolean {
     p === ".github/pull_request_template.md" ||
     // セキュリティのテスト（C-82）。設定・ルール・実行のスクリプト・依存の更新の設定は、ハーネスの更新で置き換える（docs/api/openapi.json はプロジェクトのもの）
     p === ".github/dependabot.yml" ||
+    // harness adopt が追加する CI の確認（秘密情報・npm audit、#18）
+    p === ".github/workflows/harness-check.yml" ||
     p === ".gitleaks.toml" ||
     p.startsWith(".semgrep/") ||
     p === "scripts/security-check.mjs" ||
