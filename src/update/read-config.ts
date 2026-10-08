@@ -1,6 +1,7 @@
 import semver from "semver";
 import { parse, stringify } from "yaml";
 import type { AcceptedWarning } from "../checks/review.js";
+import type { SecretScanRecord } from "../generate/config.js";
 import { GenerateError } from "../generate/errors.js";
 import { isManagedPath } from "../generate/project.js";
 import { checkRelative } from "../generate/write.js";
@@ -34,6 +35,8 @@ export interface RecordedConfig {
   ignored: string[];
   /** 印（harness:begin〜harness:end）で囲んだ文書のパス。managedFiles の指紋は、印の中の本文の指紋（adopt のときだけ） */
   markedFiles: string[];
+  /** 導入のときの秘密情報の確認の記録（harness adopt のときだけ。形が違えば無い） */
+  secretScan?: SecretScanRecord;
 }
 
 export type ConfigMode = "create" | "update" | "adopt";
@@ -205,6 +208,8 @@ export function parseConfig(text: string): RecordedConfig {
     if (p in managedFiles) markedFiles.push(p);
   }
 
+  const secretScan = readSecretScan(raw["secret_scan"]);
+
   return {
     mode: mode as ConfigMode,
     harnessVersion,
@@ -217,5 +222,20 @@ export function parseConfig(text: string): RecordedConfig {
     removedFiles,
     ignored,
     markedFiles,
+    ...(secretScan !== undefined ? { secretScan } : {}),
   };
+}
+
+/** secret_scan の欄。形が正しいものだけ読む（誤っていても更新は止めない） */
+function readSecretScan(value: unknown): SecretScanRecord | undefined {
+  const r = record(value);
+  if (r === undefined || typeof r["checked_on"] !== "string") return undefined;
+  if (r["status"] === "skipped") return { status: "skipped", checkedOn: r["checked_on"] };
+  if (
+    r["status"] === "passed" &&
+    (r["scope"] === "history+worktree" || r["scope"] === "worktree")
+  ) {
+    return { status: "passed", scope: r["scope"], checkedOn: r["checked_on"] };
+  }
+  return undefined;
 }

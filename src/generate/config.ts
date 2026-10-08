@@ -46,6 +46,18 @@ export function harnessVersion(): string {
   }
 }
 
+/** 秘密情報の確認の記録（harness adopt のときだけ、#17）。確認した範囲と日、または省いたこと */
+export type SecretScanRecord =
+  | { status: "passed"; scope: "history+worktree" | "worktree"; checkedOn: string }
+  | { status: "skipped"; checkedOn: string };
+
+/** config.yaml の secret_scan の欄 */
+export function secretScanEntry(record: SecretScanRecord): Record<string, string> {
+  return record.status === "passed"
+    ? { status: "passed", scope: record.scope, checked_on: record.checkedOn }
+    : { status: "skipped", checked_on: record.checkedOn };
+}
+
 export interface BuildConfigInput {
   answers: Answers;
   acceptedWarnings: AcceptedWarning[];
@@ -60,6 +72,8 @@ export interface BuildConfigInput {
   mode?: "create" | "adopt";
   /** 印で囲んだ文書のパス（adopt のときだけ）。managed の content は、印の中の本文にする */
   markedFiles?: string[];
+  /** 秘密情報の確認の記録（adopt のときだけ） */
+  secretScan?: SecretScanRecord;
 }
 
 const HEADER = `# ハーネス（harness）が生成した記録です。ハーネスの更新（harness update）に使います。
@@ -111,6 +125,7 @@ export function buildConfigText(input: BuildConfigInput): string {
     ...(input.markedFiles !== undefined && input.markedFiles.length > 0
       ? { marked_files: [...input.markedFiles].sort((a, b) => (a < b ? -1 : 1)) }
       : {}),
+    ...(input.secretScan !== undefined ? { secret_scan: secretScanEntry(input.secretScan) } : {}),
   };
   return HEADER + stringifyYaml(doc, { lineWidth: 0 });
 }
@@ -126,6 +141,8 @@ export interface UpdateConfigInput {
   removedFiles: string[];
   /** 作り方の記録。既定は update（harness adopt で導入したアプリは adopt のまま残す） */
   mode?: "update" | "adopt";
+  /** 導入のときの秘密情報の確認の記録（harness adopt で導入したアプリは、そのまま引き継ぐ） */
+  secretScan?: SecretScanRecord;
 }
 
 /** 新しいハーネスで作った config.yaml の中身を、更新の記録に直す */
@@ -150,6 +167,9 @@ export function toUpdateConfigText(createdText: string, input: UpdateConfigInput
     } else {
       doc[key] = value;
     }
+  }
+  if (input.secretScan !== undefined && !("secret_scan" in doc)) {
+    doc["secret_scan"] = secretScanEntry(input.secretScan);
   }
   return HEADER + stringifyYaml(doc, { lineWidth: 0 });
 }

@@ -173,6 +173,7 @@ describe("#15 R5: 導入したアプリ（mode: adopt）の状態は、印の中
     const { runAdopt } = await import("../../src/commands/adopt.js");
     const { FakePrompter, baseAnswers } = await import("../questions/helpers.js");
     const { FIXED_NOW } = await import("../versions/helpers.js");
+    const { cleanScan } = await import("../adopt/secret-scan-helpers.js");
     const fixture = path.resolve(import.meta.dirname, "..", "fixtures", "adopt-sample");
     const dir = path.join(newRoot(), "sample-app");
     cpSync(fixture, dir, { recursive: true });
@@ -190,6 +191,7 @@ describe("#15 R5: 導入したアプリ（mode: adopt）の状態は、印の中
         stderr: (s) => errs.push(s),
         stdout: () => undefined,
         now: () => FIXED_NOW,
+        secretScan: cleanScan,
       },
     );
     if (out.exitCode !== 0) throw new Error(`導入に失敗しました：${errs.join("")}`);

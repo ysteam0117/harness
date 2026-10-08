@@ -2,9 +2,21 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { Command } from "commander";
 import { buildAdoptFiles, type AdoptFile } from "../adopt/build.js";
+import {
+  formatLeaks,
+  scanSecrets,
+  type Runner,
+  type ScanScope,
+  type SecretScanResult,
+} from "../adopt/secret-scan.js";
 import { extractBlock, mergeBlock, MarkerError } from "../adopt/markers.js";
 import { planAdopt, type AdoptDecision } from "../adopt/plan.js";
-import { buildConfigText, CONFIG_PATH, localDay } from "../generate/config.js";
+import {
+  buildConfigText,
+  CONFIG_PATH,
+  localDay,
+  type SecretScanRecord,
+} from "../generate/config.js";
 import { GenerateError } from "../generate/errors.js";
 import { judge } from "../generate/judgment.js";
 import { rolesFor } from "../generate/roles.js";
@@ -39,6 +51,10 @@ export interface AdoptDeps {
   now?: () => Date;
   /** ファイル操作の差し替え（テスト用）。既定は本物 */
   fs?: Partial<UpdateFs>;
+  /** 秘密情報の確認の差し替え（テスト用）。既定は Docker の gitleaks（src/adopt/secret-scan.ts） */
+  secretScan?: (root: string, signal: AbortSignal) => Promise<SecretScanResult>;
+  /** docker・git の実行役の差し替え（テスト用。secretScan を差し替えないときに使う） */
+  runner?: Runner;
 }
 
 export interface AdoptOptions {
@@ -50,6 +66,8 @@ export interface AdoptOptions {
   dir?: string;
   /** --dry-run：一覧と差分だけを表示し、何も書かない */
   dryRun?: boolean;
+  /** --skip-secret-scan：秘密情報の確認を省く（Docker が無いときなど。確認していないと記録する） */
+  skipSecretScan?: boolean;
 }
 
 export interface AdoptOutcome {
@@ -59,10 +77,27 @@ export interface AdoptOutcome {
 const CANCEL_MESSAGE = "中断しました。ファイルは変更していません。";
 const LOCK_PATH = ".harness/.update-lock";
 const HARNESS_DIR = ".harness";
-const START_NOTICE = [
-  "秘密情報の確認（履歴を含む）はまだ行いません（#17 で追加予定）。導入の前に、秘密情報が含まれていないことを確かめてください。",
-  "harness adopt は、ファイルを書くだけです。コミット・push はしません。導入の差分は、Git で確かめてください。",
-].join("\n");
+const START_NOTICE =
+  "harness adopt は、ファイルを書くだけです。コミット・push はしません。導入の差分は、Git で確かめてください。";
+
+/** 秘密情報の確認の結果（開始の表示・レポート・config に使う） */
+type ScanOutcome =
+  { status: "skipped" } | { status: "passed"; scope: ScanScope; gitleaksConfig: boolean };
+
+/** 確認の結果の説明（開始の表示とレポートに出す） */
+function scanSentence(scan: ScanOutcome): string {
+  if (scan.status === "skipped") {
+    return "秘密情報の確認：確認していません（--skip-secret-scan で省きました）。導入の前に、履歴を含めて、秘密情報が含まれていないことを確かめてください。--dry-run などの差分の表示には、既存のファイルの値が出ることがあります。";
+  }
+  return scan.scope === "history+worktree"
+    ? "秘密情報の確認：問題は見つかりませんでした（Git の履歴と、作業フォルダ（未コミット・未追跡のファイルを含む）を gitleaks で確かめました）。"
+    : "秘密情報の確認：問題は見つかりませんでした（Git のリポジトリではないため、作業フォルダのみ確かめました。履歴は確かめていません）。";
+}
+
+const GITLEAKS_CONFIG_NOTICE =
+  "このフォルダの .gitleaks.toml の設定が、確認に使われます（その設定で許可したものは、見つかりません）。";
+const SCAN_PROGRESS =
+  "秘密情報を確認しています（Docker で gitleaks を実行します。履歴が長いと時間がかかります）。";
 const EDIT_NOTICE = "導入の間は、ファイルを編集しないでください。";
 
 class Stop extends Error {
@@ -185,6 +220,9 @@ async function run(options: AdoptOptions, deps: AdoptDeps): Promise<AdoptOutcome
   let locked = false;
   let createdHarnessDir = false;
   try {
+    // 秘密情報の確認（回答・アプリ名の確認の後、ロックと .harness を作る前。--dry-run でも確認する）
+    const scan = await checkSecrets(root, options, deps, fail, controller.signal);
+
     if (!dryRun) {
       createdHarnessDir = await fs.lstat(harnessDir).then(
         () => false,
@@ -208,7 +246,7 @@ async function run(options: AdoptOptions, deps: AdoptDeps): Promise<AdoptOutcome
       }
     }
     if (controller.signal.aborted) throw new CancelledError();
-    const result = await adopt(root, initial, options, deps, fs, fail, controller.signal);
+    const result = await adopt(root, initial, options, deps, fs, fail, controller.signal, scan);
     if (controller.signal.aborted && result.applied) {
       deps.stderr("導入は完了しました。\n");
     } else if (controller.signal.aborted && result.exitCode === 0) {
@@ -223,6 +261,59 @@ async function run(options: AdoptOptions, deps: AdoptDeps): Promise<AdoptOutcome
     } finally {
       process.off("SIGINT", onInterrupt);
       process.off("SIGTERM", onInterrupt);
+    }
+  }
+}
+
+/**
+ * 秘密情報の確認。通ったら結果（範囲）、省いたら skipped を返す。
+ * 見つかった・Docker が無い・確認できなかったときは、何も書かずに止める（値は出さない）。
+ */
+async function checkSecrets(
+  root: string,
+  options: AdoptOptions,
+  deps: AdoptDeps,
+  fail: (message: string) => never,
+  signal: AbortSignal,
+): Promise<ScanOutcome> {
+  if (options.skipSecretScan === true) return { status: "skipped" };
+  deps.prompter.note(SCAN_PROGRESS, "秘密情報の確認");
+  const scan =
+    deps.secretScan ??
+    ((r: string, s: AbortSignal) =>
+      scanSecrets(r, {
+        signal: s,
+        onWarning: (m) => deps.stderr(`${m}\n`),
+        ...(deps.runner ? { runner: deps.runner } : {}),
+      }));
+  const result = await scan(root, signal);
+  if (signal.aborted) throw new CancelledError();
+  switch (result.kind) {
+    case "clean":
+      return {
+        status: "passed",
+        scope: result.scope,
+        gitleaksConfig: result.gitleaksConfig === true,
+      };
+    case "docker-missing":
+      return fail(
+        "秘密情報の確認に Docker が必要です（Docker が見つからないか、動いていません）。Docker を起動してください。確認を省くなら --skip-secret-scan を付けます（確認していないと記録されます）。何も書いていません",
+      );
+    case "failed":
+      return fail(`${result.message}。何も書いていません`);
+    case "unreadable":
+      return fail(
+        `読めないファイル・フォルダが ${String(result.count)} 件あり、秘密情報を確かめきれません。権限を直すか、--skip-secret-scan で省いてください（確認していないと記録されます）。何も書いていません`,
+      );
+    case "leaks": {
+      deps.stderr(
+        "エラー: 秘密情報らしいものが見つかりました（値は表示しません）。何も書いていません\n",
+      );
+      for (const line of formatLeaks(result.history, result.worktree)) deps.stderr(`${line}\n`);
+      deps.stderr(
+        "本物の秘密なら、値の取り消しと作り直しが必要です。Git の履歴から消すかどうかは、利用者が決めて行います（harness adopt は、履歴を書き換えません）。誤検知なら、このフォルダの .gitleaks.toml で許可します。直したら、もう一度実行してください。確認を省くなら --skip-secret-scan を付けます（確認していないと記録されます）。\n",
+      );
+      throw new Stop(1);
     }
   }
 }
@@ -258,6 +349,7 @@ function renderReport(input: {
   outcome: Outcome;
   diffs: { path: string; text: string }[];
   appName: string;
+  scan: ScanOutcome;
 }): string {
   const o = input.outcome;
   const lines: string[] = [];
@@ -268,6 +360,7 @@ function renderReport(input: {
     lines.push(...items.map((i) => `- ${i}`), "");
   };
   lines.push(`## ハーネスの導入（${input.appName}）`, "");
+  lines.push(`- ${scanSentence(input.scan)}`, "");
   if (input.dryRun) {
     lines.push("--dry-run のため、何も書いていません。実行すると、次のとおりになります。", "");
   }
@@ -325,6 +418,7 @@ async function adopt(
   fs: UpdateFs,
   fail: (message: string) => never,
   signal: AbortSignal,
+  scan: ScanOutcome,
 ): Promise<AdoptOutcome & { applied?: true }> {
   const dryRun = options.dryRun === true;
   const yes = options.yes === true;
@@ -337,7 +431,15 @@ async function adopt(
     confirm: (o) => interruptible(() => deps.prompter.confirm(o), signal),
   };
 
-  prompter.note(dryRun ? START_NOTICE : `${START_NOTICE}\n${EDIT_NOTICE}`, "導入を始めます");
+  prompter.note(
+    [
+      scanSentence(scan),
+      ...(scan.status === "passed" && scan.gitleaksConfig ? [GITLEAKS_CONFIG_NOTICE] : []),
+      START_NOTICE,
+      ...(dryRun ? [] : [EDIT_NOTICE]),
+    ].join("\n"),
+    "導入を始めます",
+  );
 
   // 足りない項目だけ質問する
   const quiet: Prompter = Object.create(prompter, { note: { value: () => undefined } }) as Prompter;
@@ -424,7 +526,7 @@ async function adopt(
 
   // --dry-run：一覧と差分だけ
   if (dryRun) {
-    deps.stdout(renderReport({ dryRun: true, outcome, diffs, appName: answers.app_name }));
+    deps.stdout(renderReport({ dryRun: true, outcome, diffs, appName: answers.app_name, scan }));
     return { exitCode: 0 };
   }
 
@@ -536,6 +638,7 @@ async function adopt(
     now,
     mode: "adopt",
     markedFiles,
+    secretScan: secretScanRecord(scan, now),
   });
   ops.push({ kind: "create", path: CONFIG_PATH, content: configText });
 
@@ -554,12 +657,19 @@ async function adopt(
     return reportApplyError(e, deps);
   }
 
-  deps.stdout(renderReport({ dryRun: false, outcome, diffs: [], appName: answers.app_name }));
+  deps.stdout(renderReport({ dryRun: false, outcome, diffs: [], appName: answers.app_name, scan }));
   prompter.note(
     `導入しました（${localDay(now)}）。差分を Git で確かめ、既存のテストと品質チェックを実行してください。上の一覧は、PR の本文に貼れます。`,
     "導入しました",
   );
   return { exitCode: 0, applied: true };
+}
+
+/** config.yaml に残す、秘密情報の確認の記録 */
+function secretScanRecord(scan: ScanOutcome, now: Date): SecretScanRecord {
+  return scan.status === "skipped"
+    ? { status: "skipped", checkedOn: localDay(now) }
+    : { status: "passed", scope: scan.scope, checkedOn: localDay(now) };
 }
 
 function reportApplyError(e: unknown, deps: AdoptDeps): AdoptOutcome {
@@ -595,6 +705,10 @@ export function adoptCommand(deps: Partial<AdoptDeps> = {}): Command {
     .option("--yes", "確認を省く（同じ名前のファイルは、既存を残す）")
     .option("--dir <フォルダ>", "導入するプロジェクトのフォルダ（既定は作業中のフォルダ）")
     .option("--dry-run", "何が変わるかの一覧と差分だけを表示し、何も書かない")
+    .option(
+      "--skip-secret-scan",
+      "秘密情報の確認（Docker の gitleaks）を省く（確認していないと記録する）",
+    )
     .action(async (options: AdoptOptions) => {
       const outcome = await runAdopt(options, {
         prompter: deps.prompter ?? createClackPrompter(),
@@ -604,6 +718,8 @@ export function adoptCommand(deps: Partial<AdoptDeps> = {}): Command {
         stdout: deps.stdout ?? ((text) => void process.stdout.write(text)),
         ...(deps.now ? { now: deps.now } : {}),
         ...(deps.fs ? { fs: deps.fs } : {}),
+        ...(deps.secretScan ? { secretScan: deps.secretScan } : {}),
+        ...(deps.runner ? { runner: deps.runner } : {}),
       });
       process.exitCode = outcome.exitCode;
     });

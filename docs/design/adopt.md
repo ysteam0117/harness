@@ -19,7 +19,6 @@
 
 この Issue でまだやらないこと（別の Issue）
 
-- 秘密情報の確認（gitleaks で履歴も含めて確かめる。F-29 の手順1）：#17。この Issue では、`harness adopt` の開始時に「秘密情報の確認（履歴を含む）はまだ行いません。導入の前に、秘密情報が含まれていないことを確かめてください」と表示する
 - 既存の構成・コードを調べる・AI が読んで答えの案を作る（手順2・3）、差の一覧（手順5）、ブランチ・PR（手順6）、基準線（手順7）
 - CI の追加、品質チェックの道具の設定、`docs/requirements.md` のひな形
 
@@ -32,7 +31,8 @@
 | `src/adopt/markers.ts` | 印の検出（`extractBlock`）と統合（`mergeBlock`）。純粋な関数。印の文字列は `BEGIN`・`END` |
 | `src/adopt/build.ts` | `buildAdoptFiles`：導入するファイルを、メモリ上で組み立てる。技術プロファイルを使わず、AI 向けのファイルだけ |
 | `src/adopt/plan.ts` | `planAdopt`：ファイルごとに doc-merge・add・same・choose を決める。純粋な関数 |
-| `src/commands/adopt.ts` | `harness adopt`。差し込み口は `AdoptDeps`（prompter・cwd・interactive・stderr・stdout・now・fs） |
+| `src/adopt/secret-scan.ts` | 秘密情報の確認（#17）：`scanSecrets`（docker・git の実行役は差し替え可）、`parseLeakReport`（レポートから場所・行・コミット・種類だけを取り出す）、`formatLeaks`、`gitleaksImage` |
+| `src/commands/adopt.ts` | `harness adopt`。差し込み口は `AdoptDeps`（prompter・cwd・interactive・stderr・stdout・now・fs・secretScan・runner） |
 | `data/adopt-values.yaml` | 導入のときだけ、`data/template-values.yaml` の値の代わりに使う値 |
 | `src/update/apply.ts` | 原子的な書き込み（`harness update` と共通） |
 | `src/update/diff.ts` | 差分の表示（`harness update` と共通） |
@@ -42,14 +42,15 @@
 1. 場所を決める（`--dir`、なければ作業中のフォルダ）。`.harness/config.yaml` が既にあれば止める（二重に導入しない）
 2. `--answers` を読む（必須）。アプリ名は、常にフォルダの名前から決める。名前の形が正しくなければ止めて案内する。回答ファイルに、フォルダの名前と違う `app_name` があれば止める（同じなら可）。端末でなく回答が足りなければ、足りない項目を示して止める
 3. 端末でなく `--yes` もなければ止める（`--dry-run` を除く）
-4. ロック（`.harness/.update-lock`。`harness update` と同じ）を取る。`--dry-run` はロックしない
-5. 開始の表示（秘密情報の確認をまだ行わないこと・コミット／push をしないこと）。足りない項目だけ質問する
-6. `buildAdoptFiles` で導入するファイルを作り、今のファイルを読む（リンクは拒む）。既存の `AGENTS.md`・`CLAUDE.md` が UTF-8 として読めなければ（UTF-16・Shift_JIS 等。BOM 付きの UTF-8 は可）、書き込みの前に止める。印が壊れていても、止める
-7. `planAdopt` で判定する
-8. `--dry-run`：一覧と差分を表示して終わる
-9. 差分の表示（同じ名前で中身が違うファイルは、省かず全体を見せる。`.harness-new` は使わない）→ 承認（`--yes` なら聞かない。同じ名前で中身が違うファイルは、対話なら「置き換える／残す」を選ぶ。既定は残す）。「いいえ」なら何も書かない
-10. `applyUpdate` で書く。**`.harness/config.yaml` の新規作成も、同じ一括の最後の操作**にする。途中の失敗・中断（Ctrl+C）では、書いた分を元に戻し、ロックも一時ファイルも残さない
-11. 結果の一覧（PR の本文に貼れる Markdown）を出す。コミット・push はしない
+4. 秘密情報の確認（下の「秘密情報の確認」）。中断（SIGINT・SIGTERM）の受け付けは、この確認より前に始める。`--dry-run` でも確認する
+5. ロック（`.harness/.update-lock`。`harness update` と同じ）を取る。`--dry-run` はロックしない
+6. 開始の表示（秘密情報の確認の結果・コミット／push をしないこと）。足りない項目だけ質問する
+7. `buildAdoptFiles` で導入するファイルを作り、今のファイルを読む（リンクは拒む）。既存の `AGENTS.md`・`CLAUDE.md` が UTF-8 として読めなければ（UTF-16・Shift_JIS 等。BOM 付きの UTF-8 は可）、書き込みの前に止める。印が壊れていても、止める
+8. `planAdopt` で判定する
+9. `--dry-run`：一覧と差分を表示して終わる
+10. 差分の表示（同じ名前で中身が違うファイルは、省かず全体を見せる。`.harness-new` は使わない）→ 承認（`--yes` なら聞かない。同じ名前で中身が違うファイルは、対話なら「置き換える／残す」を選ぶ。既定は残す）。「いいえ」なら何も書かない
+11. `applyUpdate` で書く。**`.harness/config.yaml` の新規作成も、同じ一括の最後の操作**にする。途中の失敗・中断（Ctrl+C）では、書いた分を元に戻し、ロックも一時ファイルも残さない
+12. 結果の一覧（PR の本文に貼れる Markdown）を出す。コミット・push はしない
 
 ## 判定
 
@@ -79,7 +80,21 @@
 - `managed_files`：印で囲んだ文書の指紋は、**印の中の本文**の指紋。それ以外は、ファイル全体の指紋。残した既存のファイルは入れない
 - `versions: []`・`accepted_warnings: []`（導入では版の調査をしない）
 - `harness status` は、`marked_files` の文書を印の中の本文の指紋で比べる（印の外の編集は数えない）。印が無い・壊れていれば「印が壊れている管理ファイル」として報告する。`marked_files` が無い記録は、これまでどおり全体の指紋で比べる
+- `secret_scan`：秘密情報の確認の記録。確認したら `{status: passed, scope: history+worktree | worktree, checked_on}`、省いたら `{status: skipped, checked_on}`。`harness update` は、導入のときの記録をそのまま引き継ぐ
 - 記録の `mode` は `create`・`update`・`adopt` を読める（無ければ `create`）
+
+## 秘密情報の確認（Issue #17）
+
+- 道具：gitleaks の Docker イメージ。`harness create` のセキュリティのテスト（#42）と同じ固定のイメージを、技術プロファイル（`profile.yaml` の `container_images.gitleaks`）から取る（値を二重に持たない）。`--network none`・対象は `:ro`
+- 範囲：Git のリポジトリなら、履歴（`gitleaks git`。`--dir` がサブフォルダでも、リポジトリ全体）と、作業フォルダ（`gitleaks dir`。未コミット・未追跡のファイルを含む。`.git` の中は gitleaks の既定で調べない）の2回。どちらかで見つかれば止め、どちらかが失敗しても止める。Git でなければ作業フォルダだけで、その旨を表示・記録する
+- 値を出さない：`--redact` に加え、レポートはテンプレート（`--report-format template`。`REPORT_TEMPLATE`）で、生成の時点から場所（File）・行（StartLine）・コミット（Commit）・種類（RuleID）の4項目だけを出す（`--redact` は Message＝コミットメッセージを伏せないため）。レポートは一時フォルダにだけ出し（終了時に消す）、読むときも型を確かめて新しいオブジェクトに写す（コミットは先頭7桁）。実行の出力（stdout・stderr）は残さず、失敗の文は決まった文だけ（実行の出力・例外の文を入れない）。File の制御文字は逃がす
+- 結果：exit 0 かつ空 → 問題なし。exit 1 かつ中身あり → 見つかった（何も書かずに exit 1）。それ以外（起動できない・時間切れ 10 分・別の終了コード・レポートが読めない）→ 確認できなかったとして止める。Docker が無い・動いていない → 止める（`--skip-secret-scan` のときだけ進める）
+- Git かどうかは `git rev-parse --show-toplevel`（`LC_ALL=C`）で判定する。「リポジトリではない」と確かめられたとき（終了コード 128 と固定の判定）だけ作業フォルダのみにし、起動失敗・時間切れ・所有権やアクセス権の拒否・想定外の出力は、確認できなかったとして止める
+- 後始末：中断・時間切れ・起動失敗のときは、`finally` でコンテナを名前で探して `docker rm -f` で消す。消せなかった可能性・一時フォルダを消せなかったことは、固定の文で警告する（値は入れない）
+- 読めないものの調べ：gitleaks（v8.30.1）は、読めないファイル・入れないフォルダを黙って飛ばし、exit 0・空のレポートになりうる。そのため、作業フォルダの確認の前に、同じイメージ・同じマウント（`:ro`・`--network none`）・同じユーザーで、コンテナの中の `sh` と `find` で `/src` の下（`.git` を除く）に、読めない・入れないものが無いかを数える（`UNREADABLE_SCRIPT`）。出力は数だけで、名前は出さない・残さない。1件以上なら「読めないファイル・フォルダが N 件あり、秘密情報を確かめきれません。権限を直すか、`--skip-secret-scan` で省いてください」で止まり、何も書かない。調べ自体の失敗も止まる。gitleaks のイメージは既定で root で動くため、読めないものが問題になるのは、root でも読めない環境（rootless Docker・root squash の共有フォルダなど）である。smoke は、root の権限（`DAC_OVERRIDE`・`DAC_READ_SEARCH`）を落としてまねる
+- 中断（SIGINT・SIGTERM）：実行中の gitleaks を止め、コンテナも名前で消し、exit 130。何も書かない
+- `/src` に置くフォルダ（Git のトップ）の `.gitleaks.toml` は gitleaks が使う（その設定で許可したものは、見つからない）。あれば、開始の表示で知らせる（サブフォルダにだけあるものは使われない）
+- `--skip-secret-scan`：確認しない。開始の表示・結果の一覧・`secret_scan` に「確認していない」と残す。確認が通る前には差分を表示しないが、省いたときは、差分の表示に既存のファイルの値が出うる
 
 ## 導入したアプリの更新（`harness update`、Issue #16）
 
@@ -106,4 +121,4 @@
 
 ## テスト
 
-`test/adopt/`（印・判定・組み立て）、`test/commands/adopt.test.ts`（架空の既存のアプリ `test/fixtures/adopt-sample/` を一時フォルダに写して実行）。`test/commands/update.test.ts`・`status.test.ts`・`test/update/read-config.test.ts` に、導入済みのアプリの扱いを足した。
+`test/adopt/`（印・判定・組み立て・秘密情報の確認 `secret-scan.test.ts`）、`test/commands/adopt-secret-scan.test.ts`（確認の道具を差し替えた結果の扱い）、`test/scripts/smoke-generated-secret-scan.test.ts`（実際の Docker の gitleaks。`npm run test:smoke`。Docker が無ければ飛ばす）、`test/commands/adopt.test.ts`（架空の既存のアプリ `test/fixtures/adopt-sample/` を一時フォルダに写して実行）。`test/commands/update.test.ts`・`status.test.ts`・`test/update/read-config.test.ts` に、導入済みのアプリの扱いを足した。
