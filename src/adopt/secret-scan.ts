@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { lstat, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { CancelledError } from "../questions/prompter.js";
@@ -39,6 +39,7 @@ export type SecretScanResult =
   | { kind: "clean"; scope: ScanScope; gitleaksConfig?: boolean }
   | { kind: "leaks"; scope: ScanScope; history: Leak[]; worktree: Leak[] }
   | { kind: "docker-missing" }
+  | { kind: "docker-not-linux" }
   | { kind: "unreadable"; count: number }
   | { kind: "failed"; message: string };
 
@@ -314,6 +315,8 @@ export interface ScanDeps {
   timeoutMs?: number;
   /** 後始末の失敗の知らせ先（決まった文だけが渡される）。既定は何もしない */
   onWarning?: (message: string) => void;
+  /** レポートの出力先の権限（テスト用）。既定は所有者だけ（mkdtemp の既定）。root の権限が無い環境をまねるときに 0o777 にする */
+  outDirMode?: number;
   /** docker run に足す引数（テスト用。root の権限を落とした環境をまねる）。既定は無し */
   extraDockerArgs?: string[];
   /** 一時フォルダの削除の差し替え（テスト用）。既定は rm -r */
@@ -378,9 +381,15 @@ export async function scanSecrets(root: string, deps: ScanDeps = {}): Promise<Se
     return failed(SCAN_FAILED.image);
   }
 
-  const info = await run("docker", ["info"], { signal, timeoutMs: PROBE_TIMEOUT_MS });
+  const info = await run("docker", ["info", "--format", "{{.OSType}}"], {
+    signal,
+    timeoutMs: PROBE_TIMEOUT_MS,
+    captureStdout: true,
+  });
   if (info.aborted) throw new CancelledError();
   if (info.failedToStart || info.timedOut || info.exitCode !== 0) return { kind: "docker-missing" };
+  // Linux のイメージを動かせない Docker（Windows コンテナのモード）
+  if (info.stdout.trim().toLowerCase() === "windows") return { kind: "docker-not-linux" };
 
   // Git のリポジトリか。トップを調べる（--dir がサブフォルダでも、履歴はリポジトリ全体を見る）
   const probe = await run("git", ["-C", root, "rev-parse", "--show-toplevel"], {
@@ -417,6 +426,7 @@ export async function scanSecrets(root: string, deps: ScanDeps = {}): Promise<Se
   let outDir: string;
   try {
     outDir = await mkdtemp(path.join(deps.tmpDir ?? os.tmpdir(), "harness-secret-scan-"));
+    if (deps.outDirMode !== undefined) await chmod(outDir, deps.outDirMode);
   } catch {
     return failed(SCAN_FAILED.start);
   }

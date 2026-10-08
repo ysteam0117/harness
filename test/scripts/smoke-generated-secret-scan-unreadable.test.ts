@@ -3,15 +3,15 @@
 // root squash の共有フォルダなど）は、root の権限（DAC_OVERRIDE・DAC_READ_SEARCH）を落としてまねる。
 // ダミーの値は、実行時に連結して作る。実データ・個人名は使わない（架空の値だけ）。Docker が使えなければ飛ばす。
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { decideDockerStep } from "../../scripts/smoke-generated.js";
+import { linuxDockerAvailable, removeWithContainer } from "./docker-helpers.js";
 import { gitleaksImage, scanSecrets } from "../../src/adopt/secret-scan.js";
 
-const docker = spawnSync("docker", ["info"], { stdio: "ignore", windowsHide: true });
-const run = decideDockerStep(docker.status === 0, process.env) === "run";
+const run = decideDockerStep(linuxDockerAvailable(), process.env) === "run";
 
 const TAIL = ["aB3dE5gH7j", "K9mN1pQ3sT", "5vW7yZ9bC1", "dE3fG5"].join("");
 const NAME = "locked_dir_name_marker";
@@ -19,11 +19,8 @@ const DROP_CAPS = ["--cap-drop", "DAC_OVERRIDE", "--cap-drop", "DAC_READ_SEARCH"
 
 const roots: string[] = [];
 afterAll(() => {
-  for (const base of roots) {
-    // 権限を戻してから消す（読めないフォルダは、ホストから消せないことがある）
-    docker_sh(path.join(base, "repo"), "chmod -R 755 /work || true");
-    rmSync(base, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
-  }
+  // 権限を戻してから消す（読めないフォルダ・root が作ったファイルは、ランナーのユーザーでは消せない）
+  for (const base of roots) removeWithContainer(base, [path.join(base, "repo")]);
 });
 
 function docker_sh(repo: string, script: string): number | null {
@@ -76,7 +73,11 @@ describe.skipIf(!run)("#17 smoke：読めないファイル・フォルダを見
     roots.push(base);
     mkdirSync(path.join(base, "repo"));
     writeFileSync(path.join(base, "repo", "plain.txt"), "ok\n");
-    const result = await scanSecrets(path.join(base, "repo"), { extraDockerArgs: DROP_CAPS });
+    const result = await scanSecrets(path.join(base, "repo"), {
+      extraDockerArgs: DROP_CAPS,
+      // root の権限が無いと、所有者だけが書ける出力先に書けない（rootless などの環境をまねる）
+      outDirMode: 0o777,
+    });
     expect(result).toMatchObject({ kind: "clean", scope: "worktree" });
   }, 180_000);
 });

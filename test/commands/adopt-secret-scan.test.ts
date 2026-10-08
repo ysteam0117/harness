@@ -385,3 +385,17 @@ describe("#17 設定ファイル", () => {
     expect(text).not.toContain(DUMMY);
   });
 });
+
+describe("#17 CI：Linux コンテナを動かせない Docker", () => {
+  it("exit 1。Linux コンテナへの切り替えと --skip-secret-scan を案内し、何も書かない", async () => {
+    const dir = sampleApp();
+    const before = snapshot(dir);
+    const s = setup(dir, { secretScan: () => Promise.resolve({ kind: "docker-not-linux" }) });
+    const out = await runAdopt(options(), s.deps);
+    expect(out.exitCode).toBe(1);
+    expect(s.errs.join("")).toContain("Linux コンテナ");
+    expect(s.errs.join("")).toContain("--skip-secret-scan");
+    expect(snapshot(dir)).toEqual(before);
+    expect(existsSync(path.join(dir, ".harness"))).toBe(false);
+  });
+});
