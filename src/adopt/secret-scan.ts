@@ -26,8 +26,6 @@ export interface Leak {
   /** リポジトリの根からの相対パス（制御文字は逃がしてある） */
   file: string;
   line: number;
-  /** ルールの名前（[A-Za-z0-9_.-] 以外は ?） */
-  rule: string;
   /** コミットの先頭7桁（履歴で見つかったものだけ） */
   commit?: string;
 }
@@ -88,12 +86,13 @@ export interface RunOptions {
 export type Runner = (command: string, args: string[], options: RunOptions) => Promise<RunResult>;
 
 /**
- * gitleaks のレポートのテンプレート（--report-format template）。許可した4項目（RuleID・File・StartLine・Commit）だけを JSON で出す。
+ * gitleaks のレポートのテンプレート（--report-format template）。許可した3項目（File・StartLine・Commit）だけを JSON で出す。
+ * 種類（RuleID）は、独自ルールの id に値が入りうるため出さない。
  * --redact は Message（コミットメッセージ）などを伏せないため、レポートの生成の時点で、値の入りうる項目を出さない。
  * 空なら []。文字列は Sprig の mustToJson で JSON としてエンコードする（Go の %q は ESC を  と出し、JSON として読めない）。
  */
 export const REPORT_TEMPLATE =
-  '[{{ range $i, $f := . }}{{ if $i }},{{ end }}{"RuleID":{{ mustToJson $f.RuleID }},"File":{{ mustToJson $f.File }},"StartLine":{{ $f.StartLine }},"Commit":{{ mustToJson $f.Commit }}}{{ end }}]';
+  '[{{ range $i, $f := . }}{{ if $i }},{{ end }}{"File":{{ mustToJson $f.File }},"StartLine":{{ $f.StartLine }},"Commit":{{ mustToJson $f.Commit }}}{{ end }}]';
 const TEMPLATE_FILE = "report.tmpl";
 
 const STDOUT_LIMIT = 64 * 1024;
@@ -245,8 +244,8 @@ const escapeControl = (text: string): string =>
 const FILE_LIMIT = 300;
 
 /**
- * gitleaks の JSON のレポートから、場所・行・コミット・種類だけを取り出す。
- * 値の入りうる項目（Secret・Match・Line など）は読まない。型を確かめ、新しいオブジェクトに一つずつ写す。
+ * gitleaks の JSON のレポートから、場所・行・コミットだけを取り出す。
+ * 値の入りうる項目（Secret・Match・Line・RuleID など）は読まない。型を確かめ、新しいオブジェクトに一つずつ写す。
  * 形が違えば ReportError（文に入力の中身は入れない）。
  */
 export function parseLeakReport(text: string): Leak[] {
@@ -262,14 +261,12 @@ export function parseLeakReport(text: string): Leak[] {
     const record = item as Record<string, unknown>;
     const file = record["File"];
     const line = record["StartLine"];
-    const rule = record["RuleID"];
     const commit = record["Commit"];
     if (typeof file !== "string" || file === "") throw new ReportError();
     if (typeof line !== "number" || !Number.isInteger(line) || line < 1) throw new ReportError();
-    if (typeof rule !== "string") throw new ReportError();
     if (commit !== undefined && typeof commit !== "string") throw new ReportError();
     const shownFile = escapeControl(file.replace(/^\/src\//, "")).slice(0, FILE_LIMIT);
-    const leak: Leak = { file: shownFile, line, rule: rule.replace(/[^\w.-]/gu, "?") };
+    const leak: Leak = { file: shownFile, line };
     if (typeof commit === "string" && /^[0-9a-f]{40}$/.test(commit)) {
       leak.commit = commit.slice(0, 7);
     }
@@ -289,9 +286,7 @@ export function formatLeaks(history: Leak[], worktree: Leak[]): string[] {
       if (shown >= SHOWN_LIMIT) break;
       const where = `${leak.file}:${String(leak.line)}`;
       lines.push(
-        leak.commit !== undefined
-          ? `  - ${where}（コミット ${leak.commit}・種類 ${leak.rule}）`
-          : `  - ${where}（種類 ${leak.rule}）`,
+        leak.commit !== undefined ? `  - ${where}（コミット ${leak.commit}）` : `  - ${where}`,
       );
       shown += 1;
     }

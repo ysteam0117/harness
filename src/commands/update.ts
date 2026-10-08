@@ -3,6 +3,8 @@ import path from "node:path";
 import { Command } from "commander";
 import semver from "semver";
 import { buildAdoptFiles } from "../adopt/build.js";
+import { describeSkippedDir, HARNESS_CHECK_PATH, skippedAuditDirs } from "../adopt/ci.js";
+import { describeMissing, nodeAppDirs, usableProfiles } from "../adopt/profiles.js";
 import { extractBlock, mergeBlock, MarkerError } from "../adopt/markers.js";
 import { collectFacts } from "../checks/facts.js";
 import type { AcceptedWarning } from "../checks/review.js";
@@ -627,10 +629,29 @@ async function update(
   const adoptDocs = new Set<string>();
   try {
     if (adopted) {
+      // 当てたプロファイルは、導入のときの記録を使う（判定し直さない）。今のハーネスに無いものは、飛ばして報告する
+      const resolved = usableProfiles(recorded.profiles?.applied ?? [], deps.templatesDir);
+      if (resolved.missing.length > 0) {
+        deps.stderr(
+          `警告: 記録したプロファイルのうち、今のハーネスで使えないものを飛ばしました：${resolved.missing.map(describeMissing).join("、")}
+`,
+        );
+      }
       const files = buildAdoptFiles({
         answers,
+        profiles: resolved.usable,
+        nodeDirs: recorded.detectedStack !== undefined ? nodeAppDirs(recorded.detectedStack) : [],
         ...(deps.templatesDir !== undefined ? { templatesDir: deps.templatesDir } : {}),
       });
+      if (
+        files.some((f) => f.path === HARNESS_CHECK_PATH) &&
+        recorded.detectedStack !== undefined
+      ) {
+        for (const x of skippedAuditDirs(nodeAppDirs(recorded.detectedStack))) {
+          deps.stderr(`警告: ${describeSkippedDir(x)}
+`);
+        }
+      }
       managedNew = files.map((f) => ({ path: f.path, content: f.content }));
       for (const f of files) if (f.kind === "doc") adoptDocs.add(f.path);
     } else {

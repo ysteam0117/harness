@@ -14,6 +14,7 @@ import {
   copyRealTemplates,
   projectInput,
 } from "../generate/project-helpers.js";
+import { COMMANDS, DOCUMENTS } from "./forbidden-words.js";
 
 afterEach(cleanupProjectTmp);
 
@@ -55,7 +56,8 @@ describe("#15 AC-3: 導入するファイルは AI 向けのものだけ", () =>
       p.startsWith(".claude/agents/") ||
       p.startsWith(".codex/agents/") ||
       p === ".claude/settings.json" ||
-      p === ".codex/rules/default.rules";
+      p === ".codex/rules/default.rules" ||
+      p === ".github/workflows/harness-check.yml";
     expect(files.map((f) => f.path).filter((p) => !allowed(p))).toEqual([]);
     for (const p of [
       "package.json",
@@ -143,37 +145,6 @@ describe("#15 AC-3: AGENTS.md の「必ず読むSkill」の表に、出さない
 });
 
 describe("#15 AC-3: 生成したアプリ専用のものを、導入先の文書に書かない（R6）", () => {
-  const COMMANDS = [
-    "env:check",
-    "check:app",
-    "npm run security",
-    "docker:up",
-    "docker:down",
-    "dev:test",
-    "db:migrate",
-    "db:seed",
-    "db:cleanup",
-    "test:db",
-    "merge:check",
-  ];
-  // 導入で作らない文書のパス・生成したアプリのフォルダ構成
-  const DOCUMENTS = [
-    "docs/project-rules.md",
-    "docs/secrets.md",
-    "docs/testing/",
-    "docs/api/",
-    "docs/requirements.md",
-    "docs/design/",
-    "docs/adr/",
-    "docs/tech-stack.md",
-    "docs/issues/",
-    "docs/harness-feedback/",
-    ".githooks",
-    "prototype/",
-    "backend/src/",
-    "frontend/src/",
-  ];
-
   for (const repository of ["github", "local"]) {
     for (const database of ["d1", "postgresql", "none"]) {
       it(`#15 AC-3: adopt の出力全体（全 Skill・両 AI のエージェント・権限の設定）に、アプリ専用のコマンド名・導入で作らない文書のパス・アプリのフォルダ構成が無い（${repository}・${database}）`, async () => {

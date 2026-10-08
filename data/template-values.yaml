@@ -505,3 +505,57 @@ backend_examples_note: "ここには例を置かない（二重に持たない�
 frontend_examples_note: "ここには例を置かない（二重に持たない）。例はテスト（`frontend/src/rules-examples/`・`backend/src/rules-examples/logger.test.ts`）で動作を確かめてあり、消さない"
 env_check_how: "npm run env:check で確かめる"
 rules_apply_step: "決まったら、`.harness/config.yaml`と要件定義書を更新し、`harness update`で、有効にするルール・Skillに反映する"
+
+# ---- 技術プロファイルの Skill の、生成したアプリだけにあるコマンド・文書・フォルダ・共通の部品を前提にした箇所 ----
+# harness adopt が当てたプロファイルの Skill（#18）は、同じ名前の値を data/adopt-values.yaml で入れ替える。ひな形には分岐を入れない（F-28）。
+# 作成（harness create）の値は、これまでの Skill の文言のまま。
+
+# 各プロファイルの Skill の冒頭の文の後ろ。作成では空（導入では、読み替えの案内を足す）
+profile_skill_note: ""
+
+hono_examples_intro: "書くときは、良い例の形に合わせる。例は`backend/src/rules-examples/`のテストにあり、動作を確かめてある。悪い例も、問題が起きることをテスト（「悪い例の問題」）で確かめてある。このフォルダは、ハーネスが管理するため、消さない。"
+hono_parts_section: |-
+  ## 用意されている共通の部品（`backend/src/lib/`）
+
+  | ファイル | 役割 | 使い方 |
+  | --- | --- | --- |
+  | `app-error.ts` | 想定できるエラーの型（`AppError`） | 入力の誤り・権限不足・リソースなし・競合などは`throw new AppError("CONFLICT", "利用者向けのメッセージ")`で投げる |
+  | `error-handler.ts` | グローバル例外ハンドリング | `app.onError(handleError)`・`app.notFound(handleNotFound)`で登録する。各層でエラーを`try`〜`catch`で変換しない |
+  | `security.ts` | セキュリティヘッダー・送信元の確認・`no-store` | `app.use(securityHeaders)`・`app.use(originCheck(...))`を全体に、`noStore`を認証が必要なAPIに付ける |
+  | `validation.ts` | 入力チェック | `validate("json", スキーマ)`を使う。`@hono/zod-validator`の`zValidator`を直接使わない |
+  | `security.test.ts` | 必須のテスト | GETで状態が変わらない・送信元の拒否・入力の誤りの形式・セキュリティヘッダーを確かめる。APIを追加しても、ルーティングの定義から自動で対象になる |
+drizzle_example_tests: |-
+  - 例のテスト（`backend/src/rules-examples/*.db.test.ts`）は、`npm run check`で毎回動く。例を書き換えたら、テストも通す
+    - D1：`npm test`（Workersのテスト）の中で、Vitest専用の一時D1に対して動く
+    - PostgreSQL：`pg`をWorkersのテストの中で読めないため、Node.jsの別の設定（`vitest.db.config.ts`）で動かす。`npm test`の後に自動で`npm run test:db`が実行される。検証用DBのコンテナ（`npm run docker:up:test`）の起動が要る。接続先は`.env.test`の`DATABASE_URL`で、手元の`_test`で終わるDBだけを許す。表はその接続だけの一時的なもの（`CREATE TEMP TABLE`）で、マイグレーション・シード・既存のデータには触れない。コンテナの中で実行するときは、検証用のコンテナ（`npm run docker:up:test`）の中で行う
+drizzle_env_notes: "開発操作は`.env.development`、検証操作は`.env.test`を使う。PostgreSQLの検証DB名は`_test`で終わる必要がある。`npm run db:generate -- --name <名前>`は接続先を使わずマイグレーションを生成する"
+drizzle_migrate_commands: "開発：`npm run db:migrate:local`。検証：`npm run db:migrate:test`（環境別の一時保存先）"
+drizzle_schema_places: "テーブルの定義は、Drizzleのスキーマのファイル（`backend/db/schema.ts`）に書く。DB に触れる処理（Repository）は`backend/src/db/`に置く"
+frontend_state_examples_intro: "例は、テスト（`frontend/src/rules-examples/server-state.test.tsx`・`form.test.tsx`）で動作を確かめてある。悪い例は、問題が起きることもテストで確かめてある。コードを書く前に読み、良い例の書き方に合わせる。"
+axios_examples_intro: "例は、テスト（`frontend/src/rules-examples/http-client.test.tsx`）で動作を確かめてある。悪い例は、問題が起きることもテストで確かめてある。コードを書く前に読み、良い例の書き方に合わせる。"
+axios_client_rule: "APIは`frontend/src/services/api-client.ts`の`apiClient`だけを使って呼ぶ。コンポーネント・Hook・画面から`axios`・`fetch`を直接使わない"
+logger_examples_intro: "例は、テスト（`backend/src/rules-examples/logger.test.ts`）で動作を確かめてある。悪い例は、問題が起きることもテストで確かめてある。コードを書く前に読み、良い例の書き方に合わせる。"
+quality_generated_rule: "生成されたファイル（`worker-configuration.d.ts`等）・組み立ての結果・`prototype/`は、対象から外す（設定済み）"
+quality_run_section: |-
+  - 品質チェックとテストは、手元とCIで共通の`npm run check`で、プロジェクト全体に対して実行する。`npm run check`は、Dockerを使わない`npm run check:app`と、Dockerで動くセキュリティのテスト`npm run security`をつないだもの。**`npm run check`はホストで実行する**（Dockerが要る）。Docker（開発用のコンテナ）の中では、`npm run check:app`を実行する
+  - セキュリティのテストは、1つだけ実行もできる：`npm run security:semgrep`・`npm run security:secrets`・`npm run security:osv`。手順・合否・誤検知の抑え方は`docs/testing/security.md`
+  - ミューテーションテストは、影響の大きい処理（認証・認可・個人情報・重要な業務ルール）を対象に`npm run mutation`で行う
+
+# Skill「データアクセス（Drizzle）」の「良い例・悪い例」の冒頭の文（このプロジェクトのDBの名前を含む）
+drizzle_examples_intro:
+  - when: { answer: database, equals: d1 }
+    value: "書くときは、良い例の形に合わせる。例は`backend/src/rules-examples/`のテスト（`*.db.test.ts`）にあり、このプロジェクトのDB（Cloudflare D1（標準））で動作を確かめてある。悪い例も、問題が起きることをテスト（「悪い例の問題」）で確かめてある。このフォルダは、ハーネスが管理するため、消さない。"
+  - when: { answer: database, equals: postgresql }
+    value: "書くときは、良い例の形に合わせる。例は`backend/src/rules-examples/`のテスト（`*.db.test.ts`）にあり、このプロジェクトのDB（PostgreSQL（Hyperdrive経由））で動作を確かめてある。悪い例も、問題が起きることをテスト（「悪い例の問題」）で確かめてある。このフォルダは、ハーネスが管理するため、消さない。"
+  - value: "書くときは、良い例の形に合わせる。例は`backend/src/rules-examples/`のテスト（`*.db.test.ts`）にあり、このプロジェクトのDB（なし）で動作を確かめてある。悪い例も、問題が起きることをテスト（「悪い例の問題」）で確かめてある。このフォルダは、ハーネスが管理するため、消さない。"
+
+# 技術プロファイルの Skill の「必須の指示」のうち、導入しない部品（#18）
+hono_csrf_rule: "Honoの`csrf`ミドルウェアだけでCSRF対策を済ませない。JSONの要求を確かめないため、`originCheck`を使う"
+hono_csp_rule: "CSPに外部のサービスを追加する場合は、`security.ts`を直し、理由をADRに記録する"
+test_tools_console_rule: 'Web E2Eは、`@playwright/test`ではなく`e2e/console-guard.ts`の`test`・`expect`を読み込む。意図したエラー（誤ったパスワードでの401等）は、そのテストの中だけで`allowConsoleError(page, /メッセージ/, "理由")`で許可する'
+test_tools_db_rule: "バックエンドの結合テストは、テストごとにマイグレーションを適用したローカルのD1で行う（`vitest.config.ts`の設定済み）"
+axios_unauthenticated_rule: "401の扱い（認証の更新・ログイン画面への遷移）は、`setUnauthenticatedHandler`で1か所に登録する。更新は1回だけにし、遷移を重複させない"
+axios_error_shape: "失敗は、必ず`ApiError`（`status`・`code`・`message`・`fields`）の形で返ってくる。`code`で表示や動作を分ける"
+logger_common_rule: "各層から`console.log`等を直接呼ばない。必ず共通ロガーを使う"
+logger_audit_rule: "ログイン・ログアウト・パスワードや認証要素の変更・権限の変更・認可の拒否・試行制限の発動・管理者の操作は、`audit`で記録する"
+quality_nosemgrep_rule: "Semgrepの誤検知は、ルールを書き換えず、該当の行に`// nosemgrep: <ルールのid> <理由>`を付けて抑える。**理由は必須**（理由のない`nosemgrep`・ファイル全体の除外・ルールの削除はしない）。理由が妥当かは、コードレビューで確かめ、"

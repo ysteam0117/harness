@@ -7,7 +7,7 @@ description: フロントエンドの組み立て（Vite）と画面の切り替
 
 # 組み立て（Vite）と画面の切り替え（React Router）
 
-作業の過程と結果は、すべて日本語で書く。
+作業の過程と結果は、すべて日本語で書く。{{profile_skill_note}}
 
 ## 構成
 

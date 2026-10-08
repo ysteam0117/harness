@@ -1,0 +1,57 @@
+# ハーネスの確認（harness adopt が追加するファイル。ハーネスの更新（harness update）で置き換わる）。
+# 既存のワークフローは変えない。秘密情報の確認を常に行い、Node.js のアプリがあるときは本番の依存の脆弱性の確認も行う。
+# Lint・型・テストは、このファイルに入れない。既存のアプリの基準線を決めてから足す（ハーネスの Issue #21）。
+name: ハーネスの確認
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # 履歴と作業フォルダを gitleaks で確かめる（Docker のイメージは、ダイジェストで固定している）。
+      # ネットワークにつながず、リポジトリは読み取り専用で置く。このリポジトリの .gitleaks.toml があれば、gitleaks が使う。
+      # 値は出さない：--redact を付け、レポートは「種類・場所・行・コミット」の4項目だけのテンプレートで出す。標準エラーは捨てる。
+      - name: 秘密情報の確認
+        env:
+          REPORT_TEMPLATE: |-
+            {{report_template}}
+        run: |
+          printf '%s' "$REPORT_TEMPLATE" > "$RUNNER_TEMP/report.tmpl"
+          set +e
+          report=$(docker run --rm --network none \
+            -v "$GITHUB_WORKSPACE:/src:ro" \
+            -v "$RUNNER_TEMP/report.tmpl:/report.tmpl:ro" \
+            -w /src \
+            {{gitleaks_image}} \
+            git /src --redact --no-banner --log-level error --exit-code 1 \
+            --report-format template --report-template /report.tmpl --report-path - \
+            2>/dev/null)
+          code=$?
+          set -e
+          if [ "$code" -eq 0 ]; then
+            echo "秘密情報は見つかりませんでした"
+          elif [ "$code" -eq 1 ] && [ "${report:0:2}" = "[{" ]; then
+            echo "秘密情報らしいものが見つかりました（値は表示しません）。場所・行・コミット："
+            # 種類は出さない（独自ルールの id に値が入りうるため）。場所は、制御文字を逃がして出す
+            lines=$(printf '%s' "$report" | jq -r '.[:50][] | "  - " + (.File | if type == "string" then .[0:300] else "?" end | tojson) + ":" + (.StartLine | if type == "number" then tostring else "?" end) + "（コミット " + ((.Commit // "") | if type == "string" and test("^[0-9a-f]{40}$") then .[0:7] else "なし" end) + "）"' 2>/dev/null) || lines=""
+            if [ -n "$lines" ]; then printf '%s\n' "$lines"; else echo "  （場所を表示できません）"; fi
+            echo "本物の秘密なら、値の取り消しと作り直しが必要です。誤検知なら、.gitleaks.toml で許可します。"
+            exit 1
+          else
+            echo "秘密情報の確認を完了できませんでした"
+            exit 1
+          fi
+
+{{npm_audit_job}}

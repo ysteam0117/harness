@@ -7,7 +7,7 @@ description: ログの出し方のルール。ログを出すとき、監査ロ�
 
 # ログ（共通ロガー）
 
-作業の過程と結果は、すべて日本語で書く。
+作業の過程と結果は、すべて日本語で書く。{{profile_skill_note}}
 
 ## 使い方
 
@@ -23,15 +23,15 @@ logger.audit("権限の変更", `user:${targetUserId}`, "success");
 
 ## 守ること
 
-- **MUST NOT**：各層から`console.log`等を直接呼ばない。必ず共通ロガーを使う
+- **MUST NOT**：{{logger_common_rule}}
 - **MUST**：`INFO`は正常な重要イベント、`WARN`は処理を続けたが想定外のこと、`ERROR`は処理を完了できず対応が必要なこと、`DEBUG`は開発時だけに使う
-- **MUST**：ログイン・ログアウト・パスワードや認証要素の変更・権限の変更・認可の拒否・試行制限の発動・管理者の操作は、`audit`で記録する
+- **MUST**：{{logger_audit_rule}}
 - 伏せ字にする項目名は`logger.ts`の`REDACT_KEYS`にある。新しく秘密情報・個人情報の項目を扱う場合は、ここに加え、`logger.test.ts`にも確かめるテストを加える
 - 利用者はログ上で利用者IDで表し、メールアドレスや氏名を書かない
 
 ## 良い例・悪い例
 
-例は、テスト（`backend/src/rules-examples/logger.test.ts`）で動作を確かめてある。悪い例は、問題が起きることもテストで確かめてある。コードを書く前に読み、良い例の書き方に合わせる。
+{{logger_examples_intro}}
 
 ### 共通ロガーを使い、`console.log`で秘密の値を出さない
 

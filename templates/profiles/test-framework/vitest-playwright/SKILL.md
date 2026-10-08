@@ -7,7 +7,7 @@ description: テストの道具の使い方。Vitest（バックエンドはWork
 
 # テストの道具
 
-作業の過程と結果は、すべて日本語で書く。
+作業の過程と結果は、すべて日本語で書く。{{profile_skill_note}}
 
 | 用途 | 道具 | 置き場所 |
 | --- | --- | --- |
@@ -17,12 +17,12 @@ description: テストの道具の使い方。Vitest（バックエンドはWork
 | 異常な入力のテスト | fast-check | 対象と同じ場所 |
 | E2E | Playwright（`e2e/console-guard.ts`の`test`を使う） | `e2e/` |
 | 負荷・限界のテスト | k6（検証環境だけ、承認を得て） | `tests/load/` |
-| セキュリティのテスト（DAST） | OWASP ZAP（検証環境だけ、承認を得て） | 手順書（`docs/testing/`） |
+| セキュリティのテスト（DAST） | OWASP ZAP（検証環境だけ、承認を得て） | 手順書（{{testing_docs_dir}}） |
 
 ## 守ること
 
-- **MUST**：Web E2Eは、`@playwright/test`ではなく`e2e/console-guard.ts`の`test`・`expect`を読み込む。意図したエラー（誤ったパスワードでの401等）は、そのテストの中だけで`allowConsoleError(page, /メッセージ/, "理由")`で許可する
-- **MUST**：バックエンドの結合テストは、テストごとにマイグレーションを適用したローカルのD1で行う（`vitest.config.ts`の設定済み）
+- **MUST**：{{test_tools_console_rule}}
+- **MUST**：{{test_tools_db_rule}}
 - **MUST**：Workers＋PostgreSQL（Hyperdrive）の結合テストは、テストの道具の中では`pg`を読み込めないため、`wrangler dev`で起動したアプリのAPIに対して行う
 - **MUST**：フロントエンドのテストでAPIを呼ぶ場合は、jsdomの画面の場所と同じドメインにし、MSWで応答を返す
 - **MUST**：テストで起動したものは、テストの工程が完了したら止め、ポートが解放されたことを確かめる。ポートの確認は、待ち受け中（LISTEN）の状態だけで判定する

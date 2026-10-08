@@ -5,9 +5,13 @@ import { judge } from "../generate/judgment.js";
 import { selectKnowledge } from "../generate/knowledge.js";
 import { checkOutputPaths } from "../generate/paths.js";
 import { buildOutputs } from "../generate/plan.js";
+import { loadProfile, selectProfileFiles } from "../generate/profile.js";
 import { isManagedPath } from "../generate/project.js";
 import { findTemplatesDir } from "../generate/templates-dir.js";
 import { buildValues, chooseValues, parseValueDefinitions } from "../generate/values.js";
+import { buildHarnessCheck, HARNESS_CHECK_PATH } from "./ci.js";
+import type { AppliedProfile } from "./detect.js";
+import { applyProfileSkillValues, usableProfiles } from "./profiles.js";
 
 /** 導入するファイル。AGENTS.md・CLAUDE.md は doc（content は、印で囲む本文だけ）、それ以外は file（content は、ファイル全体） */
 export interface AdoptFile {
@@ -25,6 +29,14 @@ export interface BuildAdoptInput {
   templatesDir?: string;
   /** 既定はハーネスの knowledge/ */
   knowledgeDir?: string;
+  /**
+   * 当てた技術プロファイル（判定の applied、または config に記録した profiles.applied）。既定は []（共通のルールだけ）。
+   * 入れるのは、そのプロファイルの Skill だけ（コード・設定のファイルは入れない）。
+   * 今のハーネスに無いプロファイル（と、それを requires しているもの）は、飛ばす（報告は usableProfiles で行う）
+   */
+  profiles?: readonly AppliedProfile[];
+  /** Node.js のアプリのフォルダ（記録した判定の結果）。harness-check.yml の npm audit の対象。既定は []（job を出さない） */
+  nodeDirs?: readonly string[];
 }
 
 const ADOPT_VALUES_FILE = "adopt-values.yaml";
@@ -35,7 +47,8 @@ const DOC_PATHS = ["AGENTS.md", "CLAUDE.md"];
 /**
  * 導入先に置くファイル（AI 向けのものだけ）をメモリ上で組み立てる。ディスクには書かない。
  * AGENTS.md・CLAUDE.md・共通の Skill（知見の写しを含む）・エージェントの定義・AI の権限の設定。
- * 技術プロファイルの Skill・コード・文書・スクリプト・CI は含めない。
+ * 技術プロファイルは、当てたものの Skill だけを含める（コード・設定のファイルは含めない）。
+ * 文書・スクリプトは含めない。CI は、GitHub で品質チェックを GitHub Actions で行うときだけ、harness-check.yml を含める。
  * 生成したアプリにだけあるコマンド・文書を書かないよう、data/adopt-values.yaml の値で入れ替える。
  * パスの順に並べ、同じ入力なら同じ結果になる。誤りは GenerateError。
  */
@@ -64,9 +77,49 @@ export function buildAdoptFiles(input: BuildAdoptInput): AdoptFile[] {
     values[name] = value;
   }
 
-  // 技術プロファイルは使わない（profiles を空にする）
-  const built = buildOutputs({ templatesDir, ais: answers.ais, profiles: [], values, answers });
-  const outputs = built.files.map((f) => ({ path: f.path, content: f.content }));
+  // 当てたプロファイル：今のハーネスで使えるものだけ。Skill を AGENTS.md の表に書く
+  const applied = usableProfiles(input.profiles ?? [], templatesDir).usable;
+  const loaded = applied.map((a) => ({
+    profile: loadProfile(templatesDir, a.profile),
+    apps: a.apps,
+  }));
+  applyProfileSkillValues(values, loaded);
+
+  let built: ReturnType<typeof buildOutputs>;
+  try {
+    built = buildOutputs({
+      templatesDir,
+      ais: answers.ais,
+      profiles: loaded.map((l) => l.profile.key),
+      values,
+      answers,
+    });
+  } catch (e) {
+    if (loaded.length === 0 || !(e instanceof GenerateError)) throw e;
+    // 例：回答が database: none なのに、DB のプロファイルが当たった
+    throw new GenerateError(
+      `当てたプロファイル（${loaded.map((l) => l.profile.key).join("・")}）の Skill を組み立てられません：${e.message}。回答（database など）が、既存のアプリの技術と合っているか確かめてください`,
+      { cause: e },
+    );
+  }
+  // プロファイルの files（コード・設定）は入れない。Skill（SKILL.md）だけを残す
+  const notWritten = new Set(
+    loaded.flatMap((l) => selectProfileFiles(l.profile, answers).map((f) => f.destination)),
+  );
+  const outputs = built.files
+    .filter((f) => !notWritten.has(f.path))
+    .map((f) => ({ path: f.path, content: f.content }));
+
+  // CI：GitHub で、品質チェックを GitHub Actions で行うとき
+  if (
+    answers.repository === "github" &&
+    (answers.check_location === "github_actions" || answers.check_location === "both")
+  ) {
+    outputs.push({
+      path: HARNESS_CHECK_PATH,
+      content: buildHarnessCheck({ templatesDir, nodeDirs: input.nodeDirs ?? [] }),
+    });
+  }
 
   // 知見の写し：Skill「知見」の references/（選んだAIごと）
   const skillRoots = [

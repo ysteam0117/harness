@@ -27,19 +27,17 @@ afterEach(() => {
   for (const dir of tmpRoots.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-describe("#17 parseLeakReport：場所と種類だけを取り出す", () => {
+describe("#17 parseLeakReport：場所・行・コミットだけを取り出す（種類は出さない）", () => {
   it("Secret・Match・Line にダミーの値があっても、結果に値が無く、キーは4つだけ", () => {
     const leaks = parseLeakReport(reportOf(reportItem()));
-    expect(leaks).toEqual([
-      { file: "src/config.ts", line: 3, rule: "generic-api-key", commit: COMMIT_A.slice(0, 7) },
-    ]);
+    expect(leaks).toEqual([{ file: "src/config.ts", line: 3, commit: COMMIT_A.slice(0, 7) }]);
     expect(JSON.stringify(leaks)).not.toContain(DUMMY);
-    expect(Object.keys(leaks[0] as object).sort()).toEqual(["commit", "file", "line", "rule"]);
+    expect(Object.keys(leaks[0] as object).sort()).toEqual(["commit", "file", "line"]);
   });
 
   it("dir モードの File の先頭の /src/ を外す。Commit が空なら commit は無い", () => {
     const leaks = parseLeakReport(reportOf(reportItem({ File: "/src/a/b.txt", Commit: "" })));
-    expect(leaks).toEqual([{ file: "a/b.txt", line: 3, rule: "generic-api-key" }]);
+    expect(leaks).toEqual([{ file: "a/b.txt", line: 3 }]);
   });
 
   it("空の配列は、見つからなかった", () => {
@@ -52,9 +50,12 @@ describe("#17 parseLeakReport：場所と種類だけを取り出す", () => {
     expect(JSON.stringify(leaks)).not.toContain(DUMMY);
   });
 
-  it("RuleID は [A-Za-z0-9_.-] 以外を ? にする", () => {
-    const leaks = parseLeakReport(reportOf(reportItem({ RuleID: `rule x\u001b[31m/${DUMMY}` })));
-    expect(leaks[0]?.rule).toMatch(/^[\w.\-?]+$/);
+  it("種類（RuleID）は読まず、表示にも出さない（独自ルールの id に値が入りうるため）", () => {
+    const leaks = parseLeakReport(reportOf(reportItem({ RuleID: `ghp_${"a".repeat(36)}` })));
+    expect(leaks[0]).not.toHaveProperty("rule");
+    const shown = formatLeaks(leaks, []).join("\n");
+    expect(shown).not.toContain("ghp_");
+    expect(shown).not.toContain("種類");
   });
 
   it("File の制御文字（ESC・改行・NUL・DEL）を逃がす", () => {
@@ -73,7 +74,6 @@ describe("#17 parseLeakReport：場所と種類だけを取り出す", () => {
       JSON.stringify({ RuleID: DUMMY }),
       JSON.stringify([reportItem({ File: 3 })]),
       JSON.stringify([reportItem({ StartLine: DUMMY })]),
-      JSON.stringify([reportItem({ RuleID: null })]),
       JSON.stringify([DUMMY]),
       JSON.stringify([null]),
       JSON.stringify([reportItem({ StartLine: 0 })]),
@@ -141,11 +141,11 @@ describe("#17 gitleaksImage・gitleaksArgs", () => {
 describe("#17 formatLeaks", () => {
   it("履歴（コミットあり）と作業フォルダ（コミットなし）を分けて出し、値を含めない", () => {
     const lines = formatLeaks(
-      [{ file: "a.ts", line: 2, rule: "r1", commit: "abc1234" }],
-      [{ file: "b.ts", line: 5, rule: "r2" }],
+      [{ file: "a.ts", line: 2, commit: "abc1234" }],
+      [{ file: "b.ts", line: 5 }],
     ).join("\n");
-    expect(lines).toContain("a.ts:2（コミット abc1234・種類 r1）");
-    expect(lines).toContain("b.ts:5（種類 r2）");
+    expect(lines).toContain("a.ts:2（コミット abc1234）");
+    expect(lines).toContain("b.ts:5");
     expect(lines.indexOf("a.ts")).toBeLessThan(lines.indexOf("b.ts"));
     expect(lines).toContain("履歴");
     expect(lines).toContain("作業フォルダ");
@@ -155,7 +155,6 @@ describe("#17 formatLeaks", () => {
     const many = Array.from({ length: 80 }, (_, i) => ({
       file: `f${String(i)}`,
       line: 1,
-      rule: "r",
     }));
     const lines = formatLeaks([], many);
     expect(lines.length).toBeLessThan(80);
@@ -229,7 +228,7 @@ describe("#17 scanSecrets", () => {
     expect(result.kind).toBe("leaks");
     if (result.kind !== "leaks") return;
     expect(result.history).toHaveLength(0);
-    expect(result.worktree).toEqual([{ file: "new.txt", line: 3, rule: "generic-api-key" }]);
+    expect(result.worktree).toEqual([{ file: "new.txt", line: 3 }]);
   });
 
   it("どちらかが失敗なら、もう片方が clean でも failed", async () => {

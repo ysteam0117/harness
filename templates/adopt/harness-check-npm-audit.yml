@@ -1,0 +1,24 @@
+  npm-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # 導入のときに記録した、Node.js のアプリのフォルダ（リポジトリ全体は探さない）
+        dir: {{audit_dirs}}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      # フォルダの package-lock.json があれば、本番の依存（--omit=dev）の脆弱性を確かめる。high 以上で失敗する（既存の脆弱性でも失敗する）。
+      # package-lock.json が無ければ、その旨を出して、失敗にしない。ランナーの Node.js の npm を使う。
+      - name: 本番の依存の脆弱性の確認
+        env:
+          AUDIT_DIR: ${{ matrix.dir }}
+        run: |
+          if [ ! -f "$AUDIT_DIR/package-lock.json" ]; then
+            echo "$AUDIT_DIR に package-lock.json がありません。本番の依存の脆弱性は確かめていません"
+            exit 0
+          fi
+          cd -- "$AUDIT_DIR"
+          npm audit --omit=dev --audit-level=high

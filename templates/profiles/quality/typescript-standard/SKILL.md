@@ -7,13 +7,11 @@ description: 品質チェックの道具と合格の基準。Lint・型チェッ
 
 # 品質チェックの道具
 
-作業の過程と結果は、すべて日本語で書く。
+作業の過程と結果は、すべて日本語で書く。{{profile_skill_note}}
 
 ## 実行
 
-- 品質チェックとテストは、手元とCIで共通の`npm run check`で、プロジェクト全体に対して実行する。`npm run check`は、Dockerを使わない`npm run check:app`と、Dockerで動くセキュリティのテスト`npm run security`をつないだもの。**`npm run check`はホストで実行する**（Dockerが要る）。Docker（開発用のコンテナ）の中では、`npm run check:app`を実行する
-- セキュリティのテストは、1つだけ実行もできる：`npm run security:semgrep`・`npm run security:secrets`・`npm run security:osv`。手順・合否・誤検知の抑え方は`docs/testing/security.md`
-- ミューテーションテストは、影響の大きい処理（認証・認可・個人情報・重要な業務ルール）を対象に`npm run mutation`で行う
+{{quality_run_section}}
 
 ## 合格の基準（初期値）
 
@@ -33,7 +31,7 @@ description: 品質チェックの道具と合格の基準。Lint・型チェッ
 ## 守ること
 
 - **MUST NOT**：基準を満たすために、`eslint-disable`・`@ts-ignore`・除外の設定を安易に加えない。加える場合は理由を書く
-- **MUST**：Semgrepの誤検知は、ルールを書き換えず、該当の行に`// nosemgrep: <ルールのid> <理由>`を付けて抑える。**理由は必須**（理由のない`nosemgrep`・ファイル全体の除外・ルールの削除はしない）。理由が妥当かは、コードレビューで確かめ、{{pr_equivalent}}に記録する。gitleaksのテスト用の架空の値は、値に`FAKE_SECRET_FOR_TEST`を含める
+- **MUST**：{{quality_nosemgrep_rule}}{{pr_equivalent}}に記録する。gitleaksのテスト用の架空の値は、値に`FAKE_SECRET_FOR_TEST`を含める
 - **MUST NOT**：セキュリティのテストをスキップする設定（環境変数・`--no-verify`での回避など）を作らない。Dockerが使えないときは、導入して起動する
-- **MUST**：生成されたファイル（`worker-configuration.d.ts`等）・組み立ての結果・`prototype/`は、対象から外す（設定済み）
-- **MUST**：基準をプロジェクトの事情で変える場合は、`docs/project-rules.md`に書く。緩める場合はADRに記録し、承認を得る
+- **MUST**：{{quality_generated_rule}}
+- **MUST**：基準をプロジェクトの事情で変える場合は、{{project_rules_place}}に書く。緩める場合はADRに記録し、承認を得る

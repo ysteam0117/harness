@@ -1,0 +1,36 @@
+# harness adopt が当てた技術プロファイルの Skill を、導入先の AGENTS.md のどこに書くか（C-38：ルールはデータで持つ）。
+# プロファイルの分類（categories の名前）ごとに、「コードを書く前に、ルールを読んで従う」の表の欄を決める。
+# 当てたプロファイルの Skill だけを書く。当てていない分類は、data/adopt-values.yaml の値のまま（「該当する技術のSkillはない」など）。
+# ここにない分類のプロファイルは、導入できない（表に書けない Skill を、入れないため）。
+#
+# table：data/adopt-values.yaml（なければ template-values.yaml）の値の名前
+#   mode: append  … その値の末尾に、「・`Skill`」を足す（値は「`backend`・`error-api`」のような Skill の一覧）
+#   mode: replace … その値を、Skill の一覧に置き換える（値が「該当する技術のSkillはない」などの文のとき）
+#   mode: row     … その値（表の1行）を、template の行に置き換える。{skills} に Skill の一覧が入る
+# examples：良い例・悪い例を載せた Skill の案内（data/adopt-values.yaml の値の名前）。Skill の一覧に置き換える
+# 対象のフォルダが決まっているとき（ルート全体ではないとき）は、Skill の名前の後ろに「（`<フォルダ>/` のみ）」を書く。
+categories:
+  backend-framework:
+    table: { value: rule_skills_backend, mode: append }
+    examples: example_skills
+  data-access:
+    table:
+      value: data_access_rule_row
+      mode: row
+      template: "| DB・クエリ・マイグレーション | `backend`・{skills} |"
+    examples: example_skills
+  frontend-build:
+    table: { value: rule_skills_frontend, mode: append }
+  frontend-state:
+    table: { value: rule_skills_frontend, mode: append }
+    examples: frontend_example_skills
+  http-client:
+    table: { value: rule_skills_frontend_api, mode: append }
+    examples: frontend_example_skills
+  logger:
+    table: { value: rule_skills_logger, mode: replace }
+    examples: frontend_example_skills
+  test-framework:
+    table: { value: rule_skills_testing, mode: append }
+  quality:
+    table: { value: rule_skills_quality, mode: replace }

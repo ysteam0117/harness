@@ -18,7 +18,14 @@ import {
   type ScanScope,
   type SecretScanResult,
 } from "../adopt/secret-scan.js";
+import { describeSkippedDir, HARNESS_CHECK_PATH, skippedAuditDirs } from "../adopt/ci.js";
 import { extractBlock, mergeBlock, MarkerError } from "../adopt/markers.js";
+import {
+  describeMissing,
+  nodeAppDirs,
+  usableProfiles,
+  type MissingProfile,
+} from "../adopt/profiles.js";
 import { planAdopt, type AdoptDecision } from "../adopt/plan.js";
 import {
   buildConfigText,
@@ -367,13 +374,17 @@ const CLASS_LABEL: Record<DetectClass, string> = {
   quality: "品質チェック",
   ci: "CI",
 };
-const WILL_APPLY = "当てる予定（#18 の続きで入れる）";
+const APPLIED = "当てたプロファイル";
 
 const dirLabel = (dir: string): string => (dir === "." ? "ルート" : `\`${dir}\``);
 const dirsLabel = (dirs: string[]): string => dirs.map(dirLabel).join("、");
 
-/** 技術の判定・プロファイル・プロファイルなしの節（F-29 の「既存の技術の扱い」）。技術プロファイルの Skill は、まだ入れない */
-function detectionLines(stack: DetectedStack, match: ProfileMatch): string[] {
+/** 技術の判定・プロファイル・プロファイルなしの節（F-29 の「既存の技術の扱い」）。当てたプロファイルは、Skill だけを入れる */
+function detectionLines(
+  stack: DetectedStack,
+  match: ProfileMatch,
+  missing: MissingProfile[],
+): string[] {
   const lines: string[] = [];
   const found = stack.apps.flatMap((a) => a.items.map((i) => ({ dir: a.dir, item: i })));
   if (found.length > 0) {
@@ -399,12 +410,20 @@ function detectionLines(stack: DetectedStack, match: ProfileMatch): string[] {
   if (match.applied.length > 0) {
     lines.push("### 技術プロファイル", "");
     lines.push(
-      "必要な手がかりがすべて合った技術プロファイルです。今は技術によらない共通のルールだけを入れます。プロファイルの Skill は、まだ入れません。",
+      "必要な手がかりがすべて合った技術プロファイルです。そのプロファイルの Skill を入れます（コード・設定のファイルは入れません。ESLint・Prettier・tsconfig などの品質チェックの道具の設定は、作らず、上書きもしません）。",
       "",
     );
+    const skipped = new Set(missing.map((m) => m.profile));
     for (const a of match.applied) {
-      lines.push(`- ${a.profile}：${WILL_APPLY}（対象：${dirsLabel(a.apps)}）`);
+      if (skipped.has(a.profile)) continue;
+      lines.push(`- ${a.profile}：${APPLIED}（対象：${dirsLabel(a.apps)}）`);
     }
+    lines.push("");
+  }
+  if (missing.length > 0) {
+    lines.push("### 見つからないプロファイル", "");
+    lines.push("今のハーネスで使えないため、飛ばしました。", "");
+    for (const m of missing) lines.push(`- ${describeMissing(m)}`);
     lines.push("");
   }
   if (match.none.length > 0) {
@@ -446,6 +465,8 @@ function renderReport(input: {
   scan: ScanOutcome;
   stack: DetectedStack;
   match: ProfileMatch;
+  missing: MissingProfile[];
+  skippedDirs: string[];
 }): string {
   const o = input.outcome;
   const lines: string[] = [];
@@ -491,7 +512,12 @@ function renderReport(input: {
     "すでに同じ内容のファイルです（書き換えません）。",
     o.same.map((p) => `\`${p}\``),
   );
-  lines.push(...detectionLines(input.stack, input.match));
+  lines.push(...detectionLines(input.stack, input.match, input.missing));
+  if (input.skippedDirs.length > 0) {
+    lines.push("### harness-check.yml で確かめられないもの", "");
+    for (const d of input.skippedDirs) lines.push(`- ${d}`);
+    lines.push("");
+  }
   if (input.dryRun && input.diffs.length > 0) {
     lines.push("### 差分", "");
     for (const d of input.diffs) lines.push(`#### ${d.path}`, "", "```diff", d.text, "```", "");
@@ -561,10 +587,22 @@ async function adopt(
     return fail(`回答を確かめられません：${messageOf(e)}`);
   }
 
-  // 導入するファイル
+  // 導入するファイル（当てたプロファイルの Skill を含む。今のハーネスで使えないものは飛ばして、報告する）
   let files: AdoptFile[];
+  let missing: MissingProfile[];
+  let skippedDirs: string[] = [];
   try {
-    files = buildAdoptFiles({ answers });
+    const resolved = usableProfiles(match.applied);
+    missing = resolved.missing;
+    files = buildAdoptFiles({
+      answers,
+      profiles: resolved.usable,
+      nodeDirs: nodeAppDirs(stack),
+    });
+    // harness-check.yml を出すときだけ、npm audit の対象にできないフォルダを知らせる
+    if (files.some((f) => f.path === HARNESS_CHECK_PATH)) {
+      skippedDirs = skippedAuditDirs(nodeAppDirs(stack)).map(describeSkippedDir);
+    }
   } catch (e) {
     if (e instanceof GenerateError) return fail(e.message);
     throw e;
@@ -637,7 +675,17 @@ async function adopt(
   // --dry-run：一覧と差分だけ
   if (dryRun) {
     deps.stdout(
-      renderReport({ dryRun: true, outcome, diffs, appName: answers.app_name, scan, stack, match }),
+      renderReport({
+        dryRun: true,
+        outcome,
+        diffs,
+        appName: answers.app_name,
+        scan,
+        stack,
+        match,
+        missing,
+        skippedDirs,
+      }),
     );
     return { exitCode: 0 };
   }
@@ -780,6 +828,8 @@ async function adopt(
       scan,
       stack,
       match,
+      missing,
+      skippedDirs,
     }),
   );
   prompter.note(
