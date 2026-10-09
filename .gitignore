@@ -3,3 +3,7 @@ dist/
 *.tgz
 coverage/
 .env
+
+# 作業中にできる一時ファイル
+*.log
+%SystemDrive%/
