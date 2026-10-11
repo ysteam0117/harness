@@ -78,6 +78,23 @@ export const NO_DOCKER_REASON =
 const CLEANUP_FAILED =
   "検証用の PostgreSQL（Docker）を止められませんでした。生成した場所で npm run docker:down:test を実行してください";
 
+/**
+ * 確かめの途中で起きた例外に、検証用 DB の停止の成否を付けて投げ直すためのもの。
+ * 元の例外は cause に残し、message は元の例外のものと同じにする。
+ */
+export class VerifyCleanupError extends Error {
+  readonly original: unknown;
+  /** 検証用 DB の停止に失敗したときの案内。空なら、停止は成功した（または起動していない） */
+  readonly cleanupFailures: string[];
+
+  constructor(original: unknown, cleanupFailures: string[]) {
+    super(original instanceof Error ? original.message : String(original), { cause: original });
+    this.name = "VerifyCleanupError";
+    this.original = original;
+    this.cleanupFailures = cleanupFailures;
+  }
+}
+
 function readScriptNames(projectDir: string): Set<string> {
   try {
     const pkg = JSON.parse(readFileSync(path.join(projectDir, "package.json"), "utf8")) as {
@@ -230,25 +247,34 @@ export async function verifyProject(input: VerifyInput): Promise<VerifyResult> {
     };
   };
 
-  let result: VerifyResult;
+  let result: VerifyResult | undefined;
+  let thrown: { error: unknown } | undefined;
   try {
     result = await verifyChecks();
-  } finally {
-    if (cleanupRegistered) {
+  } catch (error) {
+    thrown = { error };
+  }
+  // 検証用 DB の停止は、確かめの途中で例外が起きても、必ず実行する
+  if (cleanupRegistered) {
+    try {
       progress("検証用の PostgreSQL（Docker）を止めています…");
-      try {
-        // 中断の合図は渡さない（2回目の Ctrl+C でも、止めない）
-        const down = await runner("npm", ["run", "docker:down:test"], {
-          cwd: projectDir,
-          timeoutMs: timeouts.cleanup,
-          redact,
-        });
-        if (!succeeded(down)) cleanupFailures.push(CLEANUP_FAILED);
-      } catch {
-        cleanupFailures.push(CLEANUP_FAILED);
-      }
+    } catch {
+      /* 表示の失敗で、停止を飛ばさない */
+    }
+    try {
+      // 中断の合図は渡さない（2回目の Ctrl+C でも、止めない）
+      const down = await runner("npm", ["run", "docker:down:test"], {
+        cwd: projectDir,
+        timeoutMs: timeouts.cleanup,
+        redact,
+      });
+      if (!succeeded(down)) cleanupFailures.push(CLEANUP_FAILED);
+    } catch {
+      cleanupFailures.push(CLEANUP_FAILED);
     }
   }
+  if (thrown) throw new VerifyCleanupError(thrown.error, cleanupFailures);
+  if (result === undefined) throw new Error("動作確認の結果がありません");
   // 後始末の途中で受けた中断も、成功・失敗より優先する。
   if (signal.aborted) return { status: "interrupted", cleanupFailures };
   return result;

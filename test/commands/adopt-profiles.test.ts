@@ -416,6 +416,9 @@ describe("#6 PR-A adopt：範囲の見直しは、知らせるだけで、記録
     expect(notes.find((n) => n.startsWith("範囲の見直し\n"))).toContain("vitest 5 系にも対応");
     expect(notes.some((n) => n.startsWith("ハーネスの改善の提案（下書き）\n"))).toBe(true);
     expect(readConfig(dir).versions).toEqual([]);
+    // #6 PR-B：試し（try_wider_ranges）は create だけ。adopt は聞かず、試さない
+    expect((s.deps.prompter as FakePrompter).askedIds).not.toContain("try_wider_ranges");
+    expect(notes.some((n) => n.startsWith("範囲の外の版の試し"))).toBe(false);
 
     const dry = setup(app("adopt-hono-react"), { fetch: registry().fn });
     const out2 = await runAdopt({ answers: answersFile(), dryRun: true }, dry.deps);

@@ -21,7 +21,9 @@
 | `src/versions/targets.ts` | `buildTargets`・`targetsFor`：調べる対象（`Target`）の一覧を作る。範囲の交わり・検証済みの食い違いの検査もここ |
 | `src/versions/registry.ts` | `fetchVersionLists`：npm と Node.js の登録情報の取得（時間切れ・同時数の上限・失敗の理由） |
 | `src/versions/range-review.ts` | 範囲の見直し（Issue #6 PR-A）：`rangeTargets`（範囲と原因を持つ対象）・`reviewRanges`（原因の最新の安定版の `peerDependencies` を読み、範囲の外に候補があるか調べる）・`formatRangeReview`（画面の文面） |
-| `src/versions/range-feedback.ts` | `renderRangeFeedbackDraft`：ハーネスの改善の提案（C-78）の下書き。画面に表示するだけで、ファイルへの出力・起票はしない |
+| `src/versions/range-feedback.ts` | `renderRangeFeedbackDraft`：ハーネスの改善の提案（C-78）の下書き（試した結果があれば結果つき）・`presentTrialFeedback`。画面に表示するだけで、ファイルへの出力・起票はしない |
+| `src/versions/range-trial.ts` | 範囲の外の版の試し（Issue #6 PR-B）：`trialVersions`・`trialAppName`・`runRangeTrials`。生成した本体の場所を受け取らない |
+| `src/versions/range-trial-messages.ts` | 試しの質問・結果の表（`formatTrialResults`）・後始末の案内・飛ばした理由の固定の文面 |
 | `src/versions/select.ts` | `pickLatestStable`（範囲内の最新の安定版）・`compareWithVerified`（検証済みとの比較） |
 | `src/versions/choose.ts` | `chooseVersions`：調査の結果の表示・利用者の選択・つながらない場合の確かめ・選定の結果（`VersionResult`）を作る |
 | `src/versions/tech-stack.ts` | `renderTechStack`：docs/tech-stack.md の中身（Markdown）を作る |
@@ -188,7 +190,23 @@ flowchart TD
 4. 候補があれば、表と「<名前> <メジャー> 系にも対応」の文言、C-78 の下書き（`harness-feedback.md` の見出し。未試行と明記）を表示する
 5. 取得できないものは「飛ばしました」と理由を表示する。終了コードは変えない
 
-候補の版で実際に試す処理（一時フォルダ・`--try-wider-ranges`）と `status` の表示は別の PR（PR-B・PR-C）。
+`status` の表示は別の PR（PR-C）。候補の版を試す処理は次の節。
+
+## 範囲の外の版の試し（Issue #6 PR-B）
+
+`create` だけ。生成と動作確認の後、`maybeTryRanges`（`src/commands/create.ts`）が決める。本体の終了コードが 130 のとき、範囲の見直しがないとき、候補がないときは何もしない（`--try-wider-ranges` で候補がなければ「試す候補はありません」を表示）。`--try-wider-ranges` があれば試す。`--yes` だけ・端末でないときは試さない。それ以外は `try_wider_ranges` を聞く（既定は「いいえ」。取り消しは「試しは行いませんでした」を stderr に出す）。SIGINT・SIGTERM は `withAbortOnSignals` で動作確認と共用する。
+
+`runRangeTrials` は、最初に Docker を1回だけ確かめ（使えなければ一時フォルダを作らず全件を飛ばす）、候補を順に試す。候補ごとの手順は次のとおり。
+
+1. `trialVersions`：対象と原因の2つだけを候補の版・原因の最新の安定版に置き換える（`newerThanVerified: true`。原因の entry がなければ飛ばす）。`buildProject` は範囲を検証しないので、これで足りる
+2. `os.tmpdir()` の下に `mkdtemp` で一時フォルダを作り、試し用のアプリ名 `<app>-rt-<実行ごとの識別子>-<候補の番号>` で組み立てて書く（Docker 上のプロジェクト名・コンテナ名・ボリュームが、本体・前回の残骸・並行実行と衝突しないため。名前は50字までに切り詰める）
+3. `verifyProject`（動作確認と同じ部品）を実行する。`verifyProject` は、途中で例外が起きても検証用 DB の停止を必ず行い、停止の成否を `VerifyCleanupError` に付けて投げ直す
+4. PostgreSQL のときは、続けて `npm run docker:down:test -- -v` でボリュームを消す（自分の名前の資源だけ）
+5. 一時フォルダを削除する。消せなければ `cleanupFailures`（`tmp-remove`）に入れ、手で削除する案内を出す
+
+検証用 DB の停止（または `-v`）に失敗したとき、停止の成否が不明な例外のときは、一時フォルダを残し、`writeProject` が返す dir（package.json がある場所）で実行するコマンドを案内し、残りの候補は試さない（`db-stop-failed-earlier`）。中断したときは残りを試さず、後始末（DB 停止・フォルダ削除）は行う。
+
+結果（`TrialResult`）は、飛ばした理由を固定の分類で持つ。例外の本文（絶対パス・アプリ名・一時フォルダを含みうる）は、結果の表にも下書きにも入れず、stderr の詳細にだけ出す。パスは後始末の案内（画面と stderr）だけに出し、下書きには入れない。下書きは、通った結果（範囲を広げる案）も失敗した結果（範囲は今のまま）も載せる。
 
 ## テストと受け入れ条件の対応
 
@@ -201,6 +219,8 @@ flowchart TD
 | AC-5：選んだ版と選定理由の内容が作られる | `tech-stack.test.ts`（中身・未確認・`latestStatus`）・`create-versions.test.ts`（最終の選択が中身に反映される） |
 | Issue #6 AC-1：範囲の原因 | `test/generate/profile.test.ts`（`range_causes` の検証・実際のプロファイル） |
 | Issue #6 AC-2・AC-4（一部）：範囲の見直しと下書き | `test/versions/range-review.test.ts`・`registry.test.ts`（`fetchPackageInfo`）・`create-versions.test.ts`・`test/commands/adopt-profiles.test.ts` |
+| Issue #6 AC-3：範囲の外の版を試す | `test/versions/range-trial.test.ts`・`range-trial-errors.test.ts`・`test/commands/create-range-trial.test.ts`・`test/verify/verify.test.ts`（例外時の DB 停止） |
+| Issue #6 AC-4：試した結果つきの下書き | `test/versions/range-feedback-trial.test.ts`・`create-range-trial.test.ts` |
 | 回答ファイルの `versions` ほか | `test/questions/answers.test.ts`・`create-versions.test.ts` |
 | 回答の変更の後の再計算 | `create-versions.test.ts` |
 | 調べた日がローカルの日付 | `choose.test.ts`・`create-versions.test.ts` |
@@ -210,5 +230,5 @@ flowchart TD
 ## 関係する Issue と要件
 
 - 要件：[F-19](../requirements/functional.md#f-19)（バージョンの調査と選定理由の記録）・[F-24](../requirements/functional.md#f-24)（技術プロファイル）・[F-08](../requirements/functional.md#f-08)（ルール7）・[C-62](../requirements/common/quality-test.md#c-62)（バージョンの固定）
-- Issue：#6（範囲の見直し。PR-A）、#32（質問と整合性チェック。ルール7の事実を受ける形を用意）、#33（この設計）、#34（tech-stack.md の保存・package.json の依存の書き出し。`selectProfiles` を共用）、#35（update）
+- Issue：#6（範囲の見直し。PR-A・PR-B）、#32（質問と整合性チェック。ルール7の事実を受ける形を用意）、#33（この設計）、#34（tech-stack.md の保存・package.json の依存の書き出し。`selectProfiles` を共用）、#35（update）
 - 関連する設計書：[questions.md](questions.md)・[generator.md](generator.md)・[overview.md](overview.md)

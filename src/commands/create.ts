@@ -26,8 +26,22 @@ import { questionDefinitions } from "../questions/definitions.js";
 import { findMissing, runQuestionsResolvingConflicts } from "../questions/flow.js";
 import { CancelledError, createClackPrompter, type Prompter } from "../questions/prompter.js";
 import { chooseVersions, type VersionResult } from "../versions/choose.js";
-import { presentRangeReview } from "../versions/range-feedback.js";
-import { rangeTargetsFor, reviewRanges, type RangeReview } from "../versions/range-review.js";
+import { presentRangeReview, presentTrialFeedback } from "../versions/range-feedback.js";
+import {
+  candidatesOf,
+  rangeTargetsFor,
+  reviewRanges,
+  type RangeReview,
+} from "../versions/range-review.js";
+import {
+  NO_CANDIDATE_TO_TRY,
+  TRIAL_CANCELLED,
+  TRIAL_INTERRUPTED,
+  TRY_RANGES_CONFIRM_ID,
+  TRY_RANGES_QUESTION,
+  formatCleanupFailure,
+} from "../versions/range-trial-messages.js";
+import { runRangeTrials, type TrialResult } from "../versions/range-trial.js";
 import { selectProfiles } from "../versions/profile-selection.js";
 import { targetsFor, type Target } from "../versions/targets.js";
 import { alignTable, shortReason } from "../versions/table.js";
@@ -70,6 +84,8 @@ export interface CreateDeps {
   runCommand?: CommandRunner;
   /** Docker が使えるかの確かめの差し替え（テスト用）。既定は docker info */
   dockerAvailable?: () => Promise<boolean>;
+  /** 範囲の外の版の試しの一時フォルダを作る場所の差し替え（テスト用）。既定は os.tmpdir() */
+  trialTmpRoot?: string;
 }
 
 export interface CreateOptions {
@@ -79,6 +95,8 @@ export interface CreateOptions {
   yes?: boolean;
   /** --verify：生成の直後に、npm install と npm run check で動作を確かめる（聞かずに実行する） */
   verify?: boolean;
+  /** --try-wider-ranges：範囲の外の版を、別の一時フォルダで試す（聞かずに実行する） */
+  tryWiderRanges?: boolean;
 }
 
 export interface CreateOutcome {
@@ -96,6 +114,8 @@ export interface CreateOutcome {
   projectDir?: string;
   /** 生成の直後の動作確認の結果。確かめたときだけ入る */
   verification?: VerifyResult;
+  /** 範囲の外の版を試した結果。試したときだけ入る */
+  rangeTrials?: TrialResult[];
 }
 
 const RULE7 = "version-newer-than-verified";
@@ -503,6 +523,10 @@ export function createCommand(deps: Partial<CreateDeps> = {}): Command {
       "--verify",
       "生成の直後に、npm install と npm run check で動作を確かめて、記録する（聞かずに実行する）",
     )
+    .option(
+      "--try-wider-ranges",
+      "範囲の外の版を、別の一時フォルダで試す（生成したプロジェクトは変えない。聞かずに実行する）",
+    )
     .action(async (options: CreateOptions) => {
       const outcome = await runCreate(options, {
         prompter: deps.prompter ?? createClackPrompter(),
@@ -515,13 +539,57 @@ export function createCommand(deps: Partial<CreateDeps> = {}): Command {
         ...(deps.generateFs ? { generateFs: deps.generateFs } : {}),
         ...(deps.runCommand ? { runCommand: deps.runCommand } : {}),
         ...(deps.dockerAvailable ? { dockerAvailable: deps.dockerAvailable } : {}),
+        ...(deps.trialTmpRoot ? { trialTmpRoot: deps.trialTmpRoot } : {}),
       });
       process.exitCode = outcome.exitCode;
     });
 }
 
-/** 生成の後：動作を確かめるかを決め、確かめて、結果の表示・記録・終了コードを決める */
+/** 生成の後：動作の確かめ → 範囲の外の版の試し。終了コードは動作の確かめの結果のまま */
 async function afterGenerate(
+  dir: string,
+  done: Confirmed,
+  options: CreateOptions,
+  deps: CreateDeps,
+  now: () => Date,
+): Promise<CreateOutcome> {
+  const outcome = await verifyAfterGenerate(dir, done, options, deps, now);
+  return maybeTryRanges(outcome, options, deps, now);
+}
+
+/**
+ * 実行の間だけ、SIGINT・SIGTERM を受ける。受けたら実行中の処理を止める合図を出す（後始末は止めない）。
+ * 2回目以降は、待つよう知らせるだけ。
+ */
+async function withAbortOnSignals<T>(
+  deps: CreateDeps,
+  run: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  let received = false;
+  const onSignal = (): void => {
+    if (received) {
+      deps.stderr(`${INTERRUPT_AGAIN_NOTICE}
+`);
+      return;
+    }
+    received = true;
+    deps.stderr(`${INTERRUPT_NOTICE}
+`);
+    controller.abort();
+  };
+  process.on("SIGINT", onSignal);
+  process.on("SIGTERM", onSignal);
+  try {
+    return await run(controller.signal);
+  } finally {
+    process.off("SIGINT", onSignal);
+    process.off("SIGTERM", onSignal);
+  }
+}
+
+/** 生成の後：動作を確かめるかを決め、確かめて、結果の表示・記録・終了コードを決める */
+async function verifyAfterGenerate(
   dir: string,
   done: Confirmed,
   options: CreateOptions,
@@ -551,41 +619,25 @@ async function afterGenerate(
   }
 
   // 確かめの間だけ、SIGINT・SIGTERM を受ける。実行中の処理を止め、後始末は止めずに終わらせる
-  const controller = new AbortController();
-  let received = false;
-  const onSignal = (): void => {
-    if (received) {
-      deps.stderr(`${INTERRUPT_AGAIN_NOTICE}
-`);
-      return;
-    }
-    received = true;
-    deps.stderr(`${INTERRUPT_NOTICE}
-`);
-    controller.abort();
-  };
-  process.on("SIGINT", onSignal);
-  process.on("SIGTERM", onSignal);
   let result: VerifyResult;
   try {
-    result = await verifyProject({
-      projectDir: dir,
-      database: done.answers.database,
-      versions: done.versions,
-      runner: deps.runCommand ?? defaultRunner,
-      dockerAvailable: deps.dockerAvailable ?? defaultDockerAvailable,
-      signal: controller.signal,
-      onProgress: (message) => deps.prompter.note(message),
-    });
+    result = await withAbortOnSignals(deps, (signal) =>
+      verifyProject({
+        projectDir: dir,
+        database: done.answers.database,
+        versions: done.versions,
+        runner: deps.runCommand ?? defaultRunner,
+        dockerAvailable: deps.dockerAvailable ?? defaultDockerAvailable,
+        signal,
+        onProgress: (message) => deps.prompter.note(message),
+      }),
+    );
   } catch (e) {
     deps.stderr(
       `エラー: 動作確認を続けられませんでした：${e instanceof Error ? e.message : String(e)}
 `,
     );
     return { ...base, exitCode: 1 };
-  } finally {
-    process.off("SIGINT", onSignal);
-    process.off("SIGTERM", onSignal);
   }
 
   const withResult = { ...base, verification: result };
@@ -625,5 +677,78 @@ async function afterGenerate(
         deps.stderr(`${f}
 `);
       return { ...withResult, exitCode: 130 };
+  }
+}
+
+/**
+ * 範囲の外の版を試す（利用者が選んだときだけ。create だけ）。生成したプロジェクトには触れず、別の一時フォルダで試す。
+ * 試しの失敗・中断・後始末の失敗では、終了コードを変えない（outcome のまま）。
+ */
+async function maybeTryRanges(
+  outcome: CreateOutcome,
+  options: CreateOptions,
+  deps: CreateDeps,
+  now: () => Date,
+): Promise<CreateOutcome> {
+  const { answers, versions, rangeReview: review } = outcome;
+  if (outcome.exitCode === 130 || answers === undefined || versions === undefined) return outcome;
+  const candidates = review ? candidatesOf(review) : [];
+  if (candidates.length === 0) {
+    if (options.tryWiderRanges) deps.prompter.note(NO_CANDIDATE_TO_TRY, "範囲の外の版の試し");
+    return outcome;
+  }
+  if (review === undefined) return outcome;
+
+  let go = options.tryWiderRanges === true;
+  if (!go && !options.yes && deps.interactive) {
+    try {
+      go = await deps.prompter.confirm({
+        id: TRY_RANGES_CONFIRM_ID,
+        message: TRY_RANGES_QUESTION,
+        initialValue: false,
+      });
+    } catch (e) {
+      if (!(e instanceof CancelledError)) throw e;
+      deps.stderr(`${TRIAL_CANCELLED}
+`);
+      return outcome;
+    }
+  }
+  if (!go) return outcome;
+
+  try {
+    const results = await withAbortOnSignals(deps, (signal) =>
+      runRangeTrials({
+        candidates,
+        answers,
+        acceptedWarnings: outcome.acceptedWarnings ?? [],
+        versions,
+        now: now(),
+        runner: deps.runCommand ?? defaultRunner,
+        dockerAvailable: deps.dockerAvailable ?? defaultDockerAvailable,
+        signal,
+        onProgress: (message) => deps.prompter.note(message),
+        onDetail: (message) =>
+          deps.stderr(`試しの詳細：${message}
+`),
+        ...(deps.trialTmpRoot ? { tmpRoot: deps.trialTmpRoot } : {}),
+      }),
+    );
+    presentTrialFeedback(review, results, (text, title) => deps.prompter.note(text, title));
+    if (results.some((r) => r.outcome.kind === "interrupted")) {
+      deps.stderr(`${TRIAL_INTERRUPTED}
+`);
+    }
+    for (const f of results.flatMap((r) => r.cleanupFailures)) {
+      deps.stderr(`${formatCleanupFailure(f)}
+`);
+    }
+    return { ...outcome, rangeTrials: results };
+  } catch (e) {
+    deps.stderr(
+      `エラー: 範囲の外の版の試しを続けられませんでした（生成は終わっています）：${e instanceof Error ? e.message : String(e)}
+`,
+    );
+    return outcome;
   }
 }
