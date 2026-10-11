@@ -8,7 +8,7 @@ export const VERIFY_QUESTION =
 
 export const VERIFY_CONFIRM_ID = "verify_after_generate";
 
-const STEP_LABEL: Record<VerifyStep, string> = {
+export const STEP_LABEL: Record<VerifyStep, string> = {
   env: "環境ファイル（.env.development・.env.test）の用意",
   install: "npm install",
   "db-up": "検証用の PostgreSQL（Docker）の起動",
@@ -68,7 +68,7 @@ export function passedMessage(
   return [...lines, ...cleanupLines(result.cleanupFailures)].join("\n");
 }
 
-function suspectTable(suspects: Suspect[]): string[] {
+export function suspectTable(suspects: Suspect[]): string[] {
   return alignTable(
     ["パッケージ", "採用", "検証済み", "差"],
     suspects.map((s) => [

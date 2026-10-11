@@ -8,7 +8,12 @@ import {
   type RunOptions,
   type RunResult,
 } from "../../src/verify/runner.js";
-import { pickSuspects, verifyProject, type VerifyInput } from "../../src/verify/verify.js";
+import {
+  VerifyCleanupError,
+  pickSuspects,
+  verifyProject,
+  type VerifyInput,
+} from "../../src/verify/verify.js";
 import {
   LONG_TEST_MS,
   PG_ENV_EXAMPLE,
@@ -229,6 +234,37 @@ describe("#57 R1：PostgreSQL（install → up → check → down）", () => {
     const f = fakeRunner((key) => (key === "run check" ? { throws: true } : {}));
     await expect(verifyProject(pgInput(pg(), f.runner))).rejects.toThrow("runner の例外");
     expect(f.keys()).toEqual(["install", UP, "run check", DOWN]);
+  });
+
+  it("#6 PR-B：例外のとき、down が成功したなら、元の例外に「停止の失敗なし」の付加情報を付けて投げ直す（message は元のまま）", async () => {
+    const f = fakeRunner((key) => (key === "run check" ? { throws: true } : {}));
+    const error: unknown = await verifyProject(pgInput(pg(), f.runner)).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(VerifyCleanupError);
+    expect((error as VerifyCleanupError).cleanupFailures).toEqual([]);
+    expect((error as VerifyCleanupError).message).toContain("runner の例外");
+    expect(f.keys().filter((k) => k === DOWN)).toHaveLength(1);
+  });
+
+  it("#6 PR-B：例外のとき down も失敗したら、付加情報に停止の失敗が入る", async () => {
+    const f = fakeRunner((key) =>
+      key === "run check" ? { throws: true } : key === DOWN ? { exitCode: 1 } : {},
+    );
+    const error: unknown = await verifyProject(pgInput(pg(), f.runner)).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(VerifyCleanupError);
+    expect((error as VerifyCleanupError).cleanupFailures).toHaveLength(1);
+  });
+
+  it("#6 PR-B：停止の前の onProgress が例外を投げても、down は1回呼ばれる", async () => {
+    const f = fakeRunner();
+    const result = await verifyProject(
+      pgInput(pg(), f.runner, {
+        onProgress: (message) => {
+          if (message.includes("止めています")) throw new Error("表示の例外（テスト）");
+        },
+      }),
+    );
+    expect(result.status).toBe("passed");
+    expect(f.keys().filter((k) => k === DOWN)).toHaveLength(1);
   });
 
   it("down は、中断の合図を渡さず、自分の時間切れだけで実行する（R4）。失敗したら cleanupFailures に入る", async () => {
