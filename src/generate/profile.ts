@@ -67,6 +67,8 @@ export type Profile = {
   verifiedVersions: Record<string, string>;
   /** 組み合わせの条件（パッケージ名 → semver の範囲） */
   versionRanges: Record<string, string>;
+  /** 範囲の原因（パッケージ名 → 原因のパッケージと種類）。version_ranges の名前と同じ組 */
+  rangeCauses: Record<string, RangeCause>;
   /** npm で入れない道具（バージョンの調査の対象にしない） */
   externalTools: string[];
   /** 検証済みの版のないパッケージ */
@@ -76,6 +78,12 @@ export type Profile = {
   /** 道具の Docker のイメージ（道具の名前 → イメージ。書いてなければ {}） */
   containerImages: Record<string, ContainerImage>;
 };
+
+/** 範囲の原因。peer は、原因のパッケージの peerDependencies が範囲を決める。self は、そのパッケージ自身の下限（確認する相手がない） */
+export interface RangeCause {
+  package: string;
+  kind: "peer" | "self";
+}
 
 const SEGMENT = "[A-Za-z0-9][A-Za-z0-9_-]*";
 const KEY_RE = new RegExp(`^(${SEGMENT})/(${SEGMENT})$`);
@@ -99,6 +107,7 @@ const KNOWN_FIELDS = new Set([
   "verified_versions",
   "compatibility_notes",
   "version_ranges",
+  "range_causes",
   "external_tools",
   "packages_when",
   "dev_packages",
@@ -167,6 +176,46 @@ function stringRecord(
       );
     }
     out[name] = v;
+  }
+  return out;
+}
+
+/** range_causes（パッケージ名 → package・kind）を読んで検証する。package が packages などにあるかは checkVersions で確かめる */
+function rangeCausesField(
+  data: Record<string, unknown>,
+  where: string,
+): Record<string, RangeCause> {
+  const value = data["range_causes"];
+  if (value === undefined) return {};
+  const shape = "名前: { package: 原因のパッケージ, kind: peer か self }";
+  if (!isPlainObject(value)) {
+    throw new GenerateError(`${where}：項目 range_causes は「${shape}」の形で書いてください`);
+  }
+  const out: Record<string, RangeCause> = {};
+  for (const [name, v] of Object.entries(value)) {
+    if (!isPlainObject(v)) {
+      throw new GenerateError(
+        `${where}：range_causes の ${name} は「${shape}」の形で書いてください`,
+      );
+    }
+    for (const key of Object.keys(v)) {
+      if (key !== "package" && key !== "kind") {
+        throw new GenerateError(
+          `${where}：range_causes の ${name} に、未知の項目 ${key} があります`,
+        );
+      }
+    }
+    if (typeof v["package"] !== "string" || v["package"] === "") {
+      throw new GenerateError(
+        `${where}：range_causes の ${name} の package は、空でない文字列で書いてください`,
+      );
+    }
+    if (v["kind"] !== "peer" && v["kind"] !== "self") {
+      throw new GenerateError(
+        `${where}：range_causes の ${name} の kind は、peer か self で書いてください（${JSON.stringify(v["kind"])}）`,
+      );
+    }
+    out[name] = { package: v["package"], kind: v["kind"] };
   }
   return out;
 }
@@ -287,6 +336,7 @@ function checkVersions(p: {
   packagesWhen: PackagesWhen[];
   verifiedVersions: Record<string, string>;
   versionRanges: Record<string, string>;
+  rangeCauses: Record<string, RangeCause>;
   externalTools: string[];
   unverified: string[];
 }): void {
@@ -342,6 +392,25 @@ function checkVersions(p: {
     if (verified !== undefined && !satisfies(verified, range)) {
       throw new GenerateError(
         `${p.where}：${name} の検証済みの版 ${verified} が、範囲 ${range} に合いません（プロファイルの誤り）`,
+      );
+    }
+    if (!(name in p.rangeCauses)) {
+      throw new GenerateError(
+        `${p.where}：version_ranges の ${name} に、range_causes（範囲の原因）がありません`,
+      );
+    }
+  }
+  for (const [name, cause] of Object.entries(p.rangeCauses)) {
+    if (!(name in p.versionRanges)) {
+      throw new GenerateError(
+        `${p.where}：range_causes の ${name} が、version_ranges にありません`,
+      );
+    }
+    if (cause.kind === "self" ? cause.package !== name : !known.has(cause.package)) {
+      throw new GenerateError(
+        cause.kind === "self"
+          ? `${p.where}：range_causes の ${name} は kind が self なので、package は ${name} 自身で書いてください（${cause.package}）`
+          : `${p.where}：range_causes の ${name} の原因 ${cause.package} が、packages にも packages_when にもありません`,
       );
     }
   }
@@ -491,12 +560,14 @@ export function loadProfile(templatesDir: string, key: string): Profile {
   const containerImages = containerImagesField(data, where);
   const verifiedVersions = stringRecord(data, "verified_versions", where, "名前: 版");
   const versionRanges = stringRecord(data, "version_ranges", where, "名前: 範囲");
+  const rangeCauses = rangeCausesField(data, where);
   checkVersions({
     where,
     packages,
     packagesWhen,
     verifiedVersions,
     versionRanges,
+    rangeCauses,
     externalTools,
     unverified,
   });
@@ -584,6 +655,7 @@ export function loadProfile(templatesDir: string, key: string): Profile {
     devPackages,
     verifiedVersions,
     versionRanges,
+    rangeCauses,
     externalTools,
     unverified,
     compatibilityNotes,

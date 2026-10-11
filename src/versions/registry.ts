@@ -62,21 +62,50 @@ function npmUrl(name: string): string {
   return `${NPM_BASE}${name.replace("/", "%2F")}`;
 }
 
+/** npm の登録情報：版の一覧と、版ごとの peerDependencies（書いてない版は空） */
+export type PackageInfoResult =
+  | { ok: true; versions: string[]; peers: Record<string, Record<string, string>> }
+  | { ok: false; reason: string };
+
+/** パッケージの版の一覧と、版ごとの peerDependencies を取得する。失敗は例外にせず ok: false と理由にする */
+export async function fetchPackageInfo(
+  name: string,
+  fetchFn: typeof fetch,
+  opts: Pick<RegistryOptions, "timeoutMs"> = {},
+): Promise<PackageInfoResult> {
+  try {
+    const body = await getJson(
+      npmUrl(name),
+      { Accept: NPM_ACCEPT },
+      fetchFn,
+      opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    );
+    const versions = (body as { versions?: unknown } | null)?.versions;
+    if (typeof versions !== "object" || versions === null || Array.isArray(versions)) {
+      return { ok: false, reason: "登録情報の形が想定と違います（versions がありません）" };
+    }
+    const peers: Record<string, Record<string, string>> = {};
+    for (const [version, meta] of Object.entries(versions)) {
+      const peer = (meta as { peerDependencies?: unknown } | null)?.peerDependencies;
+      if (typeof peer !== "object" || peer === null || Array.isArray(peer)) continue;
+      const entries = Object.entries(peer).filter(
+        (e): e is [string, string] => typeof e[1] === "string",
+      );
+      if (entries.length > 0) peers[version] = Object.fromEntries(entries);
+    }
+    return { ok: true, versions: Object.keys(versions), peers };
+  } catch (e) {
+    return { ok: false, reason: (e as Error).message };
+  }
+}
+
 async function fetchNpm(
   name: string,
   fetchFn: typeof fetch,
   timeoutMs: number,
 ): Promise<FetchResult> {
-  try {
-    const body = await getJson(npmUrl(name), { Accept: NPM_ACCEPT }, fetchFn, timeoutMs);
-    const versions = (body as { versions?: unknown } | null)?.versions;
-    if (typeof versions !== "object" || versions === null || Array.isArray(versions)) {
-      return { ok: false, reason: "登録情報の形が想定と違います（versions がありません）" };
-    }
-    return { ok: true, versions: Object.keys(versions) };
-  } catch (e) {
-    return { ok: false, reason: (e as Error).message };
-  }
+  const info = await fetchPackageInfo(name, fetchFn, { timeoutMs });
+  return info.ok ? { ok: true, versions: info.versions } : info;
 }
 
 async function fetchNode(fetchFn: typeof fetch, timeoutMs: number): Promise<FetchResult> {

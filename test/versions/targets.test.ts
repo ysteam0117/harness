@@ -23,8 +23,17 @@ afterAll(cleanupTemplates);
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
+/** version_ranges の名前には、自身の下限（kind: self）の range_causes を補う（#6。範囲の原因は必須） */
+function withCauses(body: string): string {
+  const ranges = (parse(body) as { version_ranges?: Record<string, string> }).version_ranges ?? {};
+  const causes = Object.keys(ranges)
+    .map((n) => `  ${n}: { package: ${n}, kind: self }\n`)
+    .join("");
+  return causes === "" ? body : `${body}range_causes:\n${causes}`;
+}
+
 function profileYaml(id: string, body: string): string {
-  return `id: ${id}\ncategory: lib\nname: ${id}\nskill_name: lib-${id}\n${body}`;
+  return `id: ${id}\ncategory: lib\nname: ${id}\nskill_name: lib-${id}\n${withCauses(body)}`;
 }
 
 function load(files: Record<string, string>, keys: string[]) {

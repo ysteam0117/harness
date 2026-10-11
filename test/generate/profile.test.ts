@@ -456,6 +456,8 @@ verified_versions:
   pkg-a: "1.2.0"
 version_ranges:
   pkg-a: ">=1.0.0 <2.0.0"
+range_causes:
+  pkg-a: { package: pkg-a, kind: self }
 `);
     expect(loadProfile(dir, "lib/alpha").versionRanges).toEqual({ "pkg-a": ">=1.0.0 <2.0.0" });
   });
@@ -509,6 +511,8 @@ verified_versions:
   pkg-pg: "8.23.0"
 version_ranges:
   pkg-pg: ">=8.13.0"
+range_causes:
+  pkg-pg: { package: pkg-pg, kind: self }
 `);
     const p = loadProfile(dir, "lib/alpha");
     expect(p.versionRanges).toEqual({ "pkg-pg": ">=8.13.0" });
@@ -551,6 +555,78 @@ verified_versions:
   pkg-a: "最新"
 `);
     expect(() => loadProfile(dir, "lib/alpha")).toThrow(GenerateError);
+  });
+});
+
+describe("#6 AC-1: range_causes（範囲の原因）", () => {
+  const BASE = `packages: [pkg-a, pkg-b]
+verified_versions:
+  pkg-a: "4.1.0"
+  pkg-b: "1.2.0"
+version_ranges:
+  pkg-a: "^4"
+`;
+
+  it("#6 AC-1: 実際の version_ranges を持つ全プロファイルで、全名前に原因がある", () => {
+    let count = 0;
+    for (const key of REAL_PROFILES) {
+      const p = loadProfile(realTemplatesDir, key);
+      expect(Object.keys(p.rangeCauses).sort(), key).toEqual(Object.keys(p.versionRanges).sort());
+      count += Object.keys(p.versionRanges).length;
+    }
+    expect(count).toBe(3);
+  });
+
+  it("#6 AC-1: vitest・typescript・pg の原因の値", () => {
+    expect(loadProfile(realTemplatesDir, "test-framework/vitest-playwright").rangeCauses).toEqual({
+      vitest: { package: "@cloudflare/vitest-pool-workers", kind: "peer" },
+    });
+    expect(loadProfile(realTemplatesDir, "quality/typescript-standard").rangeCauses).toEqual({
+      typescript: { package: "typescript-eslint", kind: "peer" },
+    });
+    expect(loadProfile(realTemplatesDir, "data-access/drizzle").rangeCauses).toEqual({
+      pg: { package: "pg", kind: "self" },
+    });
+  });
+
+  it("#6 AC-1: 原因のない範囲はエラー（名前を示す）", () => {
+    const dir = verTemplates(BASE);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(/pkg-a.*range_causes/);
+  });
+
+  it("#6 AC-1: version_ranges にない名前の原因はエラー", () => {
+    const dir = verTemplates(`${BASE}range_causes:
+  pkg-a: { package: pkg-b, kind: peer }
+  pkg-b: { package: pkg-b, kind: self }
+`);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(/range_causes の pkg-b が、version_ranges/);
+  });
+
+  it("#6 AC-1: packages にも packages_when にもない原因のパッケージはエラー", () => {
+    const dir = verTemplates(`${BASE}range_causes:
+  pkg-a: { package: pkg-zzz, kind: peer }
+`);
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(/pkg-zzz/);
+  });
+
+  it("#6 AC-1: kind が peer か self でなければエラー。self は自身の名前だけ", () => {
+    const bad = verTemplates(`${BASE}range_causes:
+  pkg-a: { package: pkg-b, kind: other }
+`);
+    expect(() => loadProfile(bad, "lib/alpha")).toThrow(/kind/);
+    const notSelf = verTemplates(`${BASE}range_causes:
+  pkg-a: { package: pkg-b, kind: self }
+`);
+    expect(() => loadProfile(notSelf, "lib/alpha")).toThrow(/self/);
+  });
+
+  it("#6 AC-1: peer の原因は packages にあるパッケージで読める", () => {
+    const dir = verTemplates(`${BASE}range_causes:
+  pkg-a: { package: pkg-b, kind: peer }
+`);
+    expect(loadProfile(dir, "lib/alpha").rangeCauses).toEqual({
+      "pkg-a": { package: "pkg-b", kind: "peer" },
+    });
   });
 });
 

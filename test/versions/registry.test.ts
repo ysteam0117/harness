@@ -5,7 +5,7 @@
 //   - Node.js：https://nodejs.org/dist/index.json から lts が false でない版だけ。"v" は除く
 //   - つながらない・時間切れ・HTTP のエラーは、例外にせず ok: false と理由（パッケージ名でなく、原因の説明）にする
 import { describe, expect, it } from "vitest";
-import { fetchVersionLists } from "../../src/versions/registry.js";
+import { fetchPackageInfo, fetchVersionLists } from "../../src/versions/registry.js";
 import { fakeFetch, npmTarget, nodeTarget } from "./helpers.js";
 
 const sorted = (xs: string[]) => [...xs].sort();
@@ -150,5 +150,29 @@ describe("#33 AC-1: 同時に取得する数の上限", () => {
       { concurrency: 2 },
     );
     expect(f.maxInFlight).toBeLessThanOrEqual(2);
+  });
+});
+
+describe("#6 PR-A: fetchPackageInfo（版ごとの peerDependencies）", () => {
+  it("版の一覧と、版ごとの peerDependencies を得る。peer のない版は peers に入らない", async () => {
+    const f = fakeFetch({
+      npm: { "fake-pool": ["0.9.0", "1.0.0"] },
+      peers: { "fake-pool": { "1.0.0": { "fake-lib": "^4 || ^5" } } },
+    });
+    const got = await fetchPackageInfo("fake-pool", f.fn);
+    expect(got).toEqual({
+      ok: true,
+      versions: ["0.9.0", "1.0.0"],
+      peers: { "1.0.0": { "fake-lib": "^4 || ^5" } },
+    });
+    expect(f.calls[0]?.accept).toContain("application/vnd.npm.install-v1+json");
+  });
+
+  it("HTTP 500・時間切れ・形の誤りは ok: false", async () => {
+    const f = fakeFetch({ npm: { a: 500, b: "hang" } });
+    expect((await fetchPackageInfo("a", f.fn)).ok).toBe(false);
+    const timed = await fetchPackageInfo("b", f.fn, { timeoutMs: 20 });
+    expect(timed.ok).toBe(false);
+    if (!timed.ok) expect(timed.reason).toContain("時間切れ");
   });
 });

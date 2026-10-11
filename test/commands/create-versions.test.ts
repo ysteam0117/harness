@@ -460,13 +460,20 @@ describe("#33 R3: 整合性チェックの聞き直しで回答が変わった�
 
     const names = out.versions?.entries.map((e) => e.name) ?? [];
     expect(names).toEqual(expect.arrayContaining(["drizzle-orm", "drizzle-kit", "pg"]));
-    // 調べ直さない：hono・vitest は1回だけ。増えた drizzle-orm・pg も1回
+    // 調べ直さない：hono は1回だけ。増えた drizzle-orm・pg も1回。
+    // vitest は、範囲の見直し（#6）が確認の前に1回読むため、調査の1回と合わせて2回
     const asked = f.npmNames();
-    for (const n of ["hono", "vitest", "drizzle-orm", "drizzle-kit", "pg"]) {
+    for (const [n, times] of [
+      ["hono", 1],
+      ["vitest", 2],
+      ["drizzle-orm", 1],
+      ["drizzle-kit", 1],
+      ["pg", 1],
+    ] as const) {
       expect(
         asked.filter((x) => x === n),
         n,
-      ).toHaveLength(1);
+      ).toHaveLength(times);
     }
     expect(f.urls().filter((u) => u.endsWith("index.json"))).toHaveLength(1);
 
@@ -571,5 +578,60 @@ describe("#33 レビュー指摘4：create の調べた日は、利用者のPC�
     );
     expect(out.versions?.entries.every((e) => e.surveyedOn === "2026-10-03")).toBe(true);
     expect(row(out.techStack ?? "", "vitest")).toContain("2026-10-03");
+  });
+});
+
+describe("#6 PR-A: 範囲の見直し（確認の前に表示）", () => {
+  const poolPeers = (peer: string) => ({
+    "@cloudflare/vitest-pool-workers": { "0.22.0": { vitest: peer } },
+  });
+  const review = (s: ReturnType<typeof setup>) =>
+    s.prompter.notes.find((n) => n.startsWith("範囲の見直し\n")) ?? "";
+
+  it("#6 AC-2: 原因が 5 系にも対応していれば、候補と下書きを表示する。終了コードは 0 で、生成まで進む", async () => {
+    const s = setup(
+      registryForReal(
+        { vitest: ["4.1.11", "4.2.0", "5.0.0", "5.1.0"] },
+        { peers: poolPeers("^4 || ^5") },
+      ),
+    );
+    const out = await runCreate(
+      { answers: s.writeAnswers(baseAnswers() as Record<string, unknown>), yes: true },
+      s.deps,
+    );
+    expect(out.exitCode).toBe(0);
+    expect(generated(s.cwd)).toBe(true);
+    expect(review(s)).toContain("vitest 5 系にも対応");
+    expect(out.rangeReview?.findings.some((f) => f.status === "candidate")).toBe(true);
+    expect(s.prompter.notes.some((n) => n.startsWith("ハーネスの改善の提案（下書き）\n"))).toBe(
+      true,
+    );
+    // 確認の前（回答の一覧の後、生成の前）に出る
+    const titles = s.prompter.notes.map((n) => n.split("\n")[0]);
+    expect(titles.indexOf("範囲の見直し")).toBeGreaterThan(titles.indexOf("整合性チェックの結果"));
+  });
+
+  it("#6 AC-2: 原因が 4 系だけなら、候補も下書きも出さない", async () => {
+    const s = setup(
+      registryForReal({ vitest: ["4.1.11", "4.2.0", "5.0.0"] }, { peers: poolPeers("^4") }),
+    );
+    const out = await runCreate(
+      { answers: s.writeAnswers(baseAnswers() as Record<string, unknown>), yes: true },
+      s.deps,
+    );
+    expect(out.exitCode).toBe(0);
+    expect(review(s)).not.toContain("系にも対応");
+    expect(s.prompter.notes.some((n) => n.startsWith("ハーネスの改善の提案"))).toBe(false);
+  });
+
+  it("#6 AC-2: すべて取得できなくても、飛ばした旨を表示して、終了コード 0 で生成まで進む", async () => {
+    const s = setup(offlineFetch());
+    const out = await runCreate(
+      { answers: s.writeAnswers(baseAnswers() as Record<string, unknown>), yes: true },
+      s.deps,
+    );
+    expect(out.exitCode).toBe(0);
+    expect(generated(s.cwd)).toBe(true);
+    expect(review(s)).toContain("飛ばしました");
   });
 });

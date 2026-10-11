@@ -22,7 +22,7 @@ import { stringify } from "yaml";
 import { runAdopt, type AdoptDeps } from "../../src/commands/adopt.js";
 import { cleanScan } from "../adopt/secret-scan-helpers.js";
 import { FakePrompter, baseAnswers } from "../questions/helpers.js";
-import { FIXED_NOW } from "../versions/helpers.js";
+import { FIXED_NOW, offlineFetch } from "../versions/helpers.js";
 
 const gitAvailable = spawnSync("git", ["--version"], { windowsHide: true }).status === 0;
 const GIT_TEST_OPTIONS = { timeout: 60_000, retry: 2 };
@@ -85,6 +85,7 @@ function setup(dir: string, script: Record<string, unknown[]> = {}, interactive 
     stderr: (s) => errs.push(s),
     stdout: (s) => outs.push(s),
     now: () => FIXED_NOW,
+    fetch: offlineFetch().fn,
     secretScan: cleanScan, // runGit は差し替えない(実際の git)
   };
   return { deps, err: () => errs.join(""), out: () => outs.join("") };

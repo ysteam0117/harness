@@ -6,6 +6,7 @@ import {
   type AdoptOptions,
 } from "../../src/commands/adopt.js";
 import type { GitResult, RunGit } from "../../src/commands/update.js";
+import { offlineFetch } from "../versions/helpers.js";
 
 export interface FakeGitState {
   /** git のフォルダか(既定 true) */
@@ -68,5 +69,9 @@ export function fakeGit(state: FakeGitState = {}): FakeGit {
  * 実際の git を使うテストは、これを使わずに runAdopt を直接呼ぶ
  */
 export function runAdopt(options: AdoptOptions, deps: AdoptDeps) {
-  return runAdoptReal({ issue: 12, ...options }, { runGit: fakeGit().runGit, ...deps });
+  // 範囲の見直しが本物のネットワークにつながらないよう、既定は、つながらない偽の fetch
+  return runAdoptReal(
+    { issue: 12, ...options },
+    { runGit: fakeGit().runGit, fetch: offlineFetch().fn, ...deps },
+  );
 }
