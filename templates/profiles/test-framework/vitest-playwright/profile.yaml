@@ -22,6 +22,8 @@ verified_versions:
 # 組み合わせの条件のうち、版の範囲で表せるもの（文章の説明は compatibility_notes に残す）
 version_ranges:
   vitest: "^4"   # @cloudflare/vitest-pool-workers が Vitest 4系にだけ対応する
+range_causes:
+  vitest: { package: "@cloudflare/vitest-pool-workers", kind: peer }
 compatibility_notes:
   - "@cloudflare/vitest-pool-workers は Vitest 4系にだけ対応する（5系は不可）"
   - "vitest-pool-workers の中では pg（PostgreSQLのドライバ）を読み込めない。Workers＋PostgreSQL は wrangler dev に対するAPIのテストで確かめる"

@@ -26,6 +26,8 @@ import { questionDefinitions } from "../questions/definitions.js";
 import { findMissing, runQuestionsResolvingConflicts } from "../questions/flow.js";
 import { CancelledError, createClackPrompter, type Prompter } from "../questions/prompter.js";
 import { chooseVersions, type VersionResult } from "../versions/choose.js";
+import { presentRangeReview } from "../versions/range-feedback.js";
+import { rangeTargetsFor, reviewRanges, type RangeReview } from "../versions/range-review.js";
 import { selectProfiles } from "../versions/profile-selection.js";
 import { targetsFor, type Target } from "../versions/targets.js";
 import { alignTable, shortReason } from "../versions/table.js";
@@ -88,6 +90,8 @@ export interface CreateOutcome {
   versions?: VersionResult;
   /** docs/tech-stack.md の中身 */
   techStack?: string;
+  /** 範囲の見直し（F-19）。見直す対象があり、確認の前に表示したときだけ入る */
+  rangeReview?: RangeReview;
   /** 生成した場所（<cwd>/<app_name>）。生成したときだけ入る */
   projectDir?: string;
   /** 生成の直後の動作確認の結果。確かめたときだけ入る */
@@ -383,11 +387,26 @@ async function run(options: CreateOptions, deps: CreateDeps): Promise<CreateOutc
   deps.prompter.note(formatAnswers(outcome.answers), "回答の一覧");
   deps.prompter.note(formatVersions(versions), "採用するバージョン");
   deps.prompter.note(formatResult(outcome.result, lastFacts), "整合性チェックの結果");
+  // 範囲の見直し（読むだけ。取得できなくても飛ばして続け、終了コードは変えない）
+  let rangeReview: RangeReview | undefined;
+  try {
+    const rangeTargets = rangeTargetsFor(outcome.answers);
+    if (rangeTargets.length > 0) {
+      rangeReview = await reviewRanges(rangeTargets, fetchFn);
+      presentRangeReview(rangeReview, (text, title) => deps.prompter.note(text, title));
+    }
+  } catch (e) {
+    if (!(e instanceof GenerateError)) throw e;
+    deps.stderr(`エラー: ${e.message}
+`);
+    return { exitCode: 1, answers: outcome.answers, result: outcome.result, ...withVersions };
+  }
   const done = {
     answers: outcome.answers,
     acceptedWarnings: outcome.acceptedWarnings,
     result: outcome.result,
     ...withVersions,
+    ...(rangeReview ? { rangeReview } : {}),
   };
 
   if (!options.yes) {
@@ -413,6 +432,7 @@ interface Confirmed {
   result: CheckResult;
   versions: VersionResult;
   techStack: string;
+  rangeReview?: RangeReview;
 }
 
 /**

@@ -21,6 +21,8 @@ verified_versions:
 # 組み合わせの条件のうち、版の範囲で表せるもの（文章の説明は compatibility_notes に残す）
 version_ranges:
   typescript: ">=6.0.0 <6.1.0"   # typescript-eslint が TypeScript 6.1 未満にだけ対応する
+range_causes:
+  typescript: { package: typescript-eslint, kind: peer }
 compatibility_notes:
   - "typescript-eslint は TypeScript 6.1 未満にだけ対応する（7系は不可）"
   - "npm 11 では esbuild・workerd のインストール時の処理が既定で実行されないため、package.json に allowScripts を設定する"

@@ -86,7 +86,7 @@
 - `mode: adopt`
 - `marked_files`：印で囲んだ文書のパス（`AGENTS.md`・`CLAUDE.md`）
 - `managed_files`：印で囲んだ文書の指紋は、**印の中の本文**の指紋。それ以外は、ファイル全体の指紋。残した既存のファイルは入れない
-- `versions: []`・`accepted_warnings: []`（導入では版の調査をしない）
+- `versions: []`・`accepted_warnings: []`（導入では版を選ばず、記録しない。読むだけの範囲の見直し（F-19、Issue #6）は行い、結果を画面に表示する。範囲の外の版で試すのは `create` だけ）
 - `harness status` は、`marked_files` の文書を印の中の本文の指紋で比べる（印の外の編集は数えない）。印が無い・壊れていれば「印が壊れている管理ファイル」として報告する。`marked_files` が無い記録は、これまでどおり全体の指紋で比べる
 - `secret_scan`：秘密情報の確認の記録。確認したら `{status: passed, scope: history+worktree | worktree, checked_on}`、省いたら `{status: skipped, checked_on}`。`harness update` は、導入のときの記録をそのまま引き継ぐ
 - 記録の `mode` は `create`・`update`・`adopt` を読める（無ければ `create`）

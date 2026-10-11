@@ -14,7 +14,7 @@ import { gitleaksImage } from "../../src/adopt/secret-scan.js";
 import { dummySecret } from "../adopt/detect-helpers.js";
 import { cleanScan } from "../adopt/secret-scan-helpers.js";
 import { FakePrompter, baseAnswers } from "../questions/helpers.js";
-import { FIXED_NOW } from "../versions/helpers.js";
+import { FIXED_NOW, fakeFetch, offlineFetch } from "../versions/helpers.js";
 import {
   cleanupRoots,
   exists,
@@ -391,5 +391,43 @@ describe("#18-B 値が出る経路を作らない", () => {
     for (const rel of [CHECK, ".harness/config.yaml", "AGENTS.md"]) {
       expect(readFileSync(path.join(dir, rel), "utf8"), rel).not.toContain(dummySecret());
     }
+  });
+});
+
+describe("#6 PR-A adopt：範囲の見直しは、知らせるだけで、記録も導入もしない", () => {
+  const registry = () =>
+    fakeFetch({
+      npm: {
+        vitest: ["4.1.11", "5.1.0"],
+        "@cloudflare/vitest-pool-workers": ["0.22.0"],
+        typescript: ["6.0.3"],
+        "typescript-eslint": ["8.71.0"],
+      },
+      peers: { "@cloudflare/vitest-pool-workers": { "0.22.0": { vitest: "^4 || ^5" } } },
+    });
+
+  it("候補があれば表示し、config.yaml の versions は空のまま。--dry-run でも表示する", async () => {
+    const dir = app("adopt-hono-react");
+    const f = registry();
+    const s = setup(dir, { fetch: f.fn });
+    const out = await runAdopt({ answers: answersFile(), yes: true }, s.deps);
+    expect(out.exitCode, s.err()).toBe(0);
+    const notes = (s.deps.prompter as FakePrompter).notes;
+    expect(notes.find((n) => n.startsWith("範囲の見直し\n"))).toContain("vitest 5 系にも対応");
+    expect(notes.some((n) => n.startsWith("ハーネスの改善の提案（下書き）\n"))).toBe(true);
+    expect(readConfig(dir).versions).toEqual([]);
+
+    const dry = setup(app("adopt-hono-react"), { fetch: registry().fn });
+    const out2 = await runAdopt({ answers: answersFile(), dryRun: true }, dry.deps);
+    expect(out2.exitCode).toBe(0);
+    expect((dry.deps.prompter as FakePrompter).notes.join("\n")).toContain("vitest 5 系にも対応");
+  });
+
+  it("取得できなくても、飛ばした旨を表示して、終了コード 0", async () => {
+    const dir = app("adopt-hono-react");
+    const s = setup(dir, { fetch: offlineFetch().fn });
+    const out = await runAdopt({ answers: answersFile(), yes: true }, s.deps);
+    expect(out.exitCode, s.err()).toBe(0);
+    expect((s.deps.prompter as FakePrompter).notes.join("\n")).toContain("飛ばしました");
   });
 });

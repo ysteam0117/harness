@@ -20,10 +20,12 @@
 | `src/versions/profile-selection.ts` | `selectProfiles`（回答 → プロファイルの key の一覧）・`parseProfileSelection`（対応表の検証）。#34 も同じ関数を使う |
 | `src/versions/targets.ts` | `buildTargets`・`targetsFor`：調べる対象（`Target`）の一覧を作る。範囲の交わり・検証済みの食い違いの検査もここ |
 | `src/versions/registry.ts` | `fetchVersionLists`：npm と Node.js の登録情報の取得（時間切れ・同時数の上限・失敗の理由） |
+| `src/versions/range-review.ts` | 範囲の見直し（Issue #6 PR-A）：`rangeTargets`（範囲と原因を持つ対象）・`reviewRanges`（原因の最新の安定版の `peerDependencies` を読み、範囲の外に候補があるか調べる）・`formatRangeReview`（画面の文面） |
+| `src/versions/range-feedback.ts` | `renderRangeFeedbackDraft`：ハーネスの改善の提案（C-78）の下書き。画面に表示するだけで、ファイルへの出力・起票はしない |
 | `src/versions/select.ts` | `pickLatestStable`（範囲内の最新の安定版）・`compareWithVerified`（検証済みとの比較） |
 | `src/versions/choose.ts` | `chooseVersions`：調査の結果の表示・利用者の選択・つながらない場合の確かめ・選定の結果（`VersionResult`）を作る |
 | `src/versions/tech-stack.ts` | `renderTechStack`：docs/tech-stack.md の中身（Markdown）を作る |
-| `src/generate/profile.ts` | `loadProfile`：profile.yaml の `packages`・`packages_when`・`verified_versions`・`version_ranges`・`external_tools`・`unverified`・`compatibility_notes` の読み込みと検証 |
+| `src/generate/profile.ts` | `loadProfile`：profile.yaml の `packages`・`packages_when`・`verified_versions`・`version_ranges`・`range_causes`・`external_tools`・`unverified`・`compatibility_notes` の読み込みと検証 |
 | `src/questions/answers.ts` | `parseAnswersYaml`：`--answers` の `versions`・`versions_offline` の読み込みと検証 |
 | `src/commands/create.ts` | 質問の後・整合性チェックの前にバージョンの調査を組み込む。再計算・確認の表示・結果の返却 |
 | `test/versions/*.test.ts`・`test/versions/helpers.ts` | 単体のテスト（偽の `fetch`。本物のネットワークには接続しない） |
@@ -83,6 +85,7 @@ flowchart TD
 | `unverified` | 検証済みの版のないパッケージを明示する仕組み。方針にかかわらず範囲内の最新の安定版を使い、選定理由を「ハーネスで未検証」にし、確認の表示で警告する。取得できない場合や合う安定版がない場合は、戻せる版がないため進めない（終了コード1）。今の8つのプロファイルには、未検証のものはない（将来のプロファイルのために残す） |
 | 検証済みのない `packages` | `unverified` にも書かれていなければ、プロファイルの誤りとしてエラー |
 | 範囲（`version_ranges`） | パッケージ名 → semver の範囲。読み込み時に、範囲として正しいかと、検証済みの版が範囲に合うかを確かめる |
+| 範囲の原因（`range_causes`） | `version_ranges` と同じ名前の組。`{package, kind}`。`kind: peer` は、`package` の `peerDependencies` が範囲を決める（`package` は同じプロファイルの `packages` か `packages_when` にあること）。`kind: self` は、パッケージ自身の下限（例：`pg`）で、`package` は自身の名前。`peer` の確認はしない。原因のない範囲、範囲にない原因はエラー |
 | 範囲の交わり | 同じパッケージの範囲が複数のプロファイルにある場合は、両方に合う範囲（交わり）を使う。交わりが空ならエラー |
 | 検証済みの食い違い | 同じパッケージの検証済みの版がプロファイル同士で違う場合はエラー。検証済みの版は、安定版（試験版でない）でなければならない |
 | Node.js | `data/runtimes.yaml` の検証済みの版を使い、選び方は LTS |
@@ -175,6 +178,18 @@ flowchart TD
 - 事実（`versions_newer_than_verified`）を、新しい結果から計算し直す
 - 最終の回答に合うプロファイルで tech-stack.md の中身を作るため、確認の表・返す結果・tech-stack.md の中身は一致する
 
+## 範囲の見直し（Issue #6 PR-A）
+
+`create` は確認の前、`adopt` は当てたプロファイルの確認の前（`--dry-run` でも）に、範囲の見直しを表示する。読むだけで、何も書かない。`adopt` の `config.yaml` の `versions` は空のまま。
+
+1. `version_ranges` を持つ対象ごとに、`range_causes` の原因を取り出す
+2. 原因（`peer`）の最新の安定版の `peerDependencies`（npm の短い形式の登録情報に含まれる）から、対象への範囲 P を読む。`self` は取得しない
+3. 対象の安定版のうち、P に合い、ハーネスの範囲 R に合わず、R に合う最大の版より新しいものの最新を、候補とする。試験版は除く
+4. 候補があれば、表と「<名前> <メジャー> 系にも対応」の文言、C-78 の下書き（`harness-feedback.md` の見出し。未試行と明記）を表示する
+5. 取得できないものは「飛ばしました」と理由を表示する。終了コードは変えない
+
+候補の版で実際に試す処理（一時フォルダ・`--try-wider-ranges`）と `status` の表示は別の PR（PR-B・PR-C）。
+
 ## テストと受け入れ条件の対応
 
 | 受け入れ条件 | テスト |
@@ -184,6 +199,8 @@ flowchart TD
 | AC-3：大きな版が違うと警告する | `select.test.ts`・`choose.test.ts`・`create-versions.test.ts`（ルール7の理由に該当するパッケージ） |
 | AC-4：つながらない場合に確かめる | `registry.test.ts`（失敗の理由）・`choose.test.ts`・`create-versions.test.ts`（はい・いいえ・`versions_offline`） |
 | AC-5：選んだ版と選定理由の内容が作られる | `tech-stack.test.ts`（中身・未確認・`latestStatus`）・`create-versions.test.ts`（最終の選択が中身に反映される） |
+| Issue #6 AC-1：範囲の原因 | `test/generate/profile.test.ts`（`range_causes` の検証・実際のプロファイル） |
+| Issue #6 AC-2・AC-4（一部）：範囲の見直しと下書き | `test/versions/range-review.test.ts`・`registry.test.ts`（`fetchPackageInfo`）・`create-versions.test.ts`・`test/commands/adopt-profiles.test.ts` |
 | 回答ファイルの `versions` ほか | `test/questions/answers.test.ts`・`create-versions.test.ts` |
 | 回答の変更の後の再計算 | `create-versions.test.ts` |
 | 調べた日がローカルの日付 | `choose.test.ts`・`create-versions.test.ts` |
@@ -193,5 +210,5 @@ flowchart TD
 ## 関係する Issue と要件
 
 - 要件：[F-19](../requirements/functional.md#f-19)（バージョンの調査と選定理由の記録）・[F-24](../requirements/functional.md#f-24)（技術プロファイル）・[F-08](../requirements/functional.md#f-08)（ルール7）・[C-62](../requirements/common/quality-test.md#c-62)（バージョンの固定）
-- Issue：#32（質問と整合性チェック。ルール7の事実を受ける形を用意）、#33（この設計）、#34（tech-stack.md の保存・package.json の依存の書き出し。`selectProfiles` を共用）、#35（update）
+- Issue：#6（範囲の見直し。PR-A）、#32（質問と整合性チェック。ルール7の事実を受ける形を用意）、#33（この設計）、#34（tech-stack.md の保存・package.json の依存の書き出し。`selectProfiles` を共用）、#35（update）
 - 関連する設計書：[questions.md](questions.md)・[generator.md](generator.md)・[overview.md](overview.md)

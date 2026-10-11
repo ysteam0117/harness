@@ -106,6 +106,8 @@ export interface FakeFetchSpec {
   npm?: Record<string, NpmGiven>;
   /** 指定のないパッケージの版の一覧（undefined を返すと 404） */
   npmFallback?: (name: string) => string[] | undefined;
+  /** パッケージ名 → 版 → peerDependencies（登録情報の版ごとの項目に入れる） */
+  peers?: Record<string, Record<string, Record<string, string>>>;
   /** dist-tags の latest を上書きする（試験版を指す場合など） */
   distTags?: Record<string, string>;
   /** Node.js の index.json */
@@ -173,7 +175,16 @@ export function fakeFetch(spec: FakeFetchSpec = {}): FakeFetch {
         if (given === undefined) return new Response("not found", { status: 404 });
         return await respond(given, signal, (versions: string[]) => ({
           name,
-          versions: Object.fromEntries(versions.map((v) => [v, { name, version: v }])),
+          versions: Object.fromEntries(
+            versions.map((v) => [
+              v,
+              {
+                name,
+                version: v,
+                ...(spec.peers?.[name]?.[v] ? { peerDependencies: spec.peers[name]?.[v] } : {}),
+              },
+            ]),
+          ),
           "dist-tags": spec.distTags ?? { latest: versions[versions.length - 1] },
         }));
       }
@@ -228,7 +239,7 @@ export function realVerifiedVersions(): Record<string, string> {
  */
 export function registryForReal(
   npm: Record<string, NpmGiven> = {},
-  extra: Pick<FakeFetchSpec, "node" | "distTags" | "delayMs"> = {},
+  extra: Pick<FakeFetchSpec, "node" | "distTags" | "delayMs" | "peers"> = {},
 ): FakeFetch {
   const verified = realVerifiedVersions();
   return fakeFetch({

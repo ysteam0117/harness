@@ -68,6 +68,11 @@ import {
   UpdateInterrupted,
   type ApplyOp,
 } from "../update/apply.js";
+import { loadProfile, type Profile } from "../generate/profile.js";
+import { findTemplatesDir } from "../generate/templates-dir.js";
+import { presentRangeReview } from "../versions/range-feedback.js";
+import { rangeTargets, reviewRanges } from "../versions/range-review.js";
+import { buildTargets } from "../versions/targets.js";
 import { formatDiff } from "../update/diff.js";
 import { realUpdateFs, type UpdateFs } from "../update/fs.js";
 import type { FileState } from "../update/plan.js";
@@ -92,6 +97,8 @@ export interface AdoptDeps {
   runner?: Runner;
   /** git の実行の差し替え（テスト用）。既定は本物（新しいブランチの検査と作成に使う） */
   runGit?: RunGit;
+  /** 範囲の見直し（npm の登録情報の取得）の差し替え（テスト用）。既定は globalThis.fetch */
+  fetch?: typeof fetch;
 }
 
 export interface AdoptOptions {
@@ -747,8 +754,10 @@ async function adopt(
   let files: AdoptFile[];
   let missing: MissingProfile[];
   let skippedDirs: string[] = [];
+  let usable: Profile[];
   try {
     const resolved = usableProfiles(match.applied);
+    usable = resolved.usable.map((a) => loadProfile(findTemplatesDir(), a.profile));
     missing = resolved.missing;
     files = buildAdoptFiles({
       answers,
@@ -758,6 +767,18 @@ async function adopt(
     // harness-check.yml を出すときだけ、npm audit の対象にできないフォルダを知らせる
     if (files.some((f) => f.path === HARNESS_CHECK_PATH)) {
       skippedDirs = skippedAuditDirs(nodeAppDirs(stack)).map(describeSkippedDir);
+    }
+  } catch (e) {
+    if (e instanceof GenerateError) return fail(e.message);
+    throw e;
+  }
+
+  // 範囲の見直し（読むだけ。--dry-run でも表示する。取得できなくても飛ばして続け、config.yaml の versions は変えない）
+  try {
+    const ranged = rangeTargets(usable, buildTargets(usable, answers));
+    if (ranged.length > 0) {
+      const review = await reviewRanges(ranged, deps.fetch ?? globalThis.fetch);
+      presentRangeReview(review, (text, title) => deps.prompter.note(text, title));
     }
   } catch (e) {
     if (e instanceof GenerateError) return fail(e.message);
@@ -1152,6 +1173,7 @@ export function adoptCommand(deps: Partial<AdoptDeps> = {}): Command {
         ...(deps.secretScan ? { secretScan: deps.secretScan } : {}),
         ...(deps.runner ? { runner: deps.runner } : {}),
         ...(deps.runGit ? { runGit: deps.runGit } : {}),
+        ...(deps.fetch ? { fetch: deps.fetch } : {}),
       });
       process.exitCode = outcome.exitCode;
     });

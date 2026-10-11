@@ -22,6 +22,9 @@ verified_versions:        # 2026-09-30 試作（Issue #18）で確認
 # 組み合わせの条件のうち、版の範囲で表せるもの（文章の説明は compatibility_notes に残す）
 version_ranges:
   pg: ">=8.13.0"        # node-postgres 8.13.0 以上
+# 範囲の原因（version_ranges と同じ名前）。peer は原因のパッケージの peerDependencies、self は自身の下限
+range_causes:
+  pg: { package: pg, kind: self }
 # 組み合わせる道具の条件（試作で見つかったもの）
 compatibility_notes:
   - "PostgreSQLのドライバは pg（node-postgres 8.13.0 以上）。2026-09-30 に pg 8.23.0・PostgreSQL 18.6 で確認"
