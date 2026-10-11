@@ -7,6 +7,7 @@ export interface RegistryOptions {
   timeoutMs?: number;
   /** 同時に取得する数の上限。既定は 6 */
   concurrency?: number;
+  limit?: () => Promise<() => void>;
 }
 
 const NPM_BASE = "https://registry.npmjs.org/";
@@ -14,6 +15,27 @@ const NODE_INDEX_URL = "https://nodejs.org/dist/index.json";
 const NPM_ACCEPT = "application/vnd.npm.install-v1+json";
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_CONCURRENCY = 6;
+
+/** Shared concurrency slots; acquire before starting the request timeout. */
+export function limitFetchConcurrency(
+  concurrency: number = DEFAULT_CONCURRENCY,
+): NonNullable<RegistryOptions["limit"]> {
+  const limit = Math.max(1, concurrency);
+  let inFlight = 0;
+  const waiting: (() => void)[] = [];
+  return async () => {
+    if (inFlight >= limit) {
+      await new Promise<void>((resolve) => waiting.push(resolve));
+    } else {
+      inFlight++;
+    }
+    return () => {
+      const next = waiting.shift();
+      if (next === undefined) inFlight--;
+      else next(); // 空いた枠を、次の呼び出しに渡す
+    };
+  };
+}
 
 /** 取得の失敗。message は、利用者に見せる理由 */
 class FetchFailure extends Error {}
@@ -32,7 +54,9 @@ async function getJson(
   headers: Record<string, string>,
   fetchFn: typeof fetch,
   timeoutMs: number,
+  limit?: RegistryOptions["limit"],
 ): Promise<unknown> {
+  const release = limit === undefined ? undefined : await limit();
   const controller = new AbortController();
   let timedOut = false;
   const timer = setTimeout(() => {
@@ -54,6 +78,7 @@ async function getJson(
     throw new FetchFailure(describeError(e, timeoutMs, timedOut), { cause: e });
   } finally {
     clearTimeout(timer);
+    release?.();
   }
 }
 
@@ -71,7 +96,7 @@ export type PackageInfoResult =
 export async function fetchPackageInfo(
   name: string,
   fetchFn: typeof fetch,
-  opts: Pick<RegistryOptions, "timeoutMs"> = {},
+  opts: Pick<RegistryOptions, "timeoutMs" | "limit"> = {},
 ): Promise<PackageInfoResult> {
   try {
     const body = await getJson(
@@ -79,6 +104,7 @@ export async function fetchPackageInfo(
       { Accept: NPM_ACCEPT },
       fetchFn,
       opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      opts.limit,
     );
     const versions = (body as { versions?: unknown } | null)?.versions;
     if (typeof versions !== "object" || versions === null || Array.isArray(versions)) {
@@ -103,14 +129,19 @@ async function fetchNpm(
   name: string,
   fetchFn: typeof fetch,
   timeoutMs: number,
+  limit?: RegistryOptions["limit"],
 ): Promise<FetchResult> {
-  const info = await fetchPackageInfo(name, fetchFn, { timeoutMs });
+  const info = await fetchPackageInfo(name, fetchFn, { timeoutMs, ...(limit ? { limit } : {}) });
   return info.ok ? { ok: true, versions: info.versions } : info;
 }
 
-async function fetchNode(fetchFn: typeof fetch, timeoutMs: number): Promise<FetchResult> {
+async function fetchNode(
+  fetchFn: typeof fetch,
+  timeoutMs: number,
+  limit?: RegistryOptions["limit"],
+): Promise<FetchResult> {
   try {
-    const body = await getJson(NODE_INDEX_URL, {}, fetchFn, timeoutMs);
+    const body = await getJson(NODE_INDEX_URL, {}, fetchFn, timeoutMs, limit);
     if (!Array.isArray(body)) {
       return { ok: false, reason: "登録情報の形が想定と違います（版の一覧ではありません）" };
     }
@@ -149,8 +180,8 @@ export async function fetchVersionLists(
       results.set(
         target.name,
         target.kind === "node"
-          ? await fetchNode(fetchFn, timeoutMs)
-          : await fetchNpm(target.name, fetchFn, timeoutMs),
+          ? await fetchNode(fetchFn, timeoutMs, opts.limit)
+          : await fetchNpm(target.name, fetchFn, timeoutMs, opts.limit),
       );
     }
   };

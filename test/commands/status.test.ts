@@ -1,7 +1,7 @@
 // #35 harness status。gh は差し替える（本物の gh・ネットワークは使わない）。想定する型：src/commands/status.ts
 import { rmSync } from "node:fs";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { runStatus, statusCommand, type StatusDeps } from "../../src/commands/status.js";
 import type { RunGh } from "../../src/update/latest.js";
 import {
@@ -12,6 +12,7 @@ import {
   snapshot,
   write,
 } from "../update/helpers.js";
+import { fakeFetch, offlineFetch } from "../versions/helpers.js";
 
 afterEach(cleanupRoots);
 
@@ -47,6 +48,7 @@ function setup(dir: string, over: Partial<StatusDeps> = {}) {
     repository: () => "testowner/harness",
     changelog: () => CHANGELOG,
     harnessVersion: () => "0.2.0",
+    fetch: offlineFetch().fn,
     ...over,
   };
   return { deps, out: () => outs.join(""), err: () => errs.join(""), calls };
@@ -252,5 +254,274 @@ describe("#15 R5: 導入したアプリ（mode: adopt）の状態は、印の中
     const s2 = setup(dir);
     await runStatus({}, s2.deps);
     expect(s2.out()).toContain("書き換え済みの管理ファイル：1 件");
+  });
+});
+
+// #6 PR-C（AC-5）：採用した技術の新しい大きな版と、範囲を緩められる候補。偽の fetch・架空の値だけを使う
+describe("#6 AC-5: harness status の登録情報の節", () => {
+  const POOL = "@cloudflare/vitest-pool-workers";
+
+  async function withVersions(entries: { name: string; version: string }[]) {
+    const dir = await project("0.1.0");
+    editConfig(dir, (doc) => {
+      doc.versions = entries.map((e) => ({ ...e, reason: "テスト用" }));
+    });
+    return dir;
+  }
+
+  async function adoptProject(
+    profiles: unknown,
+    versions: { name: string; version: string }[] = [],
+  ) {
+    const dir = await project("0.1.0");
+    editConfig(dir, (doc) => {
+      const d = doc as unknown as Record<string, unknown>;
+      d["mode"] = "adopt";
+      if (profiles !== undefined) d["profiles"] = profiles;
+      doc.versions = versions.map((e) => ({ ...e, reason: "テスト用" }));
+    });
+    return dir;
+  }
+
+  const registry = (over: Parameters<typeof fakeFetch>[0] = {}) =>
+    fakeFetch({
+      npm: {
+        vitest: ["4.1.11", "4.2.0", "5.0.2", "6.0.0-beta.1"],
+        [POOL]: ["0.9.0"],
+      },
+      npmFallback: () => ["1.0.0"],
+      peers: { [POOL]: { "0.9.0": { vitest: "^4 || ^5" } } },
+      node: [
+        { version: "v25.1.0", lts: false },
+        { version: "v24.19.0", lts: "Krypton" },
+      ],
+      ...over,
+    });
+
+  it("#6 AC-5: 採用した版より大きな版が新しいものを「採用 → 最新」で表示する。試験版は無視し、stderr に待ち時間の案内を出す", async () => {
+    const dir = await withVersions([{ name: "vitest", version: "4.1.11" }]);
+    const s = setup(dir, { fetch: registry().fn });
+    const out = await runStatus({}, s.deps);
+    expect(out.exitCode, s.err()).toBe(0);
+    expect(s.out()).toContain("採用した技術の新しい大きな版：");
+    expect(s.out()).toContain("- vitest：採用 4.1.11 → 最新 5.0.2");
+    expect(s.out()).not.toContain("6.0.0-beta.1");
+    expect(s.err()).toContain("登録情報（npm・Node.js）を確かめています");
+  });
+
+  it("#6 AC-5: 同じ大きな版の新しい版だけなら「ありません」", async () => {
+    const dir = await withVersions([{ name: "vitest", version: "4.1.11" }]);
+    const f = registry({ npm: { vitest: ["4.1.11", "4.2.0"], [POOL]: ["0.9.0"] } });
+    const s = setup(dir, { fetch: f.fn });
+    await runStatus({}, s.deps);
+    expect(s.out()).toContain("採用した技術の新しい大きな版：ありません");
+  });
+
+  it("#6 AC-5: Node.js は nodejs.org の index（LTS）で比べ、npm に node を問い合わせない", async () => {
+    const dir = await withVersions([{ name: "node", version: "22.20.0" }]);
+    const f = registry({
+      node: [
+        { version: "v25.1.0", lts: false },
+        { version: "v24.19.0", lts: "Krypton" },
+        { version: "v22.20.0", lts: "Jod" },
+      ],
+    });
+    const s = setup(dir, { fetch: f.fn });
+    await runStatus({}, s.deps);
+    expect(s.out()).toContain("- node：採用 22.20.0 → 最新 24.19.0");
+    expect(f.npmNames()).not.toContain("node");
+  });
+
+  it("#6 AC-5: 一方が HTTP 500・Error・応答なしでも、固定の理由で「取得できません」と表示し、他は表示し、終了コード0", async () => {
+    for (const bad of [500, new Error("接続の本文 /secret/path")]) {
+      const dir = await withVersions([
+        { name: "vitest", version: "4.1.11" },
+        { name: "fake-lib", version: "1.0.0" },
+      ]);
+      const f = registry({
+        npm: { vitest: ["4.1.11", "5.0.2"], "fake-lib": bad, [POOL]: ["0.9.0"] },
+      });
+      const s = setup(dir, { fetch: f.fn });
+      const out = await runStatus({}, s.deps);
+      expect(out.exitCode).toBe(0);
+      expect(s.out()).toContain("- vitest：採用 4.1.11 → 最新 5.0.2");
+      expect(s.out()).toMatch(/取得できません（fake-lib：(HTTP 500|接続できません)）/);
+      expect(s.out()).not.toContain("secret");
+    }
+  });
+
+  it("#6 AC-5: 応答がないものは「時間切れ」にして、他は表示し、終了コード0", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const dir = await withVersions([
+        { name: "vitest", version: "4.1.11" },
+        { name: "fake-lib", version: "1.0.0" },
+      ]);
+      const f = registry({
+        npm: { vitest: ["4.1.11", "5.0.2"], "fake-lib": "hang", [POOL]: ["0.9.0"] },
+      });
+      const s = setup(dir, { fetch: f.fn });
+      let finished = false;
+      const running = runStatus({}, s.deps).finally(() => {
+        finished = true;
+      });
+      // 取得の準備（ファイルの読み込み）が済んで時間切れの計時が始まるまで、時計を進め続ける
+      for (let i = 0; i < 2000 && !finished; i++) await vi.advanceTimersByTimeAsync(1000);
+      expect((await running).exitCode).toBe(0);
+      expect(s.out()).toContain("- vitest：採用 4.1.11 → 最新 5.0.2");
+      expect(s.out()).toContain("取得できません（fake-lib：時間切れ）");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("#6 AC-5: 記録された版が semver でなければ飛ばす。versions が空なら「記録がありません」", async () => {
+    const odd = setup(await withVersions([{ name: "vitest", version: "latest-build" }]), {
+      fetch: registry().fn,
+    });
+    await runStatus({}, odd.deps);
+    expect(odd.out()).toContain("取得できません（vitest：版の形ではありません）");
+    const none = setup(await withVersions([]), { fetch: registry().fn });
+    await runStatus({}, none.deps);
+    expect(none.out()).toContain("調べる版の記録がありません");
+  });
+
+  it("#6 AC-5: 範囲を緩められる候補（範囲・候補・原因）を表示する", async () => {
+    const s = setup(await withVersions([]), { fetch: registry().fn });
+    const out = await runStatus({}, s.deps);
+    expect(out.exitCode, s.err()).toBe(0);
+    const text = s.out();
+    expect(text).toContain("ハーネスの使える範囲を緩められる候補：");
+    expect(text).toContain(
+      `- vitest：範囲 ^4 → 候補 5.0.2（${POOL} 0.9.0 が対応。まだ試していません）`,
+    );
+    // 新しい節は、管理ファイルの節の後、更新の案内の前
+    expect(text.indexOf("書き換え済みの管理ファイル")).toBeLessThan(
+      text.indexOf("採用した技術の新しい大きな版"),
+    );
+    expect(text.indexOf("ハーネスの使える範囲を緩められる候補")).toBeLessThan(
+      text.indexOf("新しいバージョンがあります"),
+    );
+  });
+
+  it("#6 AC-5: 原因が対応していなければ「ありません」", async () => {
+    const s = setup(await withVersions([]), {
+      fetch: registry({ peers: { [POOL]: { "0.9.0": { vitest: "^4" } } } }).fn,
+    });
+    await runStatus({}, s.deps);
+    expect(s.out()).toContain("ハーネスの使える範囲を緩められる候補：ありません");
+  });
+
+  it("#6 AC-5: 取得の失敗の理由に、例外の本文（message・cause）のパス・秘密らしい文字列を出さない", async () => {
+    const leak = new Error("token=SECRET-AAA /home/someone/app", {
+      cause: new Error("/home/someone/SECRET-BBB"),
+    });
+    const dir = await withVersions([{ name: "vitest", version: "4.1.11" }]);
+    const f = registry({ npm: { vitest: leak, [POOL]: leak }, npmFallback: () => undefined });
+    const s = setup(dir, { fetch: f.fn });
+    const out = await runStatus({}, s.deps);
+    expect(out.exitCode).toBe(0);
+    expect(s.out()).toContain("取得できません（vitest：接続できません）");
+    for (const word of ["SECRET", "someone", "token="]) {
+      expect(s.out()).not.toContain(word);
+      expect(s.err()).not.toContain(word);
+    }
+  });
+
+  it("#6 AC-5: 全部つながらなくても終了コード0。既存の行は変わらない", async () => {
+    const dir = await withVersions([{ name: "vitest", version: "4.1.11" }]);
+    const s = setup(dir, { fetch: offlineFetch().fn });
+    const out = await runStatus({}, s.deps);
+    expect(out.exitCode).toBe(0);
+    expect(s.out()).toMatch(/プロジェクトのバージョン：0\.1\.0/);
+    expect(s.out()).toMatch(/最新のバージョン：0\.3\.0/);
+    expect(s.out()).toContain("採用した技術の新しい大きな版：取得できません（vitest：HTTP 404）");
+    expect(s.out()).toContain("ハーネスの使える範囲を緩められる候補：取得できません（");
+  });
+
+  it("#6 AC-5: config.yaml が無いフォルダでは、fetch を呼ばず、新しい節も出さない", async () => {
+    const f = registry();
+    const s = setup(newRoot(), { fetch: f.fn });
+    await runStatus({}, s.deps);
+    expect(f.calls).toEqual([]);
+    expect(s.out()).not.toContain("新しい大きな版");
+    expect(s.out()).not.toContain("緩められる候補");
+    expect(s.err()).toBe("");
+  });
+
+  it("#6 AC-5: 同時の取得は 6 以下", async () => {
+    const names = Array.from({ length: 12 }, (_, i) => `fake-lib-${String(i)}`);
+    const dir = await adoptProject(
+      { applied: [], none: [] },
+      names.map((name) => ({ name, version: "1.0.0" })),
+    );
+    const f = registry({ delayMs: 5, npmFallback: () => ["1.0.0", "2.0.0"] });
+    const s = setup(dir, { fetch: f.fn });
+    await runStatus({}, s.deps);
+    expect(s.out()).toContain("fake-lib-11：採用 1.0.0 → 最新 2.0.0");
+    expect(f.maxInFlight).toBeGreaterThan(1);
+    expect(f.maxInFlight).toBeLessThanOrEqual(6);
+  });
+
+  it("#6 AC-5: create の版と範囲を並行して調べても、同時の取得は合計 6 以下", async () => {
+    const names = Array.from({ length: 12 }, (_, i) => `fake-lib-${String(i)}`);
+    const dir = await withVersions([
+      { name: "node", version: "22.20.0" },
+      ...names.map((name) => ({ name, version: "1.0.0" })),
+    ]);
+    const f = registry({ delayMs: 20, npmFallback: () => ["1.0.0", "2.0.0"] });
+    const s = setup(dir, { fetch: f.fn });
+    expect((await runStatus({}, s.deps)).exitCode, s.err()).toBe(0);
+    expect(s.out()).toContain("fake-lib-11：採用 1.0.0 → 最新 2.0.0");
+    expect(s.out()).toContain("- node：採用 22.20.0 → 最新 24.19.0");
+    expect(s.out()).toContain("- vitest：範囲 ^4 → 候補 5.0.2");
+    expect(f.npmNames()).toContain(POOL);
+    expect(f.maxInFlight).toBeGreaterThan(1);
+    expect(f.maxInFlight).toBeLessThanOrEqual(6);
+  });
+
+  it("#6 AC-5: adopt は、記録された applied のプロファイルで判定する。versions は空なので「記録がありません」", async () => {
+    const dir = await adoptProject({
+      applied: [{ profile: "test-framework/vitest-playwright", apps: ["."] }],
+      none: [],
+    });
+    const s = setup(dir, { fetch: registry().fn });
+    const out = await runStatus({}, s.deps);
+    expect(out.exitCode, s.err()).toBe(0);
+    expect(s.out()).toContain("harness adopt では版を記録しません");
+    expect(s.out()).toContain("- vitest：範囲 ^4 → 候補 5.0.2");
+  });
+
+  it("#6 AC-5: adopt でプロファイルの記録が無ければ「取得できません（導入のときのプロファイルの記録がありません）」", async () => {
+    const s = setup(await adoptProject(undefined), { fetch: registry().fn });
+    const out = await runStatus({}, s.deps);
+    expect(out.exitCode).toBe(0);
+    expect(s.out()).toContain("取得できません（導入のときのプロファイルの記録がありません）");
+  });
+
+  it("#6 AC-5: adopt で記録のプロファイルが全部・一部読めないときは、範囲の制限なしとは言わない", async () => {
+    for (const applied of [
+      [{ profile: "lib/nothing", apps: ["."] }],
+      [
+        { profile: "test-framework/vitest-playwright", apps: ["."] },
+        { profile: "lib/nothing", apps: ["."] },
+      ],
+    ]) {
+      const s = setup(await adoptProject({ applied, none: [] }), { fetch: registry().fn });
+      const out = await runStatus({}, s.deps);
+      expect(out.exitCode).toBe(0);
+      expect(s.out()).toContain("取得できません（記録されたプロファイルの一部を読めませんでした）");
+      expect(s.out()).not.toContain("範囲の制限はありません");
+    }
+  });
+
+  it("#6 AC-5: adopt で範囲を持つ対象が無ければ「範囲の制限はありません」", async () => {
+    const dir = await adoptProject({
+      applied: [{ profile: "http-client/axios", apps: ["."] }],
+      none: [],
+    });
+    const s = setup(dir, { fetch: registry().fn });
+    await runStatus({}, s.deps);
+    expect(s.out()).toContain("範囲の制限はありません");
   });
 });

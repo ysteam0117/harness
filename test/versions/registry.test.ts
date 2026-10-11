@@ -4,8 +4,12 @@
 //     Accept: application/vnd.npm.install-v1+json で取得し、versions の名前の一覧を返す（試験版も含めて、そのまま返す。選ぶのは select.ts）
 //   - Node.js：https://nodejs.org/dist/index.json から lts が false でない版だけ。"v" は除く
 //   - つながらない・時間切れ・HTTP のエラーは、例外にせず ok: false と理由（パッケージ名でなく、原因の説明）にする
-import { describe, expect, it } from "vitest";
-import { fetchPackageInfo, fetchVersionLists } from "../../src/versions/registry.js";
+import { describe, expect, it, vi } from "vitest";
+import {
+  fetchPackageInfo,
+  fetchVersionLists,
+  limitFetchConcurrency,
+} from "../../src/versions/registry.js";
 import { fakeFetch, npmTarget, nodeTarget } from "./helpers.js";
 
 const sorted = (xs: string[]) => [...xs].sort();
@@ -175,4 +179,44 @@ describe("#6 PR-A: fetchPackageInfo（版ごとの peerDependencies）", () => {
     expect(timed.ok).toBe(false);
     if (!timed.ok) expect(timed.reason).toContain("時間切れ");
   });
+});
+
+describe("shared registry concurrency limit", () => {
+  it.each(["package", "npm", "node"])(
+    "starts the 50ms timeout after acquiring a slot (%s)",
+    async (kind) => {
+      vi.useFakeTimers();
+      try {
+        const limit = limitFetchConcurrency(1);
+        const release = await limit();
+        const f = fakeFetch({
+          npm: { "fine-lib": ["1.0.0"] },
+          node: [{ version: "v24.0.0", lts: "Krypton" }],
+          delayMs: 20,
+        });
+        const opts = { timeoutMs: 50, limit };
+        const pending =
+          kind === "package"
+            ? fetchPackageInfo("fine-lib", f.fn, opts)
+            : fetchVersionLists(
+                [kind === "node" ? nodeTarget() : npmTarget("fine-lib")],
+                f.fn,
+                opts,
+              );
+        await vi.advanceTimersByTimeAsync(100);
+        expect(f.calls).toHaveLength(0);
+        release();
+        await vi.advanceTimersByTimeAsync(20);
+        const result = await pending;
+        expect(
+          result instanceof Map ? result.get(kind === "node" ? "node" : "fine-lib")?.ok : result.ok,
+        ).toBe(true);
+        expect(f.calls).toHaveLength(1);
+        const releaseAgain = await limit();
+        releaseAgain();
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
 });

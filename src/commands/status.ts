@@ -14,6 +14,16 @@ import {
 import { extractBlock } from "../adopt/markers.js";
 import { ConfigError, parseConfig, type RecordedConfig } from "../update/read-config.js";
 import { messageOf, readState } from "../update/state.js";
+import { reviewRanges, type RangeReview } from "../versions/range-review.js";
+import { limitFetchConcurrency } from "../versions/registry.js";
+import {
+  checkMajorUpdates,
+  formatMajorUpdates,
+  formatRangeCandidates,
+  statusRangeTargets,
+  type MajorUpdates,
+  type StatusRangeTargets,
+} from "../versions/status-review.js";
 
 export interface StatusDeps {
   cwd: string;
@@ -29,6 +39,8 @@ export interface StatusDeps {
   harnessVersion?: () => string;
   /** ファイル操作の差し替え */
   fs?: Partial<UpdateFs>;
+  /** npm・Node.js の登録情報の取得の差し替え。既定は globalThis.fetch（.harness/config.yaml が無いフォルダでは使わない） */
+  fetch?: typeof fetch;
 }
 
 export interface StatusOptions {
@@ -73,6 +85,33 @@ async function inspectManaged(
   return { modified, missing, unreadable, brokenMarkers };
 }
 
+/** 登録情報の調査の結果。予期しない例外のときは、その節が undefined */
+interface Survey {
+  major: MajorUpdates | undefined;
+  ranges: StatusRangeTargets | undefined;
+  review: RangeReview | undefined;
+}
+
+/** 採用した技術の新しい大きな版と、範囲を緩められる候補を調べる（読むだけ。例外にしない） */
+async function surveyRegistry(recorded: RecordedConfig, fetchFn: typeof fetch): Promise<Survey> {
+  const limit = limitFetchConcurrency();
+  const major = checkMajorUpdates(recorded.versions, fetchFn, { limit }).catch(() => undefined);
+  const rangesAndReview = (async () => {
+    try {
+      const ranges = statusRangeTargets(recorded);
+      const review =
+        ranges.status === "ok" && ranges.targets.length > 0
+          ? await reviewRanges(ranges.targets, fetchFn, { limit })
+          : undefined;
+      return { ranges: ranges as StatusRangeTargets | undefined, review };
+    } catch {
+      return { ranges: undefined, review: undefined };
+    }
+  })();
+  const [m, r] = await Promise.all([major, rangesAndReview]);
+  return { major: m, ranges: r.ranges, review: r.review };
+}
+
 function listLines(paths: string[]): string[] {
   return paths.map((p) => `  - ${p}`);
 }
@@ -105,11 +144,14 @@ export async function runStatus(
     throw e;
   }
 
-  // 最新の版（取れなくても、終了コードは0）
-  const latest = await fetchLatestVersion(
-    (deps.repository ?? readOwnRepository)(),
-    deps.runGh ?? defaultRunGh,
-  );
+  // 最新の版と、登録情報（取れなくても、終了コードは0）。待ち時間を減らすため、並行して調べる
+  if (recorded !== undefined) deps.stderr("登録情報（npm・Node.js）を確かめています…\n");
+  const [latest, survey] = await Promise.all([
+    fetchLatestVersion((deps.repository ?? readOwnRepository)(), deps.runGh ?? defaultRunGh),
+    recorded === undefined
+      ? Promise.resolve(undefined)
+      : surveyRegistry(recorded, deps.fetch ?? globalThis.fetch),
+  ]);
 
   const lines: string[] = [];
   if (recorded !== undefined) lines.push(`プロジェクトのバージョン：${recorded.harnessVersion}`);
@@ -163,6 +205,12 @@ export async function runStatus(
       lines.push(...listLines(managed.unreadable));
     }
 
+    if (survey !== undefined) {
+      lines.push("");
+      lines.push(...formatMajorUpdates(survey.major, recorded.mode === "adopt"));
+      lines.push(...formatRangeCandidates(survey.ranges, survey.review));
+    }
+
     const newer =
       semver.gt(installed, recorded.harnessVersion) ||
       (latest.ok && semver.gt(latest.version, recorded.harnessVersion));
@@ -200,6 +248,7 @@ export function statusCommand(deps: Partial<StatusDeps> = {}): Command {
         ...(deps.changelog ? { changelog: deps.changelog } : {}),
         ...(deps.harnessVersion ? { harnessVersion: deps.harnessVersion } : {}),
         ...(deps.fs ? { fs: deps.fs } : {}),
+        ...(deps.fetch ? { fetch: deps.fetch } : {}),
       });
       process.exitCode = outcome.exitCode;
     });

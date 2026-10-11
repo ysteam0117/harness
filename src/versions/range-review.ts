@@ -3,7 +3,7 @@ import { type Profile, type RangeCause, resolveProfiles } from "../generate/prof
 import { findTemplatesDir } from "../generate/templates-dir.js";
 import type { Answers } from "../questions/answers.js";
 import { selectProfiles } from "./profile-selection.js";
-import { fetchPackageInfo, type PackageInfoResult } from "./registry.js";
+import { fetchPackageInfo, type PackageInfoResult, type RegistryOptions } from "./registry.js";
 import { pickLatestStable } from "./select.js";
 import { alignTable } from "./table.js";
 import { buildTargets, type Target } from "./targets.js";
@@ -94,7 +94,7 @@ export function findCandidate(
 export async function reviewRanges(
   targets: RangeTarget[],
   fetchFn: typeof fetch,
-  opts: { timeoutMs?: number } = {},
+  opts: Pick<RegistryOptions, "timeoutMs" | "limit"> = {},
 ): Promise<RangeReview> {
   const cache = new Map<string, Promise<PackageInfoResult>>();
   const info = (name: string): Promise<PackageInfoResult> => {

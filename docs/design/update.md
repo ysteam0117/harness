@@ -23,7 +23,7 @@
 | ファイル | 役割 |
 | --- | --- |
 | `src/commands/update.ts` | `harness update`。質問・整合性チェック・判定・確認・書き込みの順に進める。差し込み口は `UpdateDeps`（prompter・cwd・stderr・stdout・checkTools・now・runGit・fs・harnessVersion・changelog） |
-| `src/commands/status.ts` | `harness status`。差し込み口は `StatusDeps`（runGh・repository・changelog・harnessVersion・fs） |
+| `src/commands/status.ts` | `harness status`。差し込み口は `StatusDeps`（runGh・repository・changelog・harnessVersion・fs・fetch） |
 | `src/update/read-config.ts` | `.harness/config.yaml` の読み込みと検証。パスの形・指紋の形・回答の検証。管理の対象でないパスの記録は無視する |
 | `src/update/plan.ts` | 判定（純粋な関数）。ディスクを見ない |
 | `src/update/state.ts` | ファイルの今の状態の読み取り。リンク（シンボリックリンク・ジャンクション）をたどらない。改行をそろえない生の sha256 |
@@ -101,6 +101,10 @@ SIGINT（Ctrl+C）を受けたときは、書いた分を戻して止める（�
 - `config.yaml` がないフォルダでは、ハーネス（CLI）の情報だけを表示する
 - 最新のバージョンは、`gh release view --repo <持ち主>/<名前> --json tagName`（時間切れ5秒）で取る。持ち主・名前は、既定で `ysteam0117/harness`（組織の公開のリポジトリ。個人のアカウント名を含まない）。環境変数 `HARNESS_REPOSITORY` で変えられる。`gh` がない・ログインしていない・つながらない・Release がない・`HARNESS_REPOSITORY` の形が違う場合は、「取得できません」と理由を表示し、終了コードは0
 - `CHANGELOG.md` がなければ「変更履歴がありません」。`package.json` の `files` に `CHANGELOG.md` を含める（ファイル自体は #36 で作る）
+- 登録情報の節（Issue #6 PR-C。`config.yaml` があるときだけ。`src/versions/status-review.ts`）。管理ファイルの節の後、「新しいバージョンがあります」の案内の前に表示する。`gh` の問い合わせと並行して取り、待ち時間の案内を stderr に1行出す（stdout は変えない）。`--offline` は設けない
+  - 採用した技術の新しい大きな版：`versions` の各項目（semver として読めるものだけ。読めないものは「版の形ではありません」で飛ばす）を、npm の登録情報（Node.js は nodejs.org の index の LTS）の最新の安定版と比べ、大きな版が新しいものを「採用 → 最新」で出す。`adopt` で導入したアプリは `versions` が空のため「調べる版の記録がありません」（既存の `package.json` の版との比較は別の Issue）
+  - ハーネスの使える範囲を緩められる候補：`create` と同じ `reviewRanges` で判定する。対象は、`mode` が `adopt` なら記録した `profiles.applied`（記録がない・今のハーネスで読めないものが1件でもあれば「取得できません」。範囲の制限なしとは言わない）、それ以外は記録した回答から決まるプロファイル。候補は「まだ試していません」と明記する（試すのは `create` の `--try-wider-ranges` だけ）
+  - 取得の失敗・予期しない例外でも、終了コードは0。表示する理由は `safeReason` が変える固定の分類（時間切れ・HTTP の番号・応答を読めません・接続できません）だけで、registry の理由・例外の本文（パス・アプリ名を含みうる）はそのまま出さない
 
 ## 残す危険（利用者の判断で、これ以上は対策しない）
 
@@ -114,4 +118,4 @@ SIGINT（Ctrl+C）を受けたときは、書いた分を戻して止める（�
 
 - 質問が増えたときの対話の細かい作り（既定の値のない質問の選択肢の追加など）
 - `harness adopt`（F-29）
-- ネットワークを使った版の再調査（更新では、記録された版と、同梱の検証済みの版だけを使う）
+- ネットワークを使った版の再調査（`harness update` では、記録された版と、同梱の検証済みの版だけを使う。`harness status` は表示のためだけに登録情報を読む）
