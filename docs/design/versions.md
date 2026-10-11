@@ -190,7 +190,7 @@ flowchart TD
 4. 候補があれば、表と「<名前> <メジャー> 系にも対応」の文言、C-78 の下書き（`harness-feedback.md` の見出し。未試行と明記）を表示する
 5. 取得できないものは「飛ばしました」と理由を表示する。終了コードは変えない
 
-`status` の表示は別の PR（PR-C）。候補の版を試す処理は次の節。
+候補の版を試す処理は次の節。`status` の表示は、その後の「`status` の表示」の節。
 
 ## 範囲の外の版の試し（Issue #6 PR-B）
 
@@ -208,6 +208,15 @@ flowchart TD
 
 結果（`TrialResult`）は、飛ばした理由を固定の分類で持つ。例外の本文（絶対パス・アプリ名・一時フォルダを含みうる）は、結果の表にも下書きにも入れず、stderr の詳細にだけ出す。パスは後始末の案内（画面と stderr）だけに出し、下書きには入れない。下書きは、通った結果（範囲を広げる案）も失敗した結果（範囲は今のまま）も載せる。
 
+## status の表示（Issue #6 PR-C）
+
+`harness status` は、`.harness/config.yaml` があるときだけ、登録情報を読んで次の2つを表示する（`src/versions/status-review.ts`、表示の流れは [update.md](update.md) の `harness status`）。読むだけで、何も書かず、候補を試さない。
+
+- 採用した技術の新しい大きな版：`checkMajorUpdates` が、記録した `versions` の semver として読める版を、`fetchVersionLists`（同時数6・時間切れ10秒）の最新の安定版と比べ、`compareWithVerified` が「新しい」かつ大きな版が違うものを出す。最新は範囲を付けない全体の最新の安定版で、範囲の見直しと同じパッケージが出てもよい（意味が違う）
+- ハーネスの使える範囲を緩められる候補：`statusRangeTargets` が対象を決め、`reviewRanges` で `create` と同じ判定をする。`adopt` は記録した `profiles.applied` から（`usableProfiles` の `missing` が1件でもあれば「取得できません」）、それ以外は `rangeTargetsFor(answers)`
+
+表示する理由は `safeReason` で固定の分類（時間切れ・HTTP の番号・応答を読めません・接続できません）に変える。registry の理由は例外の本文・`cause` を含みうるため、そのまま出さない。`GenerateError` の本文も出さない。終了コードは常に 0。
+
 ## テストと受け入れ条件の対応
 
 | 受け入れ条件 | テスト |
@@ -221,6 +230,7 @@ flowchart TD
 | Issue #6 AC-2・AC-4（一部）：範囲の見直しと下書き | `test/versions/range-review.test.ts`・`registry.test.ts`（`fetchPackageInfo`）・`create-versions.test.ts`・`test/commands/adopt-profiles.test.ts` |
 | Issue #6 AC-3：範囲の外の版を試す | `test/versions/range-trial.test.ts`・`range-trial-errors.test.ts`・`test/commands/create-range-trial.test.ts`・`test/verify/verify.test.ts`（例外時の DB 停止） |
 | Issue #6 AC-4：試した結果つきの下書き | `test/versions/range-feedback-trial.test.ts`・`create-range-trial.test.ts` |
+| Issue #6 AC-5：status の表示 | `test/commands/status.test.ts`・`status-generate-error.test.ts`・`test/versions/status-review.test.ts` |
 | 回答ファイルの `versions` ほか | `test/questions/answers.test.ts`・`create-versions.test.ts` |
 | 回答の変更の後の再計算 | `create-versions.test.ts` |
 | 調べた日がローカルの日付 | `choose.test.ts`・`create-versions.test.ts` |
