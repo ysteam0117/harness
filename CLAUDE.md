@@ -14,12 +14,12 @@
 ### 1 Issueの進め方
 
 Skill「opus-plan-sonnet-impl」に従う：Opusで計画 → Codexで計画レビュー（最大3回）→ Sonnetで実装 → Codexでコードレビュー（最大3回）→ 品質チェック（`npm run check`）・smoke。
-その後、コミット・プッシュ・PR作成・CI成功の確認・マージ・mainへのpullまで行う。マージは、PRのコミットを手元で1つにまとめてから「Rebase and merge」（gh pr merge --rebase）で行う。GitHubのsquashマージは、PRを作ったアカウントを作成者にしてコミットを作り直し、個人のアカウント名が履歴に入るため使わない。マージの後は、main の CI も成功したことを確かめる。
+その後、コミット・プッシュ・PR作成・CI成功の確認・マージ・mainへのpullまで行う。マージは、PRのコミットを手元で1つにまとめてから「Rebase and merge」（gh pr merge --rebase）で行う。GitHubのsquashマージは、PRを作ったアカウントを作成者にしてコミットを作り直し、作者が ysteam0117 でなくなるため使わない。マージの後は、main の CI も成功したことを確かめる。
 
 ### リポジトリとコミット
 
 - 作業は公開のリポジトリ（組織 ysteam0117 の harness）の複製（C:web_application_filesharness-public）で行う。旧リポジトリ（非公開）と古い作業ツリーには push しない（書き換える前の履歴を含むため）
-- コミットの名前とメールアドレスは ysteam0117 <ysteam0117@users.noreply.github.com>。個人のアカウント名・メールアドレスを、コミット・ファイル・Issue・PR の本文に書かない
+- コミットの名前とメールアドレスは ysteam0117 <ysteam0117@users.noreply.github.com>。ハーネスの配布物（templates/ など導入先に出るファイル）と生成物には、個人のアカウント名・メールアドレスを入れない。コミット・プッシュ・PR に個人のアカウントが出ることは問題ない（利用者の判断。2026-10-11）
 - Issue の番号は、文書の中では旧リポジトリの番号のままでよい（新しいリポジトリの Issue の冒頭に旧番号を書いてある）
 
 ### smoke（ハーネス自身の確認）
