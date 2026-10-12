@@ -6,6 +6,13 @@ node:
   verified: "24.19.0"
   policy: lts
 
+# Java の検証済みの版（大きな版）と選び方。maven のプロファイルを選んだときだけ使う（F-19）。
+# verified : ハーネスで動作を確かめた版。登録情報を取得できないとき、範囲に合う LTS がないとき、version_policy が verified のときに使う
+# policy   : lts は、公開されている長期サポート（LTS）の中で、プロファイルの範囲に合う最新のもの
+java:
+  verified: "25"
+  policy: lts
+
 # wrangler.jsonc の compatibility_date（Cloudflare Workers の互換性の日付）。
 # テストの道具（@cloudflare/vitest-pool-workers）に同梱された実行エンジンが対応する日付以下にする（新しすぎると起動しない）。
 # テストの道具のバージョンを上げるとき（verified_versions の更新）に、対応する日付を確かめて見直す。

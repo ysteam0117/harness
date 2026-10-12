@@ -16,10 +16,13 @@
 | ファイル | 役割 |
 | --- | --- |
 | `data/profile-selection.yaml` | 回答から使うプロファイルを決める対応表（データ）。配布物に含める |
-| `data/runtimes.yaml` | Node.js の検証済みの版（`.node-version` と同じ版にする）と、選び方（`lts`） |
+| `data/runtimes.yaml` | Node.js の検証済みの版（`.node-version` と同じ版にする）と、Java の検証済みの版（大きな版。例 `25`）と、選び方（どちらも `lts`） |
 | `src/versions/profile-selection.ts` | `selectProfiles`（回答 → プロファイルの key の一覧）・`parseProfileSelection`（対応表の検証）。#34 も同じ関数を使う |
 | `src/versions/targets.ts` | `buildTargets`・`targetsFor`：調べる対象（`Target`）の一覧を作る。範囲の交わり・検証済みの食い違いの検査もここ |
-| `src/versions/registry.ts` | `fetchVersionLists`：npm と Node.js の登録情報の取得（時間切れ・同時数の上限・失敗の理由） |
+| `src/versions/registry.ts` | `fetchVersionLists`：npm・Node.js・Maven Central・Java（Adoptium）の登録情報の取得（時間切れ・同時数の上限・失敗の理由） |
+| `src/versions/ecosystem.ts` | `Ecosystem`（`npm`／`maven`）・`parseCoordinate`（Maven の座標 `group:artifact` の検査）・`JAVA_TARGET_NAME` |
+| `src/versions/maven-metadata.ts` | `parseMavenMetadata`：`maven-metadata.xml` から版の一覧を読む |
+| `src/versions/maven-version.ts` | Maven の版の安定版の判定・順序・範囲（`>=X <Y`）。semver とは別に自前で扱う |
 | `src/versions/range-review.ts` | 範囲の見直し（Issue #6 PR-A）：`rangeTargets`（範囲と原因を持つ対象）・`reviewRanges`（原因の最新の安定版の `peerDependencies` を読み、範囲の外に候補があるか調べる）・`formatRangeReview`（画面の文面） |
 | `src/versions/range-feedback.ts` | `renderRangeFeedbackDraft`：ハーネスの改善の提案（C-78）の下書き（試した結果があれば結果つき）・`presentTrialFeedback`。画面に表示するだけで、ファイルへの出力・起票はしない |
 | `src/versions/range-trial.ts` | 範囲の外の版の試し（Issue #6 PR-B）：`trialVersions`・`trialAppName`・`runRangeTrials`。生成した本体の場所を受け取らない |
@@ -94,12 +97,53 @@ flowchart TD
 
 文章の `compatibility_notes` は、説明として残し、tech-stack.md の「組み合わせの条件」にそのまま載せる。範囲で表せない注意（`allowScripts` 等）は `version_ranges` に写さない。
 
+## エコシステム（Issue #39）
+
+profile.yaml の `ecosystem`（`npm` か `maven`。書かなければ `npm`）が、そのプロファイルのパッケージの登録先を決める。既存のプロファイルは1行も変えない。
+
+| 項目 | 内容 |
+| --- | --- |
+| `languages` | `typescript`・`javascript`・`java` だけ書ける。`runtimes` は、読み込んだ値を `Profile.runtimes` に残す（`jvm` など） |
+| 依存の名前 | maven では `packages`・`packages_when` を `group:artifact` の形（英数字・`_`・`.`・`-`）で書く。group の空の部分、artifact の `.` だけの名前は誤り（URL に `..` や `/` を作らせない） |
+| 書けない項目 | maven では `dev_packages`・`package_json`・`package_json_when`・`wrangler`・`wrangler_when`・`range_causes` を書くとエラー（peer の考え方がなく、npm のためだけの項目） |
+| 検証済みの版 | maven の依存は Maven の安定版（数字で始まる）であること。semver の版は求めない |
+| 範囲 | maven の `version_ranges` は「`>=X <Y`」の形だけ（X が Y より小さい）。複数のプロファイルの範囲は、下限は大きい方・上限は小さい方の交わり。交わりが空、検証済みが範囲の外ならエラー。名前は、依存の座標か `java` |
+| 対象（`Target.kind`） | `node`・`npm`・`maven`・`java`。maven のプロファイルがあるときだけ、Node.js の次に `java` を置く。maven のプロファイルがなければ、対象は今までと同じ |
+| 名前の衝突 | 同じ名前が npm と maven の両方のプロファイルに出たらエラー。`java` は Java の版の名前のため、依存の名前に使えない |
+| 他の機能 | 範囲の見直し・範囲の外の版の試し（`range-review.ts`・`range-trial.ts`）は maven・java の対象を飛ばす（peer の考え方がなく、Gradle での試しは #41 以降）。`package.json` は npm のプロファイルのものだけを書く。`harness status` の「新しい大きな版」は、記録の名前（`java`・`group:artifact`）から種類を決めて調べる。`tech-stack.md` の説明文は、maven のプロファイルがあるときだけ「Maven Central・Java（Adoptium）」を加える。`select.ts` の `pickLatestStable`・`compareWithVerified` は、第3引数でエコシステムを受ける（既定は npm） |
+| 範囲外 | Gradle の生成（PR-B）、`--verify` での Gradle の確認（#41）。maven のプロファイルを選べるようにする回答の対応は #40 |
+
+## Maven Central の取得と安定版の判定
+
+| 項目 | 内容 |
+| --- | --- |
+| URL | `https://repo1.maven.org/maven2/<group の . を / にしたもの>/<artifact>/maven-metadata.xml`。各部分は `encodeURIComponent` を通す。座標の形が誤っていれば、取得せず「登録情報の形が想定と違います」にする |
+| 読み取り | コメントと CDATA を除いてから、`<versioning><versions>` の中の `<version>` を集める（書かれた順）。実体参照は `&amp;`・`&lt;`・`&gt;`・`&quot;`・`&apos;` の5つだけ戻す。`<latest>`・`<release>` は使わない。`<metadata>` がない、版が0件なら取得できない扱い |
+| 安定版 | 修飾子に SNAPSHOT・alpha・beta・`M数字`・milestone・RC・CR・preview・ea・dev を含む版は試験版。修飾子なし・Final・GA・RELEASE は安定版。これ以外の修飾子（例：`33.0.0-jre`）は安定版として扱う。数字で始まらない版は無視する |
+| 順序 | 数字は数として比べる（1.10 は 1.9 より新しい）。末尾の 0 は無視する（1.0 = 1.0.0）。数字が等しければ、試験版 < 修飾子なし = Final = GA = RELEASE < ほかの修飾子 |
+| 大きな版の違い | 先頭の数字が違うこと |
+| 取得の仕組み | npm と同じ（時間切れ・同時数の上限・失敗の理由）。応答は文字列として読む |
+
+## Java の版の選び方
+
+Node.js と同じ考え方で、`data/runtimes.yaml` に検証済みの版（`java.verified`、大きな版。現在 `25`）と選び方（`java.policy: lts`）を置く。
+
+1. Adoptium の `https://api.adoptium.net/v3/info/available_releases` の `available_lts_releases`（公開されている LTS の大きな版の一覧）を取得する
+2. プロファイルの `version_ranges` の `java`（例 `>=21 <27`）で絞る。範囲がなければ絞らない
+3. 絞った中の最新を採用する。一覧全体の最新が範囲の外でも、範囲の中に旧い LTS があればそれを採る
+4. 範囲に入る LTS が1つもなければ、検証済み（25）に戻す（理由に「範囲に合う安定版がないため、ハーネス検証済みを使用」）
+5. 取得に失敗したときは、Node.js と同じ流れ（対話しないときは `versions_offline: verified` で検証済みに戻す。なければ止まる）。画面に出す理由は固定の分類だけ
+6. `version_policy: verified` のときは、常に検証済み（25）
+
+Java の検証済みの版が、プロファイルの範囲の外にあるときは、プロファイルの誤りとしてエラー。
+
 ## 取得（registry.ts）
 
 | 項目 | 内容 |
 | --- | --- |
 | npm | `https://registry.npmjs.org/<名前>` を、`Accept: application/vnd.npm.install-v1+json`（短い形の登録情報）で取得し、`versions` のキーの一覧を得る。スコープ付きの名前は、`/` をエンコードする。`versions` がない形は「取得できない」にする |
 | Node.js | `https://nodejs.org/dist/index.json` から、`lts` が偽でない（LTS の）版を得る。先頭の `v` は除く。形が違えば「取得できない」にする |
+| Maven・Java | 「Maven Central の取得と安定版の判定」「Java の版の選び方」を参照 |
 | `fetch` の差し替え | `fetchVersionLists` と `chooseVersions` は `fetch` を引数で受ける（`CreateDeps.fetch`。既定は `globalThis.fetch`）。テストでは偽の `fetch` を渡し、本物のネットワークを使わない |
 | 時間切れ | 1回の取得ごとに10秒（`AbortController`）。時間切れは、その旨を理由に示す |
 | 同時の数 | 同時に取得する数の上限は6 |
@@ -231,6 +275,7 @@ flowchart TD
 | Issue #6 AC-3：範囲の外の版を試す | `test/versions/range-trial.test.ts`・`range-trial-errors.test.ts`・`test/commands/create-range-trial.test.ts`・`test/verify/verify.test.ts`（例外時の DB 停止） |
 | Issue #6 AC-4：試した結果つきの下書き | `test/versions/range-feedback-trial.test.ts`・`create-range-trial.test.ts` |
 | Issue #6 AC-5：status の表示 | `test/commands/status.test.ts`・`status-generate-error.test.ts`・`test/versions/status-review.test.ts` |
+| Issue #39 AC-2：Maven Central と Java の版の調査 | `test/versions/maven-metadata.test.ts`・`maven-version.test.ts`・`maven-registry.test.ts`（偽の `fetch`）・`java-choose.test.ts`（Java の版の選び方）・`maven-targets.test.ts`（エコシステム・対象・各所の扱い） |
 | 回答ファイルの `versions` ほか | `test/questions/answers.test.ts`・`create-versions.test.ts` |
 | 回答の変更の後の再計算 | `create-versions.test.ts` |
 | 調べた日がローカルの日付 | `choose.test.ts`・`create-versions.test.ts` |

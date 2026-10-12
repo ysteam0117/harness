@@ -31,12 +31,16 @@ function row(e: VersionEntry): string {
  */
 export function renderTechStack(
   result: VersionResult,
-  profiles: Pick<Profile, "key" | "name" | "compatibilityNotes">[],
+  profiles: (Pick<Profile, "key" | "name" | "compatibilityNotes"> &
+    Partial<Pick<Profile, "ecosystem">>)[],
 ): string {
+  const source = profiles.some((p) => p.ecosystem === "maven")
+    ? "npm・Node.js・Maven Central・Java（Adoptium）の"
+    : "npm と Node.js の";
   const lines: string[] = [
     "# 技術スタック",
     "",
-    "採用したバージョンと、その選定理由の記録です。バージョンは、npm と Node.js の登録情報を調べて決めています。",
+    `採用したバージョンと、その選定理由の記録です。バージョンは、${source}登録情報を調べて決めています。`,
     "",
     "| 技術 | 採用したバージョン | 選定理由 | 調べた日 | 確認した最新の安定版 | 検証済み |",
     "| --- | --- | --- | --- | --- | --- |",

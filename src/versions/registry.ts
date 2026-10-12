@@ -1,3 +1,5 @@
+import { parseCoordinate } from "./ecosystem.js";
+import { parseMavenMetadata } from "./maven-metadata.js";
 import type { Target } from "./targets.js";
 
 export type FetchResult = { ok: true; versions: string[] } | { ok: false; reason: string };
@@ -12,6 +14,8 @@ export interface RegistryOptions {
 
 const NPM_BASE = "https://registry.npmjs.org/";
 const NODE_INDEX_URL = "https://nodejs.org/dist/index.json";
+const MAVEN_CENTRAL_BASE = "https://repo1.maven.org/maven2/";
+const ADOPTIUM_RELEASES_URL = "https://api.adoptium.net/v3/info/available_releases";
 const NPM_ACCEPT = "application/vnd.npm.install-v1+json";
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_CONCURRENCY = 6;
@@ -49,11 +53,13 @@ function describeError(e: unknown, timeoutMs: number, timedOut: boolean): string
   return `接続できません：${message}${cause}`;
 }
 
-async function getJson(
+/** 応答の本文を、JSON か文字列として取得する。失敗は FetchFailure（利用者に見せる理由つき） */
+async function getBody(
   url: string,
   headers: Record<string, string>,
   fetchFn: typeof fetch,
   timeoutMs: number,
+  as: "json" | "text",
   limit?: RegistryOptions["limit"],
 ): Promise<unknown> {
   const release = limit === undefined ? undefined : await limit();
@@ -69,10 +75,13 @@ async function getJson(
       throw new FetchFailure(`HTTP ${response.status} が返されました（${url}）`);
     }
     try {
-      return await response.json();
+      return as === "json" ? await response.json() : await response.text();
     } catch (e) {
       if (timedOut) throw e;
-      throw new FetchFailure(`応答を JSON として読めません（${url}）`, { cause: e });
+      throw new FetchFailure(
+        as === "json" ? `応答を JSON として読めません（${url}）` : `応答を読めません（${url}）`,
+        { cause: e },
+      );
     }
   } catch (e) {
     throw new FetchFailure(describeError(e, timeoutMs, timedOut), { cause: e });
@@ -99,11 +108,12 @@ export async function fetchPackageInfo(
   opts: Pick<RegistryOptions, "timeoutMs" | "limit"> = {},
 ): Promise<PackageInfoResult> {
   try {
-    const body = await getJson(
+    const body = await getBody(
       npmUrl(name),
       { Accept: NPM_ACCEPT },
       fetchFn,
       opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      "json",
       opts.limit,
     );
     const versions = (body as { versions?: unknown } | null)?.versions;
@@ -141,7 +151,7 @@ async function fetchNode(
   limit?: RegistryOptions["limit"],
 ): Promise<FetchResult> {
   try {
-    const body = await getJson(NODE_INDEX_URL, {}, fetchFn, timeoutMs, limit);
+    const body = await getBody(NODE_INDEX_URL, {}, fetchFn, timeoutMs, "json", limit);
     if (!Array.isArray(body)) {
       return { ok: false, reason: "登録情報の形が想定と違います（版の一覧ではありません）" };
     }
@@ -160,10 +170,78 @@ async function fetchNode(
   }
 }
 
+/** Maven Central の maven-metadata.xml の URL。座標の形が誤っていれば undefined */
+export function mavenMetadataUrl(name: string): string | undefined {
+  const coordinate = parseCoordinate(name);
+  if (coordinate === undefined) return undefined;
+  const group = coordinate.group.split(".").map(encodeURIComponent).join("/");
+  return `${MAVEN_CENTRAL_BASE}${group}/${encodeURIComponent(coordinate.artifact)}/maven-metadata.xml`;
+}
+
+async function fetchMaven(
+  name: string,
+  fetchFn: typeof fetch,
+  timeoutMs: number,
+  limit?: RegistryOptions["limit"],
+): Promise<FetchResult> {
+  const url = mavenMetadataUrl(name);
+  if (url === undefined)
+    return { ok: false, reason: "登録情報の形が想定と違います（座標の形が誤っています）" };
+  try {
+    const body = await getBody(url, {}, fetchFn, timeoutMs, "text", limit);
+    return parseMavenMetadata(body as string);
+  } catch (e) {
+    return { ok: false, reason: (e as Error).message };
+  }
+}
+
+/** Java の版：Adoptium の登録情報にある、長期サポート（LTS）の大きな版（25 など）の一覧 */
+async function fetchJava(
+  fetchFn: typeof fetch,
+  timeoutMs: number,
+  limit?: RegistryOptions["limit"],
+): Promise<FetchResult> {
+  try {
+    const body = await getBody(ADOPTIUM_RELEASES_URL, {}, fetchFn, timeoutMs, "json", limit);
+    const lts = (body as { available_lts_releases?: unknown } | null)?.available_lts_releases;
+    if (!Array.isArray(lts) || lts.length === 0) {
+      return { ok: false, reason: "登録情報の形が想定と違います（LTS の一覧がありません）" };
+    }
+    const versions: string[] = [];
+    for (const item of lts) {
+      if (typeof item !== "number" || !Number.isInteger(item) || item <= 0) {
+        return { ok: false, reason: "登録情報の形が想定と違います（LTS の版が数ではありません）" };
+      }
+      versions.push(String(item));
+    }
+    return { ok: true, versions };
+  } catch (e) {
+    return { ok: false, reason: (e as Error).message };
+  }
+}
+
+async function fetchTarget(
+  target: Target,
+  fetchFn: typeof fetch,
+  timeoutMs: number,
+  limit?: RegistryOptions["limit"],
+): Promise<FetchResult> {
+  switch (target.kind) {
+    case "node":
+      return fetchNode(fetchFn, timeoutMs, limit);
+    case "java":
+      return fetchJava(fetchFn, timeoutMs, limit);
+    case "maven":
+      return fetchMaven(target.name, fetchFn, timeoutMs, limit);
+    case "npm":
+      return fetchNpm(target.name, fetchFn, timeoutMs, limit);
+  }
+}
+
 /**
  * 対象ごとの、登録情報にある版の一覧を取得する。キーは Target.name。
  * 取得できないもの（つながらない・時間切れ・HTTP のエラー）は、例外にせず ok: false と理由にする。
- * 試験版も含めて、そのまま返す（選ぶのは select.ts）。Node.js は LTS だけ。
+ * 試験版も含めて、そのまま返す（選ぶのは select.ts）。Node.js と Java は LTS だけ。Maven は Maven Central の maven-metadata.xml。
  */
 export async function fetchVersionLists(
   targets: Target[],
@@ -177,12 +255,7 @@ export async function fetchVersionLists(
 
   const worker = async (): Promise<void> => {
     for (let target = queue.shift(); target !== undefined; target = queue.shift()) {
-      results.set(
-        target.name,
-        target.kind === "node"
-          ? await fetchNode(fetchFn, timeoutMs, opts.limit)
-          : await fetchNpm(target.name, fetchFn, timeoutMs, opts.limit),
-      );
+      results.set(target.name, await fetchTarget(target, fetchFn, timeoutMs, opts.limit));
     }
   };
   await Promise.all(Array.from({ length: Math.min(concurrency, queue.length) }, worker));

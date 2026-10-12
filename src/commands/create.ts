@@ -165,7 +165,7 @@ function formatResult(result: CheckResult, facts: Facts | undefined): string {
 /** 採用するバージョンの表（確認の一覧に加える） */
 function formatVersions(result: VersionResult): string {
   const rows = result.entries.map((e) => [
-    e.name === "node" ? "node（Node.js）" : e.name,
+    e.name === "node" ? "node（Node.js）" : e.name === "java" ? "java（Java）" : e.name,
     e.version,
     shortReason(e),
   ]);

@@ -44,6 +44,8 @@ export function rangeTargets(profiles: Profile[], targets: Target[]): RangeTarge
   const out: RangeTarget[] = [];
   for (const target of targets) {
     if (target.range === undefined) continue;
+    // maven・java の範囲には、peer の考え方がなく、原因を確かめられない（Gradle の試しは #41 以降）
+    if (target.kind === "maven" || target.kind === "java") continue;
     const owners = profiles.filter(
       (p) => target.profiles.includes(p.key) && target.name in p.versionRanges,
     );

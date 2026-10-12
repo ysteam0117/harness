@@ -1,4 +1,6 @@
 import { valid } from "semver";
+import { JAVA_TARGET_NAME, type Ecosystem } from "./ecosystem.js";
+import { parseMavenVersion } from "./maven-version.js";
 import { usableProfiles } from "../adopt/profiles.js";
 import { GenerateError } from "../generate/errors.js";
 import { loadProfile } from "../generate/profile.js";
@@ -14,7 +16,7 @@ import {
 } from "./range-review.js";
 import { fetchVersionLists, type RegistryOptions } from "./registry.js";
 import { compareWithVerified, pickLatestStable } from "./select.js";
-import { buildTargets, NODE_TARGET_NAME, type Target } from "./targets.js";
+import { buildTargets, ecosystemOf, NODE_TARGET_NAME, type Target } from "./targets.js";
 
 // harness status の、新しい大きな版と、範囲を緩められる候補（Issue #6 PR-C）。読むだけで、何も書かない。
 // 画面に出す理由は、固定の分類だけにする（registry の reason は、例外の本文やパスを含みうる）。
@@ -35,10 +37,25 @@ export function safeReason(reason: string): string {
   if (reason.startsWith("時間切れ")) return "時間切れ";
   const http = /^HTTP (\d{3})(?!\d)/.exec(reason);
   if (http !== null) return `HTTP ${http[1] ?? ""}`;
-  if (reason.startsWith("応答を JSON") || reason.startsWith("登録情報の形")) {
+  if (
+    reason.startsWith("応答を JSON") ||
+    reason.startsWith("応答を読めません") ||
+    reason.startsWith("登録情報の形")
+  ) {
     return "応答を読めません";
   }
   return "接続できません";
+}
+
+/** 記録の名前から、対象の種類を決める（Maven の依存は group:artifact、Java は java） */
+function kindOfName(name: string): Target["kind"] {
+  if (name === NODE_TARGET_NAME) return "node";
+  if (name === JAVA_TARGET_NAME) return "java";
+  return name.includes(":") ? "maven" : "npm";
+}
+
+function readable(version: string, ecosystem: Ecosystem): boolean {
+  return ecosystem === "maven" ? parseMavenVersion(version) !== undefined : valid(version) !== null;
 }
 
 /** 採用した技術の、新しい大きな版を探す。取得できないものは、例外にせず skipped にする */
@@ -51,12 +68,13 @@ export async function checkMajorUpdates(
   const skipped: { name: string; reason: string }[] = [];
   const targets: Target[] = [];
   for (const e of entries) {
-    if (valid(e.version) === null) {
+    const kind = kindOfName(e.name);
+    if (!readable(e.version, ecosystemOf(kind))) {
       skipped.push({ name: e.name, reason: "版の形ではありません" });
       continue;
     }
     targets.push({
-      kind: e.name === NODE_TARGET_NAME ? "node" : "npm",
+      kind,
       name: e.name,
       unverified: false,
       profiles: [],
@@ -71,12 +89,13 @@ export async function checkMajorUpdates(
       skipped.push({ name: e.name, reason: safeReason(found.reason) });
       continue;
     }
-    const latest = pickLatestStable(found.versions);
+    const ecosystem = ecosystemOf(kindOfName(e.name));
+    const latest = pickLatestStable(found.versions, undefined, ecosystem);
     if (latest === undefined) {
       skipped.push({ name: e.name, reason: "安定版がありません" });
       continue;
     }
-    const c = compareWithVerified(e.version, latest);
+    const c = compareWithVerified(e.version, latest, ecosystem);
     if (c.kind === "newer" && c.majorDiffers) {
       updates.push({ name: e.name, adopted: e.version, latest });
     }
