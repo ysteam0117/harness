@@ -366,7 +366,12 @@ describe("#6 AC-5: harness status の登録情報の節", () => {
         finished = true;
       });
       // 取得の準備（ファイルの読み込み）が済んで時間切れの計時が始まるまで、時計を進め続ける
-      for (let i = 0; i < 2000 && !finished; i++) await vi.advanceTimersByTimeAsync(1000);
+      // setImmediate・Date は偽にしていないので、回数ではなく実際の時間で上限を決め、読み込みの完了も待てる
+      const deadline = Date.now() + 20_000;
+      while (!finished && Date.now() < deadline) {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        await vi.advanceTimersByTimeAsync(1000);
+      }
       expect((await running).exitCode).toBe(0);
       expect(s.out()).toContain("- vitest：採用 4.1.11 → 最新 5.0.2");
       expect(s.out()).toContain("取得できません（fake-lib：時間切れ）");
