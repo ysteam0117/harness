@@ -3,7 +3,7 @@ import type { Prompter } from "../questions/prompter.js";
 import { fetchVersionLists, type FetchResult } from "./registry.js";
 import { compareWithVerified, pickLatestStable } from "./select.js";
 import { alignTable } from "./table.js";
-import type { Target } from "./targets.js";
+import { ecosystemOf, type Target } from "./targets.js";
 
 /** 技術ごとの選定の結果（docs/tech-stack.md の1行になる） */
 export interface VersionEntry {
@@ -75,7 +75,8 @@ function dayOf(now: Date): string {
 }
 
 function label(name: string): string {
-  return name === "node" ? "node（Node.js）" : name;
+  if (name === "node") return "node（Node.js）";
+  return name === "java" ? "java（Java）" : name;
 }
 
 function rangeText(target: Target): string {
@@ -85,7 +86,7 @@ function rangeText(target: Target): string {
 function surveyOf(target: Target, result: FetchResult | undefined): Survey {
   if (!result) return { target, failure: "取得の結果がありません" };
   if (!result.ok) return { target, failure: result.reason };
-  const latest = pickLatestStable(result.versions, target.range);
+  const latest = pickLatestStable(result.versions, target.range, ecosystemOf(target.kind));
   return latest === undefined ? { target } : { target, latest };
 }
 
@@ -96,7 +97,7 @@ function formatTable(surveys: Survey[]): string {
     if (failure !== undefined) diff = "未確認";
     else if (latest === undefined) diff = "範囲外";
     else if (target.verified !== undefined) {
-      const c = compareWithVerified(target.verified, latest);
+      const c = compareWithVerified(target.verified, latest, ecosystemOf(target.kind));
       diff = c.kind === "same" ? "同じ" : c.majorDiffers ? "大" : c.kind === "newer" ? "小" : "古";
     }
     return [label(target.name), target.verified ?? "なし", latest ?? "-", diff, target.range ?? ""];
@@ -129,6 +130,12 @@ function buildEntry(survey: Survey, plan: Plan, surveyedOn: string): VersionEntr
     reason =
       target.range !== undefined ? `範囲内の最新の安定版${rangeText(target)}` : "最新の安定版";
     if (target.kind === "node") reason = "最新の安定版（LTS）";
+    if (target.kind === "java") {
+      reason =
+        target.range !== undefined
+          ? `範囲内の最新の LTS${rangeText(target)}`
+          : "最新の安定版（LTS）";
+    }
   } else if (plan.kind === "latest") {
     version = target.verified;
     reason =
@@ -143,7 +150,7 @@ function buildEntry(survey: Survey, plan: Plan, surveyedOn: string): VersionEntr
   let newerThanVerified = false;
   let majorDiffers = false;
   if (verified !== null) {
-    const c = compareWithVerified(verified, version);
+    const c = compareWithVerified(verified, version, ecosystemOf(target.kind));
     newerThanVerified = c.kind === "newer";
     majorDiffers = c.majorDiffers;
   }

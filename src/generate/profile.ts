@@ -3,6 +3,18 @@ import path from "node:path";
 import { prerelease, satisfies, valid, validRange } from "semver";
 import { parse as parseYaml } from "yaml";
 import { parseWhen, whenMatches, type When } from "./conditions.js";
+import {
+  ECOSYSTEMS,
+  JAVA_TARGET_NAME,
+  parseCoordinate,
+  type Ecosystem,
+} from "../versions/ecosystem.js";
+import {
+  isStableMavenVersion,
+  parseMavenRange,
+  parseMavenVersion,
+  satisfiesMavenRange,
+} from "../versions/maven-version.js";
 import { GenerateError } from "./errors.js";
 
 export type ProfileFile = { source: string; destination: string };
@@ -42,7 +54,11 @@ export type Profile = {
   skillName: string;
   /** プロファイルのフォルダの絶対パス */
   dir: string;
+  /** パッケージの登録先（書いてなければ npm） */
+  ecosystem: Ecosystem;
   languages: string[];
+  /** 動かす環境（cloudflare-workers・jvm など。書いてなければ []） */
+  runtimes: string[];
   requires: string[];
   includes: string[];
   /** 読み込むだけで、依存には加えない */
@@ -96,8 +112,12 @@ export function isProfileKey(key: string): boolean {
 const SHARED_RE = new RegExp(`^(${SEGMENT})/_shared$`);
 const SKILL_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
+/** languages に書ける言語 */
+const KNOWN_LANGUAGES = ["typescript", "javascript", "java"];
+
 const KNOWN_FIELDS = new Set([
   "id",
+  "ecosystem",
   "category",
   "name",
   "languages",
@@ -294,6 +314,50 @@ export function containerImageValues(profiles: Profile[]): Record<string, string
   return values;
 }
 
+/** ecosystem（書いてなければ npm） */
+function ecosystemField(data: Record<string, unknown>, where: string): Ecosystem {
+  const value = data["ecosystem"];
+  if (value === undefined) return "npm";
+  if (typeof value !== "string" || !(ECOSYSTEMS as readonly string[]).includes(value)) {
+    throw new GenerateError(
+      `${where}：項目 ecosystem は ${ECOSYSTEMS.join(" か ")} で書いてください（${JSON.stringify(value)}）`,
+    );
+  }
+  return value as Ecosystem;
+}
+
+/** npm のためだけの項目（maven では書けない） */
+const NPM_ONLY_FIELDS = [
+  "dev_packages",
+  "package_json",
+  "package_json_when",
+  "wrangler",
+  "wrangler_when",
+  "range_causes",
+];
+
+/** maven のプロファイル：packages 等は group:artifact の形。npm のためだけの項目は書けない */
+function checkMavenOnlyFields(
+  data: Record<string, unknown>,
+  where: string,
+  packages: string[],
+  packagesWhen: PackagesWhen[],
+): void {
+  for (const field of NPM_ONLY_FIELDS) {
+    if (data[field] !== undefined) {
+      throw new GenerateError(`${where}：ecosystem が maven のとき、項目 ${field} は書けません`);
+    }
+  }
+  const names = [...packages, ...packagesWhen.flatMap((w) => w.packages)];
+  for (const name of names) {
+    if (parseCoordinate(name) === undefined) {
+      throw new GenerateError(
+        `${where}：ecosystem が maven のとき、パッケージは「group:artifact」の形で書いてください（${JSON.stringify(name)}）`,
+      );
+    }
+  }
+}
+
 function packagesWhenField(data: Record<string, unknown>, where: string): PackagesWhen[] {
   const value = data["packages_when"];
   if (value === undefined) return [];
@@ -329,9 +393,39 @@ function checkRelativePath(value: string, where: string, label: string): void {
   }
 }
 
+/** maven の version_ranges：名前は座標か java、範囲は「>=X <Y」の形だけ。range_causes は書けない（peer の考え方がない） */
+function checkMavenRanges(p: {
+  where: string;
+  packages: string[];
+  packagesWhen: PackagesWhen[];
+  verifiedVersions: Record<string, string>;
+  versionRanges: Record<string, string>;
+}): void {
+  const known = new Set([...p.packages, ...p.packagesWhen.flatMap((w) => w.packages)]);
+  for (const [name, range] of Object.entries(p.versionRanges)) {
+    if (name !== JAVA_TARGET_NAME && !known.has(name)) {
+      throw new GenerateError(
+        `${p.where}：version_ranges の ${name} が、packages にも packages_when にもありません（Java の版は ${JAVA_TARGET_NAME} と書けます）`,
+      );
+    }
+    if (parseMavenRange(range) === undefined) {
+      throw new GenerateError(
+        `${p.where}：version_ranges の ${name} の範囲 ${JSON.stringify(range)} は、「>=X <Y」の形（X が Y より小さい）で書いてください`,
+      );
+    }
+    const verified = p.verifiedVersions[name];
+    if (verified !== undefined && !satisfiesMavenRange(verified, range)) {
+      throw new GenerateError(
+        `${p.where}：${name} の検証済みの版 ${verified} が、範囲 ${range} に合いません（プロファイルの誤り）`,
+      );
+    }
+  }
+}
+
 /** 版・範囲・外部の道具・未検証の指定が、packages などと食い違っていないかを確かめる（R1・R5・R9） */
 function checkVersions(p: {
   where: string;
+  ecosystem: Ecosystem;
   packages: string[];
   packagesWhen: PackagesWhen[];
   verifiedVersions: Record<string, string>;
@@ -366,6 +460,19 @@ function checkVersions(p: {
         `${p.where}：verified_versions の ${name} が、packages にも packages_when にもありません`,
       );
     }
+    if (p.ecosystem === "maven") {
+      if (parseMavenVersion(version) === undefined) {
+        throw new GenerateError(
+          `${p.where}：verified_versions の ${name} の版 ${JSON.stringify(version)} は、Maven の版として読めません（数字で始めてください）`,
+        );
+      }
+      if (!isStableMavenVersion(version)) {
+        throw new GenerateError(
+          `${p.where}：verified_versions の ${name} の版 ${version} は試験版です（安定版を書いてください）`,
+        );
+      }
+      continue;
+    }
     if (valid(version) === null) {
       throw new GenerateError(
         `${p.where}：verified_versions の ${name} の版 ${JSON.stringify(version)} は、semver の版として読めません`,
@@ -376,6 +483,10 @@ function checkVersions(p: {
         `${p.where}：verified_versions の ${name} の版 ${version} は試験版です（安定版を書いてください）`,
       );
     }
+  }
+  if (p.ecosystem === "maven") {
+    checkMavenRanges(p);
+    return;
   }
   for (const [name, range] of Object.entries(p.versionRanges)) {
     if (!known.has(name)) {
@@ -537,11 +648,19 @@ export function loadProfile(templatesDir: string, key: string): Profile {
     );
   }
 
+  const ecosystem = ecosystemField(data, where);
   const languages = stringArrayField(data, "languages", where);
+  for (const language of languages) {
+    if (!KNOWN_LANGUAGES.includes(language)) {
+      throw new GenerateError(
+        `${where}：languages の ${language} は書けません（書けるのは ${KNOWN_LANGUAGES.join("・")}）`,
+      );
+    }
+  }
   const requires = stringArrayField(data, "requires", where);
   const includes = stringArrayField(data, "includes", where);
   const optionalPackages = stringArrayField(data, "optional_packages", where);
-  stringArrayField(data, "runtimes", where);
+  const runtimes = stringArrayField(data, "runtimes", where);
   stringArrayField(data, "databases", where);
   const packages = stringArrayField(data, "packages", where);
   const compatibilityNotes = stringArrayField(data, "compatibility_notes", where);
@@ -557,12 +676,14 @@ export function loadProfile(templatesDir: string, key: string): Profile {
       );
     }
   }
+  if (ecosystem === "maven") checkMavenOnlyFields(data, where, packages, packagesWhen);
   const containerImages = containerImagesField(data, where);
   const verifiedVersions = stringRecord(data, "verified_versions", where, "名前: 版");
   const versionRanges = stringRecord(data, "version_ranges", where, "名前: 範囲");
   const rangeCauses = rangeCausesField(data, where);
   checkVersions({
     where,
+    ecosystem,
     packages,
     packagesWhen,
     verifiedVersions,
@@ -640,7 +761,9 @@ export function loadProfile(templatesDir: string, key: string): Profile {
     name,
     skillName,
     dir,
+    ecosystem,
     languages,
+    runtimes,
     requires,
     includes,
     optionalPackages,

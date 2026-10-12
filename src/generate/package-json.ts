@@ -60,6 +60,7 @@ export function buildPackageJson(input: BuildPackageJsonInput): Record<string, u
   // パッケージ名 → すべてのプロファイルが dev_packages に書いているか
   const isDev = new Map<string, boolean>();
   for (const profile of profiles) {
+    if (profile.ecosystem !== "npm") continue; // maven の依存は package.json に入れない
     for (const name of wantedPackages(profile, answers)) {
       const dev = profile.devPackages.includes(name);
       isDev.set(name, (isDev.get(name) ?? true) && dev);
