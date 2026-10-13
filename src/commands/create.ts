@@ -253,6 +253,15 @@ async function run(options: CreateOptions, deps: CreateDeps): Promise<CreateOutc
     return { exitCode: 1 };
   }
 
+  if (!deps.interactive && parsedExtra !== undefined) {
+    // 以前の回答ファイルは、backend・infra を書かなくてよかった（選択肢が1つだった）ため、書かれていなければ Hono・Cloudflare とみなす。
+    // 端末で実行するとき（対話）は、書かれていなければ聞く
+    if (initial.backend === undefined) initial = { ...initial, backend: "hono" };
+    if (initial.infra === undefined && initial.backend === "hono") {
+      initial = { ...initial, infra: "cloudflare" };
+    }
+  }
+
   if (!deps.interactive) {
     const missing = findMissing(questionDefinitions, initial);
     if (missing.length > 0) {
@@ -369,6 +378,7 @@ async function run(options: CreateOptions, deps: CreateDeps): Promise<CreateOutc
     techStack = renderTechStack(
       versions,
       resolveProfiles(findTemplatesDir(), selectProfiles(outcome.answers)),
+      { terraform: outcome.answers.infra === "cloudflare" },
     );
   } catch (e) {
     if (!(e instanceof GenerateError)) throw e;

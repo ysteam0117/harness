@@ -113,3 +113,44 @@
   message: 生成先のフォルダに、すでに中身があります
   reason: 既存のファイルを上書きしないため、生成できません
   fix: [app_name]
+
+# バックエンドとデプロイ先・DB・認証の組み合わせ（#40）。Spring Boot は Workers で動かず、Hono はコンテナ向けの構成を持たない
+- id: spring-boot-on-workers
+  level: error
+  when:
+    all:
+      - { answer: backend, equals: spring_boot }
+      - { answer: infra, equals: cloudflare }
+  message: バックエンドが「Spring Boot」で、デプロイ先が「Cloudflare」です
+  reason: Spring Boot（Java）は Cloudflare Workers で動かせません（Workers は JavaScript・WebAssembly の実行環境です）
+  fix: [backend, infra]
+
+- id: hono-needs-workers
+  level: error
+  when:
+    all:
+      - { answer: backend, equals: hono }
+      - { answer: infra, equals: container }
+  message: バックエンドが「Hono」で、デプロイ先が「コンテナ」です
+  reason: このハーネスの Hono の構成は Cloudflare Workers を前提にしており、コンテナ向けの構成（Dockerfile・デプロイの設定）を持ちません
+  fix: [backend, infra]
+
+- id: spring-boot-with-d1
+  level: error
+  when:
+    all:
+      - { answer: backend, equals: spring_boot }
+      - { answer: database, equals: d1 }
+  message: バックエンドが「Spring Boot」で、DBが「Cloudflare D1」です
+  reason: D1 は Cloudflare Workers の中からだけ使えるDBで、Spring Boot（Java）からは接続できません
+  fix: [backend, database]
+
+- id: spring-boot-with-auth
+  level: error
+  when:
+    all:
+      - { answer: backend, equals: spring_boot }
+      - { answer: auth, in: [app, oidc, both] }
+  message: バックエンドが「Spring Boot」で、認証が「アプリ独自認証」「OIDC」「併用」のいずれかです
+  reason: 認証の仕組み（セッション・OIDC）はまだ Hono の構成にだけあり、Spring Boot の認証は未提供です
+  fix: [backend, auth]

@@ -117,9 +117,35 @@ describe("#32 AC-4: --answers のエラー（まとめて示す）", () => {
     expect(errors.some((e) => e.includes("infra"))).toBe(true);
   });
 
-  it("#39 AC-1: backend に spring_boot を書くと、今は選べない値としてエラー（選択肢は #40 で足す）", () => {
-    const errors = errorsOf(yaml(baseAnswers({ backend: "spring_boot" })));
-    expect(errors.some((e) => e.includes("backend"))).toBe(true);
+  it("#40: backend に spring_boot、infra に container を書くと、選べる値として読める（#39 で固定した拒否の反転）", () => {
+    const parsed = parseAnswersYaml(
+      yaml(baseAnswers({ backend: "spring_boot", infra: "container", database: "none" })),
+    );
+    expect(parsed.answers).toMatchObject({ backend: "spring_boot", infra: "container" });
+  });
+
+  it("#40: backend・infra に、選択肢にない値を書くとエラー", () => {
+    expect(
+      errorsOf(yaml(baseAnswers({ backend: "rails" }))).some((e) => e.includes("backend")),
+    ).toBe(true);
+    expect(errorsOf(yaml(baseAnswers({ infra: "aws" }))).some((e) => e.includes("infra"))).toBe(
+      true,
+    );
+  });
+
+  it("#40: spring_boot は、DB があっても data_access を書けない（Hono のときだけ聞く）", () => {
+    const errors = errorsOf(
+      yaml(
+        baseAnswers({
+          backend: "spring_boot",
+          infra: "container",
+          database: "postgresql",
+          postgres_provider: "neon",
+          data_access: "drizzle",
+        }),
+      ),
+    );
+    expect(errors.some((e) => e.includes("data_access"))).toBe(true);
   });
 
   it("#32 AC-4: 複数の誤りは1回の AnswersError にまとめて入る", () => {

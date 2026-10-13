@@ -1,0 +1,11 @@
+# 技術プロファイル：Gradle（ビルドの道具。F-24、Issue #40）
+id: gradle
+ecosystem: maven
+category: build
+name: Gradle
+languages: [java]
+runtimes: [jvm]
+# 依存は足さない。backend/ の settings.gradle.kts・gradle/libs.versions.toml は、ハーネスが選んだ版から作る。
+# Gradle Wrapper（gradlew）は出さない。backend/ で gradle wrapper を実行して作る（README の「Gradle の使い方」）
+packages: []
+skill_name: build-gradle

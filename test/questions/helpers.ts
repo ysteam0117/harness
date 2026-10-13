@@ -107,7 +107,7 @@ export class FakePrompter implements Prompter {
 
 /**
  * 実在しない架空の回答（質問に全部答えた状態。自動で決まる質問は含めないが、backend だけは含める：
- * プロファイル・ファイルの出し分けが backend の回答で決まり、回答に無いとどの条件にも合わなくなるため。#40）
+ * プロファイル・ファイルの出し分けが backend・infra の回答で決まり、回答に無いとどの条件にも合わなくなるため。#40）
  */
 export function baseAnswers(over: Record<string, unknown> = {}): Partial<Answers> {
   return {
@@ -117,6 +117,7 @@ export function baseAnswers(over: Record<string, unknown> = {}): Partial<Answers
     visibility: "private",
     team_size: "solo",
     backend: "hono",
+    infra: "cloudflare",
     database: "d1",
     auth: "oidc",
     idp: "google",
@@ -139,8 +140,6 @@ export const AUTO_VALUES = {
   project_type: "web",
   layers: "frontend_backend",
   frontend: "react",
-  backend: "hono",
-  infra: "cloudflare",
   data_access: "drizzle",
 } as const;
 

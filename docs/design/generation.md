@@ -355,7 +355,7 @@ maven のプロファイル（`ecosystem: maven`）が1つでもあるときだ�
 
 ## backend による出し分け（#40）
 
-Spring Boot の構成（#40）を足せるよう、Hono（Workers）のためのものを、`backend` が `hono` のときだけ出す形にした。**Hono の生成結果は1バイトも変わらない**（既存のスナップショットとベースラインで確かめる）。Spring Boot の選択肢と、Spring Boot 側のプロファイル・設定は、まだ無い（選べない）。
+Spring Boot の構成（#40）を足せるよう、Hono（Workers）のためのものを、`backend` が `hono` のときだけ出す形にした。**Hono の生成結果は1バイトも変わらない**（既存のスナップショットとベースライン（`test/generate/hono-baseline.test.ts`）で確かめる）。Spring Boot の構成は、`backend=spring_boot`（`infra=container`）で選ぶ。
 
 | 出すもの | 条件 |
 | --- | --- |
@@ -369,7 +369,24 @@ Spring Boot の構成（#40）を足せるよう、Hono（Workers）のための
 | `vite-react-router`：`vite.config.ts`・`public/_headers`・`@cloudflare/vite-plugin`・scripts（wrangler の型・Docker の開発環境を使うもの） | `backend=hono`（`files_when`・`packages_when`・`package_json_when`） |
 | `typescript-standard`：`tsconfig.json`・scripts・`allowScripts` の `workerd` | `backend=hono` |
 | `vitest-playwright`：`@cloudflare/vitest-pool-workers`・`vitest.*.config.ts`・Playwright の設定と E2E・scripts | `backend=hono`（DB の条件は `all` で重ねる） |
+| プロファイル `backend-framework/spring-boot`・`build/gradle`・`test-framework/junit-testcontainers`・`logger/slf4j-logback` | `backend=spring_boot` |
+| `README.md` | `backend=spring_boot` のときは `project/README-spring.md`（`TEMPLATE_FILES` の `unless`）。Docker の開発環境・wrangler・Hono の記述がなく、`./gradlew bootRun` と `npm run dev` の手順を書く。Gradle の節は今までどおり `addGradleReadme` が足す |
+| `docs/tech-stack.md` の Terraform の節 | `infra=cloudflare`（`renderTechStack` の `terraform` の指定） |
 
+#### backend ごとの frontend・quality・test の差分（Issue #40）
+
+3つのプロファイルは、`backend=hono` と `backend=spring_boot` で、次のように分かれる（どちらも `files_when`・`package_json_when`・`packages_when`）。
+
+| プロファイル | `backend=hono` | `backend=spring_boot` |
+| --- | --- | --- |
+| `vite-react-router` | `vite.config.ts`（`@cloudflare/vite-plugin`）・`public/_headers`・scripts（`dev`・`build`・`types`・`docker:*` など） | `vite.config.ts` は `files/vite.spring.config.ts`（`react()` のみ。`server.proxy`・`preview.proxy` で `/api` を `HARNESS_API_ORIGIN`（既定 `http://localhost:8080`）へ中継。ビルドは `readWorkerConfig` を呼ばない）。scripts は `dev`（`run-local.ts development vite`）・`build`（`vite build`）・`preview`・`predev`（`env:check`）だけ。`docker:*` と Compose は出さない |
+| `typescript-standard` | `tsconfig.json`（wrangler の型・`@cloudflare/vitest-pool-workers/types`）・`pretypecheck`・`deps:check`／`dup:check` は `frontend/src backend/src`・`allowScripts` の `workerd` | `tsconfig.json` は `files/tsconfig.spring.json`（`types` は `vite/client`・`node`、`include` は `frontend`・`e2e`・`scripts`・`*.ts`）。`pretypecheck` なし、`deps:check`／`dup:check` は `frontend/src` だけ、`workerd` の許可なし |
+| `vitest-playwright` | `@cloudflare/vitest-pool-workers`・DB ごとの `vitest.*.config.ts`・Playwright と E2E・scripts | `vitest.config.ts` は `files/vitest.spring.config.ts`（frontend のプロジェクトのみ。jsdom）。scripts は `test`・`pretest` だけ。E2E（Playwright）は出さない（デプロイ先の Issue（#43）以降）。`@playwright/test` は依存に残る |
+
+- **Docker の開発環境（Compose）は、`spring_boot` では出さない。** デプロイ先の Issue（#43）で扱う。README にも、今は無いことと、手元では `./gradlew bootRun` と `npm run dev` を使うことを書く
+- Spring Boot の画面は、`wrangler.jsonc` を持たない。`scripts/run-local.ts` の `development vite` は、`.env.development`（`APP_ENV`）を検証して Vite を起動する。ビルド（`vite build`）は `run-local.ts` を通さず、`vite.config.ts` が `assertNoDevVars`・`clearInheritedEnvironment` を呼ぶ
+- 認証（`auth/*`）と `data-access/drizzle` は `backend=hono` のときだけ。Spring Boot で認証が `none`・`undecided` のときは何も出ない
+- 共通の Skill・AGENTS.md の、バックエンドの案内（`rule_skills_backend`・`example_skills`・`data_access_*`）は、`backend=spring_boot` のとき Spring Boot の Skill（`backend-spring-boot`）を案内する値に分けた（`data/template-values.yaml`）。そのほかの共通の Skill に残る Hono の説明（エラー応答・`backend/src/rules-examples/` など）は、Spring Boot 用に分ける作業が残っている
 - `package_json_when` に移した scripts は、並び順を今のまま保つ（`mergePackageJson` は並べ替えない）。同じ項目に違う値があるとエラーになるため、出し分けるプロファイルでは scripts を丸ごと条件つきの項目に移す
 - `backend` や `infra` の回答が無い入力（`buildOutputs` の既定の `answers` など）では、これらの条件に合わない（条件の対象の回答が無ければ合わない）。`--answers` で `backend`・`infra` を省いた場合は、質問の流れが `hono`・`cloudflare` に自動で決める（[questions.md](questions.md)）
 
@@ -378,6 +395,19 @@ Spring Boot の構成（#40）を足せるよう、Hono（Workers）のための
 プロファイルの `files` の出力先には、`{{java_package_path}}` だけ書ける（Java のソースを `backend/src/main/java/{{java_package_path}}/Application.java` のように、パッケージの階層に置くため）。`profile.ts` の `readFileMap` は、これ以外の `{{名前}}` をエラーにし、パスの形の確認は、例の値（`com/example/app`）に置き換えてから行う。`plan.ts` が `fillDestination` で、アプリ名から決めた値に置き換える。出力先の重なりの確認（プロファイル同士）は置き換える前の文字列で、出力全体の重なりの確認は置き換えた後で行う。
 
 値は `values.ts` が作る：`java_package`（`com.example.<名前>`）と `java_package_path`（`com/example/<名前>`）。`<名前>` は `javaPackageName(appName)`：アプリ名からハイフンを除き、数字で始まれば先頭に `_`、Java の予約語（`true`・`false`・`null`・`goto`・`const`・`_` を含む）になれば末尾に `_` を付ける（JLS 6.1 の慣例。例：`my-app` → `myapp`、`123-app` → `_123app`、`class` → `class_`）。
+
+### Spring Boot のプロファイル（Issue #40）
+
+| プロファイル | 中身 |
+| --- | --- |
+| `backend-framework/spring-boot`（maven） | `packages` は2つのプラグインのマーカー（`org.springframework.boot`、`io.spring.dependency-management`）。`gradle.plugins` で id と結び、別名は `spring-boot`・`spring-dependency-management`。`gradle.managed` は `spring-boot-starter-webmvc`・`spring-boot-starter-actuator`。ファイル：`backend/build.gradle.kts`・`Application.java`・`health/HealthController.java`（`GET /api/health` → `{"status":"ok","appEnv":…}`）・`application.yaml`（`server.port: 8080`、`app.env: ${APP_ENV:development}`）。`version_ranges.java` は `>=17 <27` |
+| `build/gradle`（maven） | 依存なし。Skill（`./gradlew check`、Wrapper の作り方）だけ |
+| `test-framework/junit-testcontainers`（maven） | `gradle.managed` は `spring-boot-starter-test`・`spring-boot-starter-webmvc-test`（`@WebMvcTest` を含む。`spring-boot-starter-test` には含まれない）・`spring-boot-testcontainers`・`testcontainers-junit-jupiter`・`testcontainers-postgresql`・`org.postgresql:postgresql`・`junit-platform-launcher`。`check` は `test` に依存。ファイル：`HealthControllerTest`（`@WebMvcTest`）・`ApplicationTests`（`@SpringBootTest`）・`PostgresContainerTest`（Testcontainers で PostgreSQL を起動して JDBC でつなぐ。Docker が要る） |
+| `logger/slf4j-logback`（maven） | 依存なし（starter に含まれる）。`logback-spring.xml`（Spring Boot の標準のコンソール） |
+
+- build.gradle.kts は `plugins { java; {{gradle_plugins}} }` の形で、`tasks.withType<JavaCompile> { options.encoding = "UTF-8" }` を含む。依存の版は書かない（BOM が決める）
+- 出力先の `{{java_package_path}}` と、ソースの `{{java_package}}` は、アプリ名から決まる（上の「出力先の `{{java_package_path}}`」）。Java のソースは `backend/src/main/java/…`・`backend/src/test/java/…` に出る
+- テスト：`test/generate/spring-generation.test.ts`（DB なし・PostgreSQL のスナップショット、Hono・Cloudflare・Docker のファイルが出ないこと、アプリ名 `123-app`・`class` の package 宣言と出力先、版の調査）、`test/checks/spring-rules.test.ts`（整合性チェックの4つの規則）。Gradle の実行（`./gradlew check`）と、生成先の `npm ci`〜`build`、`/api/health` の確認は、自動のテストには入れず、PR に手元で確かめた結果を記録する
 
 ## 秘密情報を生成物に入れないこと
 

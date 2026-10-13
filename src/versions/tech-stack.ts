@@ -32,7 +32,8 @@ function row(e: VersionEntry): string {
 export function renderTechStack(
   result: VersionResult,
   profiles: (Pick<Profile, "key" | "name" | "compatibilityNotes"> &
-    Partial<Pick<Profile, "ecosystem">>)[],
+    Partial<Pick<Profile, "ecosystem" | "gradle">>)[],
+  options: { terraform?: boolean } = {},
 ): string {
   const source = profiles.some((p) => p.ecosystem === "maven")
     ? "npm・Node.js・Maven Central・Java（Adoptium）の"
@@ -50,20 +51,29 @@ export function renderTechStack(
     "- 確認した最新の安定版：調べた日に、登録情報にあった最新の安定版（試験版を除く。範囲の条件があるものは、その範囲の中）",
     "- 未確認：登録情報を取得できず、最新の安定版を調べられなかったもの",
   ];
+  // 版を BOM（Spring Boot のプラグイン）が決める依存は、調べる対象ではなく、表に載らない
+  if (profiles.some((p) => (p.gradle?.managed.length ?? 0) > 0)) {
+    lines.push(
+      "- 版を BOM が管理する依存（Spring Boot の starter・Testcontainers など）は、表に載せていません。Spring Boot のプラグインの版を決めると、BOM によって一緒に決まります",
+    );
+  }
 
-  const terraform = terraformVersions();
-  lines.push(
-    "",
-    "## インフラ（Terraform、infra/）",
-    "",
-    "| 技術 | 版 | 固定する場所 |",
-    "| --- | --- | --- |",
-    `| Terraform | ${terraform.terraform} 以上 2.0.0 未満 | infra/versions.tf の required_version |`,
-    `| Cloudflare プロバイダー（cloudflare/cloudflare、v5 系） | ${terraform.cloudflareProvider} | infra/versions.tf の required_providers（= で固定）。lock ファイルは README の手順で作ってコミットする |`,
-    "",
-    "- Terraform は npm では入れない。PC に直接入れる（infra/README.md）",
-    "- プロバイダーの版は、ハーネスが、生成した infra/ で terraform init（-backend=false）と terraform validate を実行して確かめた版",
-  );
+  // Terraform の節は、インフラが Cloudflare のとき（infra/ を出すとき）だけ
+  if (options.terraform !== false) {
+    const terraform = terraformVersions();
+    lines.push(
+      "",
+      "## インフラ（Terraform、infra/）",
+      "",
+      "| 技術 | 版 | 固定する場所 |",
+      "| --- | --- | --- |",
+      `| Terraform | ${terraform.terraform} 以上 2.0.0 未満 | infra/versions.tf の required_version |`,
+      `| Cloudflare プロバイダー（cloudflare/cloudflare、v5 系） | ${terraform.cloudflareProvider} | infra/versions.tf の required_providers（= で固定）。lock ファイルは README の手順で作ってコミットする |`,
+      "",
+      "- Terraform は npm では入れない。PC に直接入れる（infra/README.md）",
+      "- プロバイダーの版は、ハーネスが、生成した infra/ で terraform init（-backend=false）と terraform validate を実行して確かめた版",
+    );
+  }
 
   const major = result.entries.filter((e) => e.majorDiffers);
   if (major.length > 0) {

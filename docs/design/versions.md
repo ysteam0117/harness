@@ -112,7 +112,15 @@ profile.yaml の `ecosystem`（`npm` か `maven`。書かなければ `npm`）�
 | 対象（`Target.kind`） | `node`・`npm`・`maven`・`java`。maven のプロファイルがあるときだけ、Node.js の次に `java` を置く。maven のプロファイルがなければ、対象は今までと同じ |
 | 名前の衝突 | 同じ名前が npm と maven の両方のプロファイルに出たらエラー。`java` は Java の版の名前のため、依存の名前に使えない |
 | 他の機能 | 範囲の見直し・範囲の外の版の試し（`range-review.ts`・`range-trial.ts`）は maven・java の対象を飛ばす（peer の考え方がなく、Gradle での試しは #41 以降）。`package.json` は npm のプロファイルのものだけを書く。`harness status` の「新しい大きな版」は、記録の名前（`java`・`group:artifact`）から種類を決めて調べる。`tech-stack.md` の説明文は、maven のプロファイルがあるときだけ「Maven Central・Java（Adoptium）」を加える。`select.ts` の `pickLatestStable`・`compareWithVerified` は、第3引数でエコシステムを受ける（既定は npm） |
-| 範囲外 | Gradle の生成（PR-B）、`--verify` での Gradle の確認（#41）。maven のプロファイルを選べるようにする回答の対応は #40 |
+| 範囲外 | `--verify` での Gradle の確認（#41）。Gradle の生成は #39、maven のプロファイルを選べる回答（Spring Boot）は #40 で実装済み |
+
+### Spring Boot の版の調査（Issue #40）
+
+- 調べる対象は、`backend-framework/spring-boot` の `packages`（2つのプラグインのマーカーの座標）と `java` だけ。`gradle.managed` の依存（starter・Testcontainers など）は、版を Spring Boot の BOM が決めるため、対象にしない。`docs/tech-stack.md` には、「BOM が管理する依存は表に載せない」という注記を1行入れる
+- 検証済みの版は、Maven の登録情報の安定版の最新（Spring Boot 4.1.1、`io.spring.dependency-management` 1.1.7）。試験版（4.2.0-M2）は選ばない。最新の安定版が検証済みより新しいときは、今までと同じく `versions_newer_than_verified` の fact が立ち、警告（F-08 のルール7）になる
+- `java` の範囲は、Spring Boot の `version_ranges.java`（`>=17 <27`）と `data/runtimes.yaml` の公開 LTS の交わり
+- Spring Boot の構成では、`@cloudflare/vite-plugin`・`@cloudflare/vitest-pool-workers` は `packages_when`（`backend: hono`）の外のため、調べる対象に入らない。`vitest` の範囲（`^4`）の原因は `@cloudflare/vitest-pool-workers` だが、原因のパッケージが対象にないときは、範囲の見直し（`rangeTargets`）がその範囲を飛ばす（確かめる相手がない）
+- `docs/tech-stack.md` の Terraform の節は、`infra` が `cloudflare` のときだけ出す（`renderTechStack` の `terraform` の指定）
 
 ## Maven Central の取得と安定版の判定
 

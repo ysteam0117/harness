@@ -59,6 +59,8 @@ const GITHUB_REPOSITORY: When = { answer: "repository", equals: "github" };
 const LOCAL_REPOSITORY: When = { answer: "repository", equals: "local" };
 /** Hono のバックエンド（Workers）のときだけ出すもの。Spring Boot のときは出さない（#40） */
 const HONO_BACKEND: When = { answer: "backend", equals: "hono" };
+/** Spring Boot のバックエンドのとき（README などを Spring Boot 用に差し替える） */
+const SPRING_BACKEND: When = { answer: "backend", equals: "spring_boot" };
 /** インフラが Cloudflare のときだけ出すもの（Terraform の infra/） */
 const CLOUDFLARE_INFRA: When = { answer: "infra", equals: "cloudflare" };
 
@@ -67,6 +69,8 @@ const TEMPLATE_FILES: {
   source: string;
   destination: string;
   when?: When;
+  /** この条件に合うときは出さない（同じ出力先の、別のひな形に差し替えるため） */
+  unless?: When;
   executable?: true;
 }[] = [
   { source: "docs/secrets.md", destination: "docs/secrets.md" },
@@ -188,7 +192,9 @@ const TEMPLATE_FILES: {
       ],
     },
   },
-  { source: "project/README.md", destination: "README.md" },
+  // README.md は、Spring Boot のときだけ別のひな形（Docker の開発環境・wrangler・Hono の記述がない）にする
+  { source: "project/README.md", destination: "README.md", unless: SPRING_BACKEND },
+  { source: "project/README-spring.md", destination: "README.md", when: SPRING_BACKEND },
   // IaC（C-39）。Terraform で Cloudflare の資源を作る。インフラが Cloudflare のときだけ、回答に合う資源のファイルを出す
   ...["versions.tf", "providers.tf", "variables.tf", "outputs.tf", "README.md"].map((name) => ({
     source: `infra/${name}`,
@@ -415,6 +421,7 @@ export function buildProject(input: BuildProjectInput): { files: ProjectFile[] }
   // 文書・スクリプト・Issue のテンプレート
   for (const file of TEMPLATE_FILES) {
     if (!whenMatches(file.when, answers)) continue;
+    if (file.unless !== undefined && whenMatches(file.unless, answers)) continue;
     const text = stripMarkerComments(
       stripHarnessComments(readTemplate(templatesDir, file.source), file.source),
     );
@@ -458,7 +465,12 @@ export function buildProject(input: BuildProjectInput): { files: ProjectFile[] }
     });
   }
 
-  outputs.push({ path: "docs/tech-stack.md", content: renderTechStack(versions, profiles) });
+  outputs.push({
+    path: "docs/tech-stack.md",
+    content: renderTechStack(versions, profiles, {
+      terraform: whenMatches(CLOUDFLARE_INFRA, answers),
+    }),
+  });
   if (acceptedWarnings.length > 0) {
     outputs.push({ path: ADR_PATH, content: buildAdr(acceptedWarnings, localDay(now)) });
   }

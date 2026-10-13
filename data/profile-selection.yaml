@@ -7,11 +7,20 @@
 #           複数の条件をすべて満たすときだけ選ぶ場合は、all に answer 条件を並べる（#72）
 #           例：when: { all: [{ answer: database, equals: d1 }, { answer: auth, in: [app, oidc, both] }] }
 
-# Hono（Workers）の土台。Spring Boot のプロファイルは backend=spring_boot で足す（#40）
+# Hono（Workers）の土台
 - profile: backend-framework/hono
   when: { answer: backend, equals: hono }
 - profile: logger/structured-logger
   when: { answer: backend, equals: hono }
+# Spring Boot（Java、Gradle）の土台（#40）。Maven は対象外
+- profile: backend-framework/spring-boot
+  when: { answer: backend, equals: spring_boot }
+- profile: build/gradle
+  when: { answer: backend, equals: spring_boot }
+- profile: test-framework/junit-testcontainers
+  when: { answer: backend, equals: spring_boot }
+- profile: logger/slf4j-logback
+  when: { answer: backend, equals: spring_boot }
 - profile: frontend-build/vite-react-router
 - profile: http-client/axios
 - profile: frontend-state/tanstack-query-rhf-zod

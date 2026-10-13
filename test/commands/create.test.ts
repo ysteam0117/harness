@@ -258,6 +258,8 @@ describe("#32 AC-1: 確認（--yes と対話）", () => {
         repository: ["github"],
         visibility: ["private"],
         team_size: ["solo"],
+        backend: ["hono"],
+        infra: ["cloudflare"],
         database: ["d1"],
         auth: ["oidc"],
         idp: ["google"],

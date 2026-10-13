@@ -1,5 +1,5 @@
 // #40：Hono（Workers）のためのファイル・設定を、backend が hono のときだけ出す。
-// spring_boot の選択肢はまだ無い（Spring Boot のプロファイルを入れる PR で開く）ので、ここでは回答を直接書き換えて、条件の働きだけを確かめる。
+// Spring Boot の構成の生成結果そのもの（スナップショット）は spring-generation.test.ts で確かめる。ここでは、Hono のものが出ない条件の働きを確かめる。
 // Hono の生成結果が変わらないことは、既存のスナップショット（project.test.ts）・auth-none-baseline・hono-baseline が守る。
 import type { Answers } from "../../src/questions/answers.js";
 import { afterEach, describe, expect, it } from "vitest";
@@ -43,9 +43,6 @@ const HONO_ONLY_FILES = [
   "wrangler.jsonc",
   "scripts/db-local.ts",
   "docker-compose.yml",
-  "vite.config.ts",
-  "tsconfig.json",
-  "vitest.config.ts",
   "playwright.config.ts",
   "public/_headers",
   "e2e/health.spec.ts",
@@ -121,7 +118,10 @@ describe("#40: backend が hono でないときは、Hono のためのファイ�
   it("Hono の土台・wrangler.jsonc・OpenAPI・Docker の開発環境・Hono の設定ファイル・infra/ を出さない", async () => {
     const paths = pathsOf(await generate(SPRING));
     for (const p of HONO_ONLY_FILES) expect(paths, p).not.toContain(p);
-    expect(paths.filter((p) => p.startsWith("infra/") || p.startsWith("backend/src/"))).toEqual([]);
+    // backend/src/ に出るのは Spring Boot の Java のソース（main・test）だけ。Hono の TypeScript は出ない
+    expect(
+      paths.filter((p) => p.startsWith("infra/") || /^backend\/src\/(?!main\/|test\/)/.test(p)),
+    ).toEqual([]);
     expect(paths.filter((p) => /^docker-compose/.test(p))).toEqual([]);
   });
 
@@ -136,8 +136,8 @@ describe("#40: backend が hono でないときは、Hono のためのファイ�
       names.filter((n) => n.startsWith("@cloudflare/") || n === "wrangler" || n === "hono"),
     ).toEqual([]);
     const scripts = Object.keys(pkg.scripts ?? {});
-    expect(scripts.filter((s) => /^docker:|^types|^pretypecheck$|^dev$|^pretest/.test(s))).toEqual(
-      [],
-    );
+    expect(
+      scripts.filter((s) => /^docker:|^types|^pretypecheck$|^dev:test$|^test:e2e$/.test(s)),
+    ).toEqual([]);
   });
 });

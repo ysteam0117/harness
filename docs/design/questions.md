@@ -69,21 +69,22 @@ flowchart TD
 
 選択肢が1つの `select` は、聞かずに決めて表示する（「◯◯：△△（自動で決定）」）。
 
-- `project_type`・`layers`・`frontend`・`backend`・`infra`・`data_access`
+- `project_type`・`layers`・`frontend`・`data_access`
 - `data_access` は `database` が `none` 以外で、かつ `backend` が `hono` のときだけ（`when` の `all`）
 
-`backend` は今、選択肢が `hono` だけなので、自動で決まる。Spring Boot を選べるようにするのは #40 で、この Issue（#39）では選択肢を足さない（Spring Boot のプロファイルが無いまま、`--answers` で選んで生成に進む抜け道を作らないため）。#39 では、`backend: spring_boot` が今は選べない値として拒否されることを、`test/questions/answers.test.ts` で固定している。
+`backend`（Hono／Spring Boot）と `infra`（Cloudflare／コンテナ）は、#40 で選択肢が2つになり、聞く質問になった（`initialValue` は付けない）。
 
-#40 で選択肢を足すときの手順（データの変更だけで済む）：
+#40 で選択肢を足した内容（Spring Boot のプロファイルと同じ PR で有効にした）：
 
-1. `src/questions/definitions.ts` の `backend` の選択肢に `spring_boot`（見出し「Spring Boot（Javaで開発。ビルドは Gradle）」）を足す。選択肢が2つになるので、`backend` は自動で決まる質問ではなくなり、聞く質問になる
-2. `src/questions/answers.ts` の `Answers` の `backend` の型を `"hono" | "spring_boot"` にする
-3. `data/profile-selection.yaml`：`backend-framework/spring-boot` を `equals: spring_boot` で足す（`backend-framework/hono` ほか Hono のためのプロファイルの `backend=hono` の条件は、#40 の土台の PR で入れ済み）
-4. `data/consistency-rules.yaml`：`spring_boot` と `infra: cloudflare` の組み合わせをエラーにする規則を足す（F-08）
-5. 上の「自動で決まる質問」の一覧から `backend` を外し、`definitions.test.ts`・`flow.test.ts` の「選択肢が1つの select」の期待を直す
-6. `infra` に `container`（見出し「コンテナ（AWS ECS 等。デプロイの設定は今後追加）」）を足し、聞く質問にする（`initialValue` は付けない）。4 の規則は、`spring_boot` と `cloudflare`、`hono` と `container`、`spring_boot` と `database: d1`、`spring_boot` と `auth` が `app`・`oidc`・`both` の4つ
+1. `src/questions/definitions.ts` の `backend` の選択肢に `spring_boot`（見出し「Spring Boot（Javaで開発。ビルドは Gradle）」）、`infra` に `container`（見出し「コンテナ（AWS ECS 等。デプロイの設定は今後追加）」）を足した
+2. `src/questions/answers.ts` の `Answers` の `backend` を `"hono" | "spring_boot"`、`infra` を `"cloudflare" | "container"` にした
+3. `data/profile-selection.yaml`：`backend-framework/spring-boot`・`build/gradle`・`test-framework/junit-testcontainers`・`logger/slf4j-logback` を `equals: spring_boot` で足した
+4. `data/consistency-rules.yaml`：`spring-boot-on-workers`（spring_boot × cloudflare）・`hono-needs-workers`（hono × container）・`spring-boot-with-d1`（spring_boot × database d1）・`spring-boot-with-auth`（spring_boot × auth が `app`・`oidc`・`both`。`none`・`undecided` は当たらない）の4つのエラーを足した（F-08 のルール11〜14）
+5. `test/questions/answers.test.ts` の「`spring_boot` は今は選べない」(#39) は、「選べる」に反転した。`definitions.test.ts`・`flow.test.ts` の「選択肢が1つの select」の期待、`baseAnswers`（`infra` を含める）、スクリプトに `backend`・`infra` を足した
 
-#40 の土台の PR（Hono の生成結果を変えない）で入れたもの：質問の条件の `all`、`data_access` の `backend=hono` の条件、`--answers` で `backend`・`infra` を省いたときの互換（下の「質問の条件の `all`」）。上の 1〜6（選択肢と規則）は、Spring Boot のプロファイルと同じ PR で有効にする。
+- 「PostgreSQL（Hyperdrive経由）」の見出しは、Hono（Workers）のものである。Spring Boot の PostgreSQL の見出しと提供元の扱いは、デプロイ先の Issue（#43）で見直す
+- `--answers` で `backend`・`infra` を省いたとき：条件の判定には `hono`・`cloudflare` とみなす（`parseAnswersYaml`）。対話しない実行（端末でない、または `--answers` のみで聞けない）では、`create` が `backend` を `hono`、`infra`（`backend` が `hono` のとき）を `cloudflare` として回答に入れる。端末で実行するときは、書かれていなければ聞く
+- 直す質問の選択（整合性チェックのエラーからの聞き直し）は、ルールの `fix`（`backend`・`infra` など）で行う
 
 ### 条件で決まる質問
 

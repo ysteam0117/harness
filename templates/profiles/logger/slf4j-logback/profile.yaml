@@ -1,0 +1,12 @@
+# 技術プロファイル：SLF4J・Logback（Spring Boot のログ。F-24、Issue #40）
+id: slf4j-logback
+ecosystem: maven
+category: logger
+name: SLF4J・Logback
+languages: [java]
+runtimes: [jvm]
+# 依存は足さない（SLF4J と Logback は、Spring Boot の starter に含まれる）
+packages: []
+skill_name: logger
+files:
+  files/logback-spring.xml: backend/src/main/resources/logback-spring.xml
