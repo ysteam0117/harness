@@ -7,19 +7,22 @@
 #           複数の条件をすべて満たすときだけ選ぶ場合は、all に answer 条件を並べる（#72）
 #           例：when: { all: [{ answer: database, equals: d1 }, { answer: auth, in: [app, oidc, both] }] }
 
+# Hono（Workers）の土台。Spring Boot のプロファイルは backend=spring_boot で足す（#40）
 - profile: backend-framework/hono
+  when: { answer: backend, equals: hono }
 - profile: logger/structured-logger
+  when: { answer: backend, equals: hono }
 - profile: frontend-build/vite-react-router
 - profile: http-client/axios
 - profile: frontend-state/tanstack-query-rhf-zod
 - profile: test-framework/vitest-playwright
 - profile: quality/typescript-standard
 - profile: data-access/drizzle
-  when: { answer: database, notEquals: none }
+  when: { all: [{ answer: database, notEquals: none }, { answer: backend, equals: hono }] }
 # 認証（#72 は枠だけ。中身は #73〜#75）。auth/session は認証ありの共通、app-auth・oidc-auth は方式ごと
 - profile: auth/session
-  when: { answer: auth, in: [app, oidc, both] }
+  when: { all: [{ answer: auth, in: [app, oidc, both] }, { answer: backend, equals: hono }] }
 - profile: auth/app-auth
-  when: { answer: auth, in: [app, both] }
+  when: { all: [{ answer: auth, in: [app, both] }, { answer: backend, equals: hono }] }
 - profile: auth/oidc-auth
-  when: { answer: auth, in: [oidc, both] }
+  when: { all: [{ answer: auth, in: [oidc, both] }, { answer: backend, equals: hono }] }

@@ -126,7 +126,13 @@ describe("#32 AC-1: 質問の定義（データ）", () => {
 
   it("#32 AC-1: 条件の質問の条件が計画どおり", () => {
     expect(byId("postgres_provider")?.when).toMatchObject({ id: "database", equals: "postgresql" });
-    expect(byId("data_access")?.when).toMatchObject({ id: "database", notEquals: "none" });
+    // Spring Boot のデータアクセスは別の質問で決めるため、Hono のときだけ聞く（all。#40）
+    expect(byId("data_access")?.when).toEqual({
+      all: [
+        { id: "database", notEquals: "none" },
+        { id: "backend", equals: "hono" },
+      ],
+    });
     expect(byId("idp")?.when).toMatchObject({ id: "auth", in: ["oidc", "both"] });
     expect(byId("critical_ops_kinds")?.when).toMatchObject({ id: "critical_ops", equals: "yes" });
     expect(byId("file_kinds")?.when).toMatchObject({ id: "file_upload", equals: "yes" });

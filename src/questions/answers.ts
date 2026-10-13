@@ -2,6 +2,7 @@ import { parse } from "yaml";
 import {
   matchesCondition,
   questionDefinitions,
+  unmetConditionIds,
   validateValue,
   type QuestionDefinition,
 } from "./definitions.js";
@@ -66,6 +67,8 @@ const VERSIONS_KEY = "versions";
 const VERSIONS_OFFLINE_KEY = "versions_offline";
 const REPOSITORY_ID = "repository";
 const DEFAULT_REPOSITORY = "github";
+/** 書かれていなければ、これとみなす回答（以前の回答ファイルとの互換。条件の判定にだけ使い、回答には入れない） */
+const COMPAT_DEFAULTS: Readonly<Record<string, string>> = { backend: "hono", infra: "cloudflare" };
 const EXTRA_KEYS: readonly string[] = [ACCEPTED_WARNINGS_KEY, VERSIONS_KEY, VERSIONS_OFFLINE_KEY];
 
 /**
@@ -160,16 +163,23 @@ export function parseAnswersYaml(
       effective[def.id] = def.defaultValue;
     }
   }
+  // backend・infra は、以前は選択肢が1つで回答ファイルに書かなくてもよかったため、書かれていなければ Hono・Cloudflare とみなす
+  for (const [id, value] of Object.entries(COMPAT_DEFAULTS)) {
+    if (!(id in effective) && definitions.some((d) => d.id === id)) effective[id] = value;
+  }
 
   for (const def of definitions) {
     if (!(def.id in valid)) continue;
-    // 条件に合わない質問への回答
-    if (def.when && !matchesCondition(def.when, effective) && def.when.id in effective) {
-      const written = def.when.id in valid;
+    // 条件に合わない質問への回答。all のときは、合っていない条件のうち、判断できるもの（回答か既定値があるもの）を原因にする
+    const unmet = def.when ? unmetConditionIds(def.when, effective) : [];
+    const judged = unmet.filter((id) => id in effective);
+    if (judged.length > 0) {
+      const writtenCause = judged.find((id) => id in valid);
+      const cause = writtenCause ?? (judged[0] as string);
       errors.push(
-        written
-          ? `${def.id}：この質問は、${def.when.id} の回答によって聞かない質問のため、回答を書けません`
-          : `${def.id}：${def.id} を書く場合は、条件となる ${def.when.id} も書く必要があります（${def.when.id} が書かれていないため、既定値の「${String(effective[def.when.id])}」として扱われ、条件に合いません）`,
+        writtenCause !== undefined
+          ? `${def.id}：この質問は、${cause} の回答によって聞かない質問のため、回答を書けません`
+          : `${def.id}：${def.id} を書く場合は、条件となる ${cause} も書く必要があります（${cause} が書かれていないため、既定値の「${String(effective[cause])}」として扱われ、条件に合いません）`,
       );
       continue;
     }

@@ -5,7 +5,7 @@ import { judge } from "../generate/judgment.js";
 import { selectKnowledge } from "../generate/knowledge.js";
 import { checkOutputPaths } from "../generate/paths.js";
 import { buildOutputs } from "../generate/plan.js";
-import { loadProfile, selectProfileFiles } from "../generate/profile.js";
+import { fillDestination, loadProfile, selectProfileFiles } from "../generate/profile.js";
 import { isManagedPath } from "../generate/project.js";
 import { findTemplatesDir } from "../generate/templates-dir.js";
 import { buildValues, chooseValues, parseValueDefinitions } from "../generate/values.js";
@@ -123,7 +123,9 @@ ${BASELINE_RULE}`;
   }
   // プロファイルの files（コード・設定）は入れない。Skill（SKILL.md）だけを残す
   const notWritten = new Set(
-    loaded.flatMap((l) => selectProfileFiles(l.profile, answers).map((f) => f.destination)),
+    loaded.flatMap((l) =>
+      selectProfileFiles(l.profile, answers).map((f) => fillDestination(f.destination, values)),
+    ),
   );
   const outputs = built.files
     .filter((f) => !notWritten.has(f.path))

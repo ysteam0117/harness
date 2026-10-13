@@ -1,5 +1,10 @@
 import type { Answers } from "./answers.js";
-import { matchesCondition, validateValue, type QuestionDefinition } from "./definitions.js";
+import {
+  matchesCondition,
+  unmetConditionIds,
+  validateValue,
+  type QuestionDefinition,
+} from "./definitions.js";
 import type { Prompter } from "./prompter.js";
 
 type Step =
@@ -70,10 +75,12 @@ async function pass(
     const hasGiven = def.id in given && given[def.id] !== undefined;
     if (step.kind === "skip") {
       if (hasGiven && def.when) {
+        // 条件に合わなかった最初の質問を、原因にする（all のとき、合っている質問は原因ではない）
+        const cause = unmetConditionIds(def.when, answers)[0] ?? def.id;
         conflicts.push({
           id: def.id,
-          cause: def.when.id,
-          reason: `「${titleOf(def.when.id)}」の回答により、この質問は聞かない質問になりましたが、先に書かれた回答があります`,
+          cause,
+          reason: `「${titleOf(cause)}」の回答により、この質問は聞かない質問になりましたが、先に書かれた回答があります`,
         });
       }
       continue;

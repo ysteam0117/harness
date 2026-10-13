@@ -93,7 +93,10 @@ export function wantedPackages(profile: Profile, answers: Partial<Answers>): str
   const names = [...profile.packages];
   for (const entry of profile.packagesWhen) {
     if (Object.entries(entry.when).every(([id, value]) => record[id] === value)) {
-      names.push(...entry.packages);
+      // before があれば、packages のその名前の直前に置く（条件がないときと同じ並びにするため）
+      const at = entry.before === undefined ? -1 : names.indexOf(entry.before);
+      if (at >= 0) names.splice(at, 0, ...entry.packages);
+      else names.push(...entry.packages);
     }
   }
   return names;

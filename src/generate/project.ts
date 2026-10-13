@@ -57,6 +57,10 @@ export interface BuildProjectInput {
 
 const GITHUB_REPOSITORY: When = { answer: "repository", equals: "github" };
 const LOCAL_REPOSITORY: When = { answer: "repository", equals: "local" };
+/** Hono のバックエンド（Workers）のときだけ出すもの。Spring Boot のときは出さない（#40） */
+const HONO_BACKEND: When = { answer: "backend", equals: "hono" };
+/** インフラが Cloudflare のときだけ出すもの（Terraform の infra/） */
+const CLOUDFLARE_INFRA: When = { answer: "infra", equals: "cloudflare" };
 
 /** ひな形から出力する文書・スクリプト・Issue のテンプレート（ひな形 → 出力先） */
 const TEMPLATE_FILES: {
@@ -72,7 +76,7 @@ const TEMPLATE_FILES: {
   { source: "scripts/local-env.ts", destination: "scripts/local-env.ts" },
   { source: "scripts/run-local.ts", destination: "scripts/run-local.ts" },
   { source: "scripts/test-safety.mjs", destination: "scripts/test-safety.mjs" },
-  { source: "scripts/db-local.ts", destination: "scripts/db-local.ts" },
+  { source: "scripts/db-local.ts", destination: "scripts/db-local.ts", when: HONO_BACKEND },
   { source: "scripts/compose-local.ts", destination: "scripts/compose-local.ts" },
   // 文書のひな形（#63）。要件定義書には F-26 の判定の結果を書き込む
   { source: "docs/requirements.md", destination: "docs/requirements.md" },
@@ -151,54 +155,96 @@ const TEMPLATE_FILES: {
   { source: "project/gitignore", destination: ".gitignore" },
   { source: "project/prettierignore", destination: ".prettierignore" },
   // API の最初のひな形：Controller（routes）→ Service（services）の層（C-03）。DB ありの入口（index.ts）は data-access/drizzle が出す
-  { source: "project/backend/app.ts", destination: "backend/src/app.ts" },
-  { source: "project/backend/config.ts", destination: "backend/src/config.ts" },
+  { source: "project/backend/app.ts", destination: "backend/src/app.ts", when: HONO_BACKEND },
+  { source: "project/backend/config.ts", destination: "backend/src/config.ts", when: HONO_BACKEND },
   // API の仕様書と実際のルートの突き合わせ（#42）。仕様書（docs/api/openapi.json）は下で組み立てる
-  { source: "project/backend/openapi.test.ts", destination: "backend/src/openapi.test.ts" },
-  { source: "project/backend/health.route.ts", destination: "backend/src/routes/health.ts" },
+  {
+    source: "project/backend/openapi.test.ts",
+    destination: "backend/src/openapi.test.ts",
+    when: HONO_BACKEND,
+  },
+  {
+    source: "project/backend/health.route.ts",
+    destination: "backend/src/routes/health.ts",
+    when: HONO_BACKEND,
+  },
   {
     source: "project/backend/health.route.test.ts",
     destination: "backend/src/routes/health.test.ts",
+    when: HONO_BACKEND,
   },
   {
     source: "project/backend/health.service.ts",
     destination: "backend/src/services/health.service.ts",
+    when: HONO_BACKEND,
   },
   {
     source: "project/backend/index.none.ts",
     destination: "backend/src/index.ts",
-    when: { answer: "database", equals: "none" },
+    when: {
+      all: [
+        { answer: "backend", equals: "hono" },
+        { answer: "database", equals: "none" },
+      ],
+    },
   },
   { source: "project/README.md", destination: "README.md" },
-  // IaC（C-39）。Terraform で Cloudflare の資源を作る。回答に合う資源のファイルだけを出す
+  // IaC（C-39）。Terraform で Cloudflare の資源を作る。インフラが Cloudflare のときだけ、回答に合う資源のファイルを出す
   ...["versions.tf", "providers.tf", "variables.tf", "outputs.tf", "README.md"].map((name) => ({
     source: `infra/${name}`,
     destination: `infra/${name}`,
+    when: CLOUDFLARE_INFRA,
   })),
   {
     source: "infra/d1.tf",
     destination: "infra/d1.tf",
-    when: { answer: "database", equals: "d1" },
+    when: {
+      all: [
+        { answer: "infra", equals: "cloudflare" },
+        { answer: "database", equals: "d1" },
+      ],
+    },
   },
   {
     source: "infra/hyperdrive.tf",
     destination: "infra/hyperdrive.tf",
-    when: { answer: "database", equals: "postgresql" },
+    when: {
+      all: [
+        { answer: "infra", equals: "cloudflare" },
+        { answer: "database", equals: "postgresql" },
+      ],
+    },
   },
   {
     source: "infra/r2.tf",
     destination: "infra/r2.tf",
-    when: { answer: "file_upload", equals: "yes" },
+    when: {
+      all: [
+        { answer: "infra", equals: "cloudflare" },
+        { answer: "file_upload", equals: "yes" },
+      ],
+    },
   },
+  // Docker の開発環境（Compose）。Spring Boot の構成では、デプロイ先の Issue（#43）で扱うため、今は出さない
   {
     source: "project/docker-compose.yml",
     destination: "docker-compose.yml",
-    when: { answer: "database", notEquals: "postgresql" },
+    when: {
+      all: [
+        { answer: "backend", equals: "hono" },
+        { answer: "database", notEquals: "postgresql" },
+      ],
+    },
   },
   {
     source: "project/docker-compose.postgres.yml",
     destination: "docker-compose.yml",
-    when: { answer: "database", equals: "postgresql" },
+    when: {
+      all: [
+        { answer: "backend", equals: "hono" },
+        { answer: "database", equals: "postgresql" },
+      ],
+    },
   },
 ];
 
@@ -394,17 +440,23 @@ export function buildProject(input: BuildProjectInput): { files: ProjectFile[] }
   }
 
   // wrangler.jsonc：選んだプロファイルの設定を、回答に合わせてまとめて作る。.env.example：環境変数の項目の一覧
-  outputs.push({
-    path: "wrangler.jsonc",
-    content: buildWranglerJsonc({ profiles, answers, values }),
-  });
+  // wrangler.jsonc と OpenAPI は Hono（Workers）のときだけ出す
+  const hono = whenMatches(HONO_BACKEND, answers);
+  if (hono) {
+    outputs.push({
+      path: "wrangler.jsonc",
+      content: buildWranglerJsonc({ profiles, answers, values }),
+    });
+  }
   outputs.push({ path: ".env.example", content: buildEnvExample(answers) });
 
   // API の仕様書（OpenAPI）。実際に組み込まれるルートの分だけを書く。プロジェクトのもの（managed ではない）
-  outputs.push({
-    path: "docs/api/openapi.json",
-    content: buildOpenApi({ templatesDir, answers, values }),
-  });
+  if (hono) {
+    outputs.push({
+      path: "docs/api/openapi.json",
+      content: buildOpenApi({ templatesDir, answers, values }),
+    });
+  }
 
   outputs.push({ path: "docs/tech-stack.md", content: renderTechStack(versions, profiles) });
   if (acceptedWarnings.length > 0) {

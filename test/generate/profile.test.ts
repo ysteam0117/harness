@@ -31,6 +31,7 @@ import {
   resolveProfiles,
   type Profile,
 } from "../../src/generate/profile.js";
+import { wantedPackages } from "../../src/versions/targets.js";
 import { cleanupTemplates, fixturesDir, makeTemplates, realTemplatesDir } from "./helpers.js";
 
 afterAll(cleanupTemplates);
@@ -370,6 +371,8 @@ describe("#31 AC-4: mergePackageJson", () => {
         "quality/typescript-standard",
         "frontend-state/tanstack-query-rhf-zod",
       ]),
+      // scripts は Workers（Hono）の構成のものなので、backend = hono の回答が要る（#40）
+      { backend: "hono" },
     ) as { scripts: Record<string, string>; overrides: Record<string, unknown> };
     // #42 R1：これまでの check の中身は check:app に移った
     expect(merged.scripts["check:app"]).toContain("npm run lint");
@@ -789,5 +792,66 @@ dev_packages: pkg-a
       const known = new Set([...p.packages, ...p.packagesWhen.flatMap((w) => w.packages)]);
       for (const name of p.devPackages) expect(known.has(name), `${key}：${name}`).toBe(true);
     }
+  });
+});
+
+describe("#40: files の出力先の {{java_package_path}}", () => {
+  const withDestination = (destination: string) =>
+    alphaTemplates(ALPHA_YAML.replace("files/a.ts: out/a.ts", `files/a.ts: ${destination}`));
+
+  it("{{java_package_path}} は出力先に書ける（元の文字列のまま読む）", () => {
+    const dir = withDestination("backend/src/main/java/{{java_package_path}}/A.java");
+    expect(loadProfile(dir, "lib/alpha").files).toEqual([
+      { source: "files/a.ts", destination: "backend/src/main/java/{{java_package_path}}/A.java" },
+    ]);
+  });
+
+  it("ほかの {{名前}} は、出力先に書けない", () => {
+    expect(() => loadProfile(withDestination("out/{{app_name}}/a.ts"), "lib/alpha")).toThrow(
+      /files の出力先 out\/\{\{app_name\}\}\/a\.ts に、書けない \{\{名前\}\}/,
+    );
+    expect(() => loadProfile(withDestination("out/{{java_package}}/a.ts"), "lib/alpha")).toThrow(
+      GenerateError,
+    );
+  });
+
+  it("置き換えた形でも、.. を含む出力先はエラーにする", () => {
+    expect(() =>
+      loadProfile(withDestination('"{{java_package_path}}/../a.ts"'), "lib/alpha"),
+    ).toThrow(/files の出力先/);
+  });
+});
+
+describe("#40: packages_when の before（条件つきのパッケージを packages の位置に置く）", () => {
+  const yamlWith = (entry: string) =>
+    alphaTemplates(`${ALPHA_YAML}packages: [one, two, three]
+packages_when:
+${entry}
+verified_versions:
+  one: "1.0.0"
+  two: "1.0.0"
+  three: "1.0.0"
+  extra: "1.0.0"
+`);
+
+  it("before の名前の直前に並べる。条件に合わなければ入れない", () => {
+    const dir = yamlWith("  - when: { backend: hono }\n    packages: [extra]\n    before: two");
+    const profile = loadProfile(dir, "lib/alpha");
+    expect(profile.packagesWhen[0]?.before).toBe("two");
+    expect(wantedPackages(profile, { backend: "hono" })).toEqual(["one", "extra", "two", "three"]);
+    expect(wantedPackages(profile, {})).toEqual(["one", "two", "three"]);
+  });
+
+  it("before がなければ、packages の後ろに足す（今までどおり）", () => {
+    const dir = yamlWith("  - when: { backend: hono }\n    packages: [extra]");
+    const profile = loadProfile(dir, "lib/alpha");
+    expect(wantedPackages(profile, { backend: "hono" })).toEqual(["one", "two", "three", "extra"]);
+  });
+
+  it("before が packages にない名前なら、エラーにする", () => {
+    const dir = yamlWith("  - when: { backend: hono }\n    packages: [extra]\n    before: none");
+    expect(() => loadProfile(dir, "lib/alpha")).toThrow(
+      /packages_when の before の none が、packages にありません/,
+    );
   });
 });

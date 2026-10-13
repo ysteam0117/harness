@@ -1,5 +1,6 @@
 import type { Answers } from "../questions/answers.js";
 import {
+  conditionIds,
   questionDefinitions,
   type Condition,
   type QuestionDefinition,
@@ -41,7 +42,7 @@ export type ReviewOutcome =
   | { status: "declined"; answers: Answers; result: CheckResult };
 
 function refersTo(cond: Condition | undefined, id: string): boolean {
-  return cond?.id === id;
+  return cond !== undefined && conditionIds(cond).includes(id);
 }
 
 /** 質問 id の回答で、表示の条件や自動の値が決まる質問（依存する質問）を、定義から自動で求める（間接的なものも含む） */

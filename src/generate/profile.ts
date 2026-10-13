@@ -29,7 +29,12 @@ export type ProfileWranglerWhen = { when: When; wrangler: Record<string, unknown
 export type ProfilePackageJsonWhen = { when: When; packageJson: Record<string, unknown> };
 
 /** 回答に合うときだけ足すパッケージ（packages_when） */
-export type PackagesWhen = { when: Record<string, string>; packages: string[] };
+export type PackagesWhen = {
+  when: Record<string, string>;
+  packages: string[];
+  /** packages にあるこの名前の直前に並べる（書かなければ、packages の後ろに足す）。条件つきのパッケージを、条件なしのときと同じ位置に置くための指定 */
+  before?: string;
+};
 
 /** 道具の Docker のイメージ（版とダイジェストで固定し、確かめた日と方法を残す） */
 export type ContainerImage = {
@@ -97,10 +102,14 @@ export type Profile = {
   gradle: GradleSettings;
 };
 
-/** gradle: の中身。別名・依存の種類ごとの座標・check に足すタスク */
+/** gradle: の中身。別名・プラグイン・版を BOM が決める依存・依存の種類ごとの座標・check に足すタスク */
 export interface GradleSettings {
-  /** 座標（group:artifact）→ libs.versions.toml の別名。書かない座標は、artifact 名の小文字ハイフンにする */
+  /** 座標（group:artifact）→ libs.versions.toml の別名。書かない座標は、artifact 名の小文字ハイフンにする（プラグインは id の . を - にした名前） */
   aliases: Record<string, string>;
+  /** Gradle のプラグインの id → そのプラグインのマーカーの座標（packages に書く。版を調べて [plugins] に入れる） */
+  plugins: Record<string, string>;
+  /** 版を BOM（プラグインの dependency-management など）が決める依存の座標。packages に書かず、版を調べない。[libraries] には module だけを書く */
+  managed: string[];
   /** 依存の種類（implementation など）→ 座標の一覧 */
   configurations: Record<string, string[]>;
   /** check に依存させるタスク */
@@ -371,11 +380,13 @@ function checkMavenOnlyFields(
   }
 }
 
+const GRADLE_KEYS = ["aliases", "plugins", "managed", "configurations", "check_tasks"];
+const GRADLE_PLUGIN_ID_RE = /^[A-Za-z][A-Za-z0-9_-]*(\.[A-Za-z0-9_-]+)*$/;
 const GRADLE_ALIAS_RE = /^[a-z][a-z0-9_-]*$/;
 const GRADLE_CONFIGURATION_RE = /^[a-z][A-Za-z0-9]*$/;
 const GRADLE_TASK_RE = /^[A-Za-z][A-Za-z0-9:_-]*$/;
 
-/** gradle（aliases・configurations・check_tasks）を読んで検証する。ecosystem が maven のときだけ書ける */
+/** gradle（aliases・plugins・managed・configurations・check_tasks）を読んで検証する。ecosystem が maven のときだけ書ける */
 function gradleField(
   data: Record<string, unknown>,
   where: string,
@@ -383,25 +394,64 @@ function gradleField(
   known: Set<string>,
 ): GradleSettings {
   const value = data["gradle"];
-  const empty: GradleSettings = { aliases: {}, configurations: {}, checkTasks: [] };
+  const empty: GradleSettings = {
+    aliases: {},
+    plugins: {},
+    managed: [],
+    configurations: {},
+    checkTasks: [],
+  };
   if (value === undefined) return empty;
   if (ecosystem !== "maven") {
     throw new GenerateError(`${where}：項目 gradle は、ecosystem が maven のときだけ書けます`);
   }
-  const shape = "gradle は「aliases・configurations・check_tasks」を持つ連想配列で書いてください";
+  const shape =
+    "gradle は「aliases・plugins・managed・configurations・check_tasks」を持つ連想配列で書いてください";
   if (!isPlainObject(value)) throw new GenerateError(`${where}：${shape}`);
   for (const key of Object.keys(value)) {
-    if (key !== "aliases" && key !== "configurations" && key !== "check_tasks") {
+    if (!GRADLE_KEYS.includes(key)) {
       throw new GenerateError(
         `${where}：gradle に、知らない項目 ${key} があります（書き間違いの可能性）`,
       );
     }
   }
+  const plugins = stringRecord(
+    value,
+    "plugins",
+    `${where}：gradle`,
+    "プラグインの id: マーカーの座標",
+  );
+  for (const [id, marker] of Object.entries(plugins)) {
+    if (!GRADLE_PLUGIN_ID_RE.test(id)) {
+      throw new GenerateError(
+        `${where}：gradle.plugins の id ${JSON.stringify(id)} は、「org.example.plugin」のような、. で区切った英数字の名前で書いてください`,
+      );
+    }
+    if (!known.has(marker)) {
+      throw new GenerateError(
+        `${where}：gradle.plugins の ${id} のマーカー ${marker} が、packages にも packages_when にもありません（版を調べるため、packages にも書いてください）`,
+      );
+    }
+  }
+  const managed = stringArrayField(value, "managed", `${where}：gradle`);
+  for (const coordinate of managed) {
+    if (parseCoordinate(coordinate) === undefined) {
+      throw new GenerateError(
+        `${where}：gradle.managed は「group:artifact」の形で書いてください（${JSON.stringify(coordinate)}）`,
+      );
+    }
+    if (known.has(coordinate)) {
+      throw new GenerateError(
+        `${where}：gradle.managed の ${coordinate} が、packages（または packages_when）にも書かれています（版を調べる依存と、BOM が版を決める依存を二重に扱えません）`,
+      );
+    }
+  }
+  const markers = new Set(Object.values(plugins));
   const aliases = stringRecord(value, "aliases", `${where}：gradle`, "座標: 別名");
   for (const [coordinate, alias] of Object.entries(aliases)) {
-    if (!known.has(coordinate)) {
+    if (!known.has(coordinate) && !managed.includes(coordinate)) {
       throw new GenerateError(
-        `${where}：gradle.aliases の ${coordinate} が、packages にも packages_when にもありません`,
+        `${where}：gradle.aliases の ${coordinate} が、packages にも packages_when にも managed にもありません`,
       );
     }
     if (!GRADLE_ALIAS_RE.test(alias)) {
@@ -430,9 +480,14 @@ function gradleField(
         );
       }
       for (const coordinate of list as string[]) {
-        if (!known.has(coordinate)) {
+        if (markers.has(coordinate)) {
           throw new GenerateError(
-            `${where}：gradle.configurations の ${coordinate} が、packages にも packages_when にもありません`,
+            `${where}：gradle.configurations の ${coordinate} は、プラグインのマーカーです（依存の種類には書けません。plugins で使います）`,
+          );
+        }
+        if (!known.has(coordinate) && !managed.includes(coordinate)) {
+          throw new GenerateError(
+            `${where}：gradle.configurations の ${coordinate} が、packages にも packages_when にも managed にもありません`,
           );
         }
       }
@@ -447,7 +502,7 @@ function gradleField(
       );
     }
   }
-  return { aliases, configurations, checkTasks };
+  return { aliases, plugins, managed, configurations, checkTasks };
 }
 
 function packagesWhenField(data: Record<string, unknown>, where: string): PackagesWhen[] {
@@ -466,7 +521,17 @@ function packagesWhenField(data: Record<string, unknown>, where: string): Packag
     if (!Array.isArray(item["packages"]) || !item["packages"].every((v) => typeof v === "string")) {
       throw new GenerateError(`${at}：項目 packages は文字列の一覧で書いてください`);
     }
-    return { when, packages: item["packages"] as string[] };
+    const before = item["before"];
+    if (before !== undefined && (typeof before !== "string" || before === "")) {
+      throw new GenerateError(
+        `${at}：項目 before は、packages にあるパッケージの名前（文字列）で書いてください`,
+      );
+    }
+    return {
+      when,
+      packages: item["packages"] as string[],
+      ...(before !== undefined ? { before } : {}),
+    };
   });
 }
 
@@ -619,6 +684,26 @@ function checkVersions(p: {
   }
 }
 
+/** files の出力先に書ける {{名前}}（Java のパッケージの階層。アプリ名で決まる） */
+const DESTINATION_PLACEHOLDER = "{{java_package_path}}";
+/** 出力先の形の確認に使う、{{java_package_path}} の例の値 */
+const DESTINATION_PLACEHOLDER_EXAMPLE = "com/example/app";
+
+/**
+ * files の出力先の {{java_package_path}} を値に置き換える。これ以外の {{名前}} は、出力先に書けない。
+ * 値は、Java のパッケージの階層（com/example/<名前>）。
+ */
+export function fillDestination(destination: string, values: Record<string, string>): string {
+  if (!destination.includes(DESTINATION_PLACEHOLDER)) return destination;
+  const value = values["java_package_path"];
+  if (value === undefined) {
+    throw new GenerateError(
+      `files の出力先 ${destination} の ${DESTINATION_PLACEHOLDER} に入れる値がありません`,
+    );
+  }
+  return destination.replaceAll(DESTINATION_PLACEHOLDER, value);
+}
+
 /** files の「元: 出力先」を読む。元のファイルの存在・パスの形・出力先の重なりを確かめる */
 function readFileMap(
   raw: Record<string, unknown>,
@@ -633,7 +718,17 @@ function readFileMap(
       throw new GenerateError(`${at}：files の ${source} の出力先は文字列で書いてください`);
     }
     checkRelativePath(source, at, "files の元のファイル");
-    checkRelativePath(destination, at, "files の出力先");
+    // 出力先に書ける {{名前}} は {{java_package_path}} だけ。形の確認は、例の値に置き換えてから行う
+    const example = destination.replaceAll(
+      DESTINATION_PLACEHOLDER,
+      DESTINATION_PLACEHOLDER_EXAMPLE,
+    );
+    if (example.includes("{{") || example.includes("}}")) {
+      throw new GenerateError(
+        `${at}：files の出力先 ${destination} に、書けない {{名前}} があります（書けるのは ${DESTINATION_PLACEHOLDER} だけ）`,
+      );
+    }
+    checkRelativePath(example, at, "files の出力先");
     if (!isFile(path.join(dir, ...source.split("/")))) {
       throw new GenerateError(
         `${at}：files の元のファイル profiles/${profileKey}/${source} がありません`,
@@ -759,6 +854,13 @@ export function loadProfile(templatesDir: string, key: string): Profile {
   const externalTools = stringArrayField(data, "external_tools", where);
   const unverified = stringArrayField(data, "unverified", where);
   const packagesWhen = packagesWhenField(data, where);
+  for (const entry of packagesWhen) {
+    if (entry.before !== undefined && !packages.includes(entry.before)) {
+      throw new GenerateError(
+        `${where}：packages_when の before の ${entry.before} が、packages にありません`,
+      );
+    }
+  }
   const devPackages = stringArrayField(data, "dev_packages", where);
   const selectable = new Set([...packages, ...packagesWhen.flatMap((w) => w.packages)]);
   for (const name of devPackages) {
