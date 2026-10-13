@@ -51,6 +51,8 @@ export function buildAnswersYaml(over: Record<string, unknown> = {}): string {
     repository: "github",
     visibility: "private",
     team_size: "solo",
+    backend: "hono",
+    infra: "cloudflare",
     database: "d1",
     auth: "oidc",
     idp: "google",
