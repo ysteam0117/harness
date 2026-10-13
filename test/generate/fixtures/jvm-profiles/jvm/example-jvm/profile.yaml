@@ -1,0 +1,34 @@
+id: example-jvm
+ecosystem: maven
+category: jvm
+name: 架空の JVM（テスト用）
+languages: [java]
+runtimes: [jvm]
+packages:
+  - com.example:demo-lib
+  - com.example:Demo_Util
+  - com.example:demo-test
+packages_when:
+  - when: { database: d1 }
+    packages: [com.example:demo-extra]
+verified_versions:
+  com.example:demo-lib: "1.2.3"
+  com.example:Demo_Util: "2.0"
+  com.example:demo-test: "3.1.0"
+  com.example:demo-extra: "0.9.0"
+version_ranges:
+  java: ">=21 <27"
+skill_name: jvm-example
+files:
+  files/build.gradle.kts: backend/build.gradle.kts
+gradle:
+  aliases:
+    com.example:demo-test: demo-testing
+  configurations:
+    implementation:
+      - com.example:demo-lib
+      - com.example:Demo_Util
+      - com.example:demo-extra
+    testImplementation:
+      - com.example:demo-test
+  check_tasks: [spotlessCheck, test]

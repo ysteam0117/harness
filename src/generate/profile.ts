@@ -93,7 +93,19 @@ export type Profile = {
   compatibilityNotes: string[];
   /** 道具の Docker のイメージ（道具の名前 → イメージ。書いてなければ {}） */
   containerImages: Record<string, ContainerImage>;
+  /** Gradle のビルドファイルの設定（ecosystem が maven のときだけ書ける。書いてなければ空） */
+  gradle: GradleSettings;
 };
+
+/** gradle: の中身。別名・依存の種類ごとの座標・check に足すタスク */
+export interface GradleSettings {
+  /** 座標（group:artifact）→ libs.versions.toml の別名。書かない座標は、artifact 名の小文字ハイフンにする */
+  aliases: Record<string, string>;
+  /** 依存の種類（implementation など）→ 座標の一覧 */
+  configurations: Record<string, string[]>;
+  /** check に依存させるタスク */
+  checkTasks: string[];
+}
 
 /** 範囲の原因。peer は、原因のパッケージの peerDependencies が範囲を決める。self は、そのパッケージ自身の下限（確認する相手がない） */
 export interface RangeCause {
@@ -143,6 +155,7 @@ const KNOWN_FIELDS = new Set([
   "wrangler_when",
   "optional_packages",
   "container_images",
+  "gradle",
 ]);
 
 const CONTAINER_IMAGE_FIELDS = ["image", "tag", "digest", "checked_on", "note"];
@@ -356,6 +369,85 @@ function checkMavenOnlyFields(
       );
     }
   }
+}
+
+const GRADLE_ALIAS_RE = /^[a-z][a-z0-9_-]*$/;
+const GRADLE_CONFIGURATION_RE = /^[a-z][A-Za-z0-9]*$/;
+const GRADLE_TASK_RE = /^[A-Za-z][A-Za-z0-9:_-]*$/;
+
+/** gradle（aliases・configurations・check_tasks）を読んで検証する。ecosystem が maven のときだけ書ける */
+function gradleField(
+  data: Record<string, unknown>,
+  where: string,
+  ecosystem: Ecosystem,
+  known: Set<string>,
+): GradleSettings {
+  const value = data["gradle"];
+  const empty: GradleSettings = { aliases: {}, configurations: {}, checkTasks: [] };
+  if (value === undefined) return empty;
+  if (ecosystem !== "maven") {
+    throw new GenerateError(`${where}：項目 gradle は、ecosystem が maven のときだけ書けます`);
+  }
+  const shape = "gradle は「aliases・configurations・check_tasks」を持つ連想配列で書いてください";
+  if (!isPlainObject(value)) throw new GenerateError(`${where}：${shape}`);
+  for (const key of Object.keys(value)) {
+    if (key !== "aliases" && key !== "configurations" && key !== "check_tasks") {
+      throw new GenerateError(
+        `${where}：gradle に、知らない項目 ${key} があります（書き間違いの可能性）`,
+      );
+    }
+  }
+  const aliases = stringRecord(value, "aliases", `${where}：gradle`, "座標: 別名");
+  for (const [coordinate, alias] of Object.entries(aliases)) {
+    if (!known.has(coordinate)) {
+      throw new GenerateError(
+        `${where}：gradle.aliases の ${coordinate} が、packages にも packages_when にもありません`,
+      );
+    }
+    if (!GRADLE_ALIAS_RE.test(alias)) {
+      throw new GenerateError(
+        `${where}：gradle.aliases の ${coordinate} の別名 ${JSON.stringify(alias)} は、小文字・数字・-・_ で、小文字から始めて書いてください`,
+      );
+    }
+  }
+  const configurations: Record<string, string[]> = {};
+  const rawConfigurations = value["configurations"];
+  if (rawConfigurations !== undefined) {
+    if (!isPlainObject(rawConfigurations)) {
+      throw new GenerateError(
+        `${where}：gradle.configurations は「依存の種類: [座標]」の形で書いてください`,
+      );
+    }
+    for (const [configuration, list] of Object.entries(rawConfigurations)) {
+      if (!GRADLE_CONFIGURATION_RE.test(configuration)) {
+        throw new GenerateError(
+          `${where}：gradle.configurations の名前 ${JSON.stringify(configuration)} は、implementation のような英数字の名前で書いてください`,
+        );
+      }
+      if (!Array.isArray(list) || !list.every((v) => typeof v === "string")) {
+        throw new GenerateError(
+          `${where}：gradle.configurations の ${configuration} は座標の一覧で書いてください`,
+        );
+      }
+      for (const coordinate of list as string[]) {
+        if (!known.has(coordinate)) {
+          throw new GenerateError(
+            `${where}：gradle.configurations の ${coordinate} が、packages にも packages_when にもありません`,
+          );
+        }
+      }
+      configurations[configuration] = list as string[];
+    }
+  }
+  const checkTasks = stringArrayField(value, "check_tasks", `${where}：gradle`);
+  for (const task of checkTasks) {
+    if (!GRADLE_TASK_RE.test(task)) {
+      throw new GenerateError(
+        `${where}：gradle.check_tasks の ${JSON.stringify(task)} は、Gradle のタスク名として書けない形です`,
+      );
+    }
+  }
+  return { aliases, configurations, checkTasks };
 }
 
 function packagesWhenField(data: Record<string, unknown>, where: string): PackagesWhen[] {
@@ -678,6 +770,12 @@ export function loadProfile(templatesDir: string, key: string): Profile {
   }
   if (ecosystem === "maven") checkMavenOnlyFields(data, where, packages, packagesWhen);
   const containerImages = containerImagesField(data, where);
+  const gradle = gradleField(
+    data,
+    where,
+    ecosystem,
+    new Set([...packages, ...packagesWhen.flatMap((w) => w.packages)]),
+  );
   const verifiedVersions = stringRecord(data, "verified_versions", where, "名前: 版");
   const versionRanges = stringRecord(data, "version_ranges", where, "名前: 範囲");
   const rangeCauses = rangeCausesField(data, where);
@@ -783,6 +881,7 @@ export function loadProfile(templatesDir: string, key: string): Profile {
     unverified,
     compatibilityNotes,
     containerImages,
+    gradle,
   };
 }
 

@@ -10,6 +10,7 @@ import { stripHarnessComments, stripMarkerComments } from "./comments.js";
 import { buildConfigText, CONFIG_PATH, localDay } from "./config.js";
 import { whenMatches, type When } from "./conditions.js";
 import { GenerateError } from "./errors.js";
+import { buildGradle, GRADLE_DIR } from "./gradle.js";
 import { judge } from "./judgment.js";
 import { selectKnowledge } from "./knowledge.js";
 import { buildOutputs } from "./plan.js";
@@ -50,6 +51,8 @@ export interface BuildProjectInput {
   templatesDir?: string;
   /** 既定はハーネスの knowledge/ */
   knowledgeDir?: string;
+  /** 使うプロファイルの key。既定は回答から決める（selectProfiles）。テストで、回答に結びつかないプロファイルを使うために置く */
+  profileKeys?: string[];
 }
 
 const GITHUB_REPOSITORY: When = { answer: "repository", equals: "github" };
@@ -254,6 +257,24 @@ function readTemplate(templatesDir: string, rel: string): string {
   }
 }
 
+/** 生成する README に、Gradle の使い方の節を足す（Gradle Wrapper は出さないため、作り方から案内する）。「リポジトリの用意」の前に置く */
+function addGradleReadme(
+  readme: string,
+  templatesDir: string,
+  values: Record<string, string>,
+): string {
+  const source = "project/README-gradle.md";
+  const section = renderTemplate(
+    stripMarkerComments(stripHarnessComments(readTemplate(templatesDir, source), source)),
+    values,
+    { templatesDir, fileName: source },
+  );
+  const marker = "## リポジトリの用意\n";
+  const at = readme.indexOf(marker);
+  if (at < 0) throw new GenerateError("README のひな形に「リポジトリの用意」の章がありません");
+  return `${readme.slice(0, at)}${section.trimEnd()}\n\n${readme.slice(at)}`;
+}
+
 const cell = (text: string): string => text.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
 
 /** 承知した警告の ADR（C-35：背景・選択肢・決定・理由・影響） */
@@ -318,7 +339,7 @@ export function buildProject(input: BuildProjectInput): { files: ProjectFile[] }
   const templatesDir = input.templatesDir ?? findTemplatesDir();
   const ais: Ai[] = answers.ais;
 
-  const profileKeys = selectProfiles(answers);
+  const profileKeys = input.profileKeys ?? selectProfiles(answers);
   const profiles = resolveProfiles(templatesDir, profileKeys);
   const judgment = judge(answers);
   const knowledge = selectKnowledge(answers, {
@@ -332,6 +353,9 @@ export function buildProject(input: BuildProjectInput): { files: ProjectFile[] }
   values["license_year"] = String(now.getFullYear());
   // 道具の Docker のイメージ（版・ダイジェスト）。プロファイルの container_images（F-24）から、{{semgrep_image}} などとして差し込む
   Object.assign(values, containerImageValues(profiles));
+  // Gradle のビルドファイル（maven のプロファイルがあるときだけ。Hono だけなら何も足さない）。build.gradle.kts のひな形に差し込む値
+  const gradle = buildGradle({ profiles, answers, versions, appName: answers.app_name });
+  if (gradle !== undefined) Object.assign(values, gradle.values);
 
   // AI向けの出力・プロファイルの files
   const built = buildOutputs({ templatesDir, ais, profiles: profileKeys, values, answers });
@@ -348,11 +372,25 @@ export function buildProject(input: BuildProjectInput): { files: ProjectFile[] }
     const text = stripMarkerComments(
       stripHarnessComments(readTemplate(templatesDir, file.source), file.source),
     );
+    let content = renderTemplate(text, values, { templatesDir, fileName: file.source });
+    if (gradle !== undefined && file.destination === "README.md") {
+      content = addGradleReadme(content, templatesDir, values);
+    }
     outputs.push({
       path: file.destination,
-      content: renderTemplate(text, values, { templatesDir, fileName: file.source }),
+      content,
       ...(file.executable ? { executable: true as const } : {}),
     });
+  }
+
+  if (gradle !== undefined) {
+    outputs.push(...gradle.files);
+    // build.gradle.kts の中身はプロファイルの files に任せる。無ければ、Gradle のプロジェクトにならない
+    if (!outputs.some((f) => f.path === `${GRADLE_DIR}/build.gradle.kts`)) {
+      throw new GenerateError(
+        `maven のプロファイルの files に、${GRADLE_DIR}/build.gradle.kts がありません`,
+      );
+    }
   }
 
   // wrangler.jsonc：選んだプロファイルの設定を、回答に合わせてまとめて作る。.env.example：環境変数の項目の一覧
