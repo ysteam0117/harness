@@ -208,6 +208,24 @@ export function terraformVersions(): { terraform: string; cloudflareProvider: st
   };
 }
 
+/** Java の予約語・リテラル（パッケージ名の部分に使えない）。JLS の 3.8・3.9 */
+const JAVA_RESERVED = new Set(
+  "abstract assert boolean break byte case catch char class const continue default do double else enum extends final finally float for goto if implements import instanceof int interface long native new package private protected public return short static strictfp super switch synchronized this throw throws transient try void volatile while true false null _".split(
+    " ",
+  ),
+);
+
+/**
+ * アプリ名から、Java のパッケージ名の最後の部分を作る。ハイフンを除き、数字で始まれば先頭に _、
+ * Java の予約語（true・false・null を含む）になれば末尾に _ を付ける（JLS 6.1 の慣例）。
+ * アプリ名の形は validateAppName が確かめる（英小文字・数字・ハイフン）。
+ */
+export function javaPackageName(appName: string): string {
+  const name = appName.replaceAll("-", "");
+  const safe = /^[0-9]/.test(name) ? `_${name}` : name;
+  return JAVA_RESERVED.has(safe) ? `${safe}_` : safe;
+}
+
 function pentestRequirement(judgment: Judgment): string {
   return judgment.pentestRequired
     ? `初回のリリースの前に必須（${judgment.pentestReasons.join("、")}）`
@@ -319,6 +337,9 @@ export function buildValues(input: BuildValuesInput): Record<string, string> {
   values["app_name"] = answers.app_name;
   values["auth_method"] = labelOf("auth", answers.auth);
   values["database"] = labelOf("database", answers.database);
+  // Java のパッケージ名（Spring Boot のソースの package 宣言と出力先に使う）
+  values["java_package"] = `com.example.${javaPackageName(answers.app_name)}`;
+  values["java_package_path"] = `com/example/${javaPackageName(answers.app_name)}`;
   values["asvs_level"] = asvsLevel(judgment);
   values["pentest_requirement"] = pentestRequirement(judgment);
   values["judgment_table"] = judgmentTable(answers);

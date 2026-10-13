@@ -341,15 +341,43 @@ maven のプロファイル（`ecosystem: maven`）が1つでもあるときだ�
 | --- | --- |
 | `backend/settings.gradle.kts` | `rootProject.name`。`dependencyResolutionManagement` と `pluginManagement` の両方に `mavenCentral()`（プラグインも Maven Central だけから解決する） |
 | `backend/gradle/libs.versions.toml` | `[versions]`・`[libraries]`・`[plugins]`。名前（別名）の昇順で、選んだ正確な版を書く。`toml.ts` で文字列をエスケープする |
-| `backend/build.gradle.kts` | 中身はプロファイルの `files` のひな形に任せる。ハーネスは `{{gradle_dependencies}}`・`{{gradle_check_tasks}}`・`{{java_version}}` を差し込む |
+| `backend/build.gradle.kts` | 中身はプロファイルの `files` のひな形に任せる。ハーネスは `{{gradle_plugins}}`・`{{gradle_dependencies}}`・`{{gradle_check_tasks}}`・`{{java_version}}` を差し込む |
 
 - 別名は、プロファイルの `gradle.aliases`（座標 → 別名）に書く。書かない座標は、artifact 名を小文字にして `.`・`_` を `-` にした名前にする。別名が重なったらエラー
-- プロファイルの `gradle:` は、`aliases`・`configurations`（依存の種類 → 座標。`implementation(libs.x)` の行になる）・`check_tasks`（`check` に依存させるタスク。`tasks.named("check") { dependsOn(...) }`）を書ける。座標は `packages`・`packages_when` にあるものだけ。回答に合わない `packages_when` の座標は、`libs.versions.toml` にも依存の行にも入れない。`ecosystem` が npm のプロファイルに書いたらエラー
+- プロファイルの `gradle:` は、`aliases`・`plugins`・`managed`・`configurations`（依存の種類 → 座標。`implementation(libs.x)` の行になる）・`check_tasks`（`check` に依存させるタスク。`tasks.named("check") { dependsOn(...) }`）を書ける。座標は `packages`・`packages_when`・`managed` にあるものだけ。回答に合わない `packages_when` の座標は、`libs.versions.toml` にも依存の行にも入れない。`ecosystem` が npm のプロファイルに書いたらエラー
+- `gradle.plugins`（#40）：プラグインの id → そのプラグインのマーカーの座標（`<id>:<id>.gradle.plugin`）。マーカーは `packages` にも書き、版を調べる（Maven Central にある）。`[libraries]` ではなく `[plugins]` に `別名 = { id = "...", version.ref = "別名" }` の形で出し、`{{gradle_plugins}}` に `alias(libs.plugins.x)` の行を差し込む。別名の既定は id の `.`・`_` を `-` にした名前（`gradle.aliases` にマーカーの座標で書けば変えられる）。マーカーは `configurations` に書けない
+- `gradle.managed`（#40）：版を BOM（Spring Boot のプラグインの dependency-management など）が決める依存の座標。`packages` には書かず、版を調べない。`[libraries]` に `module` だけを書き（`version.ref` なし）、`[versions]` に入れない。`packages`（または `packages_when`）と両方に書いたらエラー。`configurations` と `aliases` には書ける
 - Java の版（`{{java_version}}`）は、バージョンの調査（[versions.md](versions.md)）で選んだ `java` の大きな版。依存の版は、選んだ版（`VersionResult`）から取る。選んだ版に無い座標・Java の版が無いときはエラー
-- `[plugins]` は、今は空の節だけを出す。プラグインの定義は、Spring Boot のプロファイルを入れる #40 で足す。プラグインのマーカーと実装を Maven Central から解決できるかは、#40 で Spring Boot のプラグインを入れるときに、Gradle の実行で確かめる
+- `[plugins]` は、`gradle.plugins` があるときだけ中身を出す（なければ空の節）。プラグインのマーカーと実装を Maven Central から解決できるかは、Spring Boot のプロファイルを入れるときに、Gradle の実行で確かめる（#40）
 - Gradle Wrapper（`gradlew`）は出さない。maven のプロファイルがあるときだけ、生成する `README.md` に「Gradle の使い方」の節（`templates/project/README-gradle.md`）を足す。`backend/` で `gradle wrapper` を1回実行して `gradlew`（Windows は `gradlew.bat`）を作り、その後 `backend/` で `./gradlew check` を実行する順序。maven のプロファイルが無いときは `README.md` を変えない
 - 3つのファイルは、`package.json` と同じく、プロジェクトのもの（利用者が依存や設定を足す）として扱い、管理するファイル（F-27）にしない。`managed_files` には載らない
 - テスト：`test/generate/gradle.test.ts`。架空のプロファイル `test/generate/fixtures/jvm-profiles/jvm/example-jvm` を、実際のひな形の一時的な写しに足して使う（`buildProject` の `profileKeys` で選ぶ）
+
+## backend による出し分け（#40）
+
+Spring Boot の構成（#40）を足せるよう、Hono（Workers）のためのものを、`backend` が `hono` のときだけ出す形にした。**Hono の生成結果は1バイトも変わらない**（既存のスナップショットとベースラインで確かめる）。Spring Boot の選択肢と、Spring Boot 側のプロファイル・設定は、まだ無い（選べない）。
+
+| 出すもの | 条件 |
+| --- | --- |
+| `backend/src/app.ts`・`config.ts`・`routes/health.ts`・`services/health.service.ts` とそのテスト・`openapi.test.ts` | `backend=hono` |
+| `backend/src/index.ts`（DB なしの入口） | `backend=hono` かつ `database=none` |
+| `docs/api/openapi.json`・`wrangler.jsonc`・`scripts/db-local.ts` | `backend=hono`（`project.ts`） |
+| `docker-compose.yml`（DB で2種類） | `backend=hono`（かつ `database` で選ぶ）。Spring Boot の Docker の開発環境は、デプロイ先の Issue（#43）で扱う |
+| `infra/*.tf`（`d1.tf`・`hyperdrive.tf`・`r2.tf` は `database`・`file_upload` も） | `infra=cloudflare` |
+| プロファイル `hono`・`structured-logger`（`data/profile-selection.yaml`） | `backend=hono` |
+| プロファイル `drizzle`・`auth/*` | 今の条件に、`backend=hono` を `all` で足す |
+| `vite-react-router`：`vite.config.ts`・`public/_headers`・`@cloudflare/vite-plugin`・scripts（wrangler の型・Docker の開発環境を使うもの） | `backend=hono`（`files_when`・`packages_when`・`package_json_when`） |
+| `typescript-standard`：`tsconfig.json`・scripts・`allowScripts` の `workerd` | `backend=hono` |
+| `vitest-playwright`：`@cloudflare/vitest-pool-workers`・`vitest.*.config.ts`・Playwright の設定と E2E・scripts | `backend=hono`（DB の条件は `all` で重ねる） |
+
+- `package_json_when` に移した scripts は、並び順を今のまま保つ（`mergePackageJson` は並べ替えない）。同じ項目に違う値があるとエラーになるため、出し分けるプロファイルでは scripts を丸ごと条件つきの項目に移す
+- `backend` や `infra` の回答が無い入力（`buildOutputs` の既定の `answers` など）では、これらの条件に合わない（条件の対象の回答が無ければ合わない）。`--answers` で `backend`・`infra` を省いた場合は、質問の流れが `hono`・`cloudflare` に自動で決める（[questions.md](questions.md)）
+
+### 出力先の `{{java_package_path}}`
+
+プロファイルの `files` の出力先には、`{{java_package_path}}` だけ書ける（Java のソースを `backend/src/main/java/{{java_package_path}}/Application.java` のように、パッケージの階層に置くため）。`profile.ts` の `readFileMap` は、これ以外の `{{名前}}` をエラーにし、パスの形の確認は、例の値（`com/example/app`）に置き換えてから行う。`plan.ts` が `fillDestination` で、アプリ名から決めた値に置き換える。出力先の重なりの確認（プロファイル同士）は置き換える前の文字列で、出力全体の重なりの確認は置き換えた後で行う。
+
+値は `values.ts` が作る：`java_package`（`com.example.<名前>`）と `java_package_path`（`com/example/<名前>`）。`<名前>` は `javaPackageName(appName)`：アプリ名からハイフンを除き、数字で始まれば先頭に `_`、Java の予約語（`true`・`false`・`null`・`goto`・`const`・`_` を含む）になれば末尾に `_` を付ける（JLS 6.1 の慣例。例：`my-app` → `myapp`、`123-app` → `_123app`、`class` → `class_`）。
 
 ## 秘密情報を生成物に入れないこと
 

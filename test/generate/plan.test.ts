@@ -485,3 +485,46 @@ describe("#31 AC-2: プロファイルの元のファイルの改行が CRLF・C
     },
   );
 });
+
+describe("#40: 出力先の {{java_package_path}} の置き換え", () => {
+  const edited = (destination: string) => {
+    const files = fixtureFiles();
+    files["profiles/lib/alpha/profile.yaml"] = (
+      files["profiles/lib/alpha/profile.yaml"] ?? ""
+    ).replace("files/a.ts: out/src/a.ts", `files/a.ts: ${destination}`);
+    return makeTemplates(files);
+  };
+
+  it("出力先の {{java_package_path}} を、値で置き換える", () => {
+    const { files } = buildOutputs({
+      templatesDir: edited("backend/src/main/java/{{java_package_path}}/A.java"),
+      ais: ["claude"],
+      profiles: ["lib/alpha"],
+      values: { ...smallValues, java_package_path: "com/example/myapp" },
+    });
+    expect(files.map((f) => f.path)).toContain("backend/src/main/java/com/example/myapp/A.java");
+    expect(files.map((f) => f.path).some((p) => p.includes("{{"))).toBe(false);
+  });
+
+  it("値が無ければ、エラーにする", () => {
+    expect(() =>
+      buildOutputs({
+        templatesDir: edited("src/{{java_package_path}}/A.java"),
+        ais: ["claude"],
+        profiles: ["lib/alpha"],
+        values: smallValues,
+      }),
+    ).toThrow(GenerateError);
+  });
+
+  it("置き換えた後の出力先が、ほかの出力と重なったらエラーにする", () => {
+    expect(() =>
+      buildOutputs({
+        templatesDir: edited('"{{java_package_path}}"'),
+        ais: ["claude"],
+        profiles: ["lib/alpha"],
+        values: { ...smallValues, java_package_path: "AGENTS.md" },
+      }),
+    ).toThrow(GenerateError);
+  });
+});

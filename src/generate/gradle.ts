@@ -37,6 +37,17 @@ function defaultAlias(coordinate: string): string {
   return artifact.toLowerCase().replace(/[._]/g, "-");
 }
 
+/** プラグインの既定の別名：プラグインの id を小文字にして、. と _ を - にする */
+function defaultPluginAlias(pluginId: string): string {
+  return pluginId.toLowerCase().replace(/[._]/g, "-");
+}
+
+/** 別名を、build.gradle.kts の libs.（または libs.plugins.）の後ろに書く形にする（区切りを . にする） */
+const accessor = (alias: string): string => alias.replace(/[-_]/g, ".");
+
+/** libs.versions.toml の1つの項目の種類（library：版つきの依存、plugin：プラグイン、managed：版を BOM が決める依存） */
+type EntryKind = "library" | "plugin" | "managed";
+
 /** Gradle のバージョンカタログが受け付けない名前（予約語、先頭が bundles・versions・plugins、先頭が小文字の英字でない、使えない文字） */
 function assertCatalogAlias(alias: string, coordinate: string): void {
   const reserved = ["class", "convention", "extensions"];
@@ -76,45 +87,81 @@ export function buildGradle(input: BuildGradleInput): GradleOutput | undefined {
   const adopted = new Map<string, string>();
   for (const entry of versions.entries) adopted.set(entry.name, entry.version);
 
-  // 座標 → 別名（回答に合う座標だけ）。別名が重なったらエラー
+  // 座標 → 別名（回答に合う座標だけ。プラグインのマーカーと、版を BOM が決める依存を含む）。別名が重なったらエラー
   const aliasOf = new Map<string, string>();
+  const kindOf = new Map<string, EntryKind>();
+  const pluginIdOf = new Map<string, string>();
   const ownerOf = new Map<string, string>();
+  const register = (
+    profile: Profile,
+    coordinate: string,
+    kind: EntryKind,
+    fallback: string,
+  ): void => {
+    const alias = profile.gradle.aliases[coordinate] ?? fallback;
+    assertCatalogAlias(alias, coordinate);
+    // Gradle は -・_・. を同じ区切りとして扱うので、区切りをそろえた名前で重なりを調べる
+    const key = alias.replace(/[-_]/g, ".");
+    const other = ownerOf.get(key);
+    if (other !== undefined && other !== coordinate) {
+      throw new GenerateError(
+        `libs.versions.toml の別名 ${alias} が、${other} と ${coordinate} で重なっています（gradle.aliases で別名を分けてください）`,
+      );
+    }
+    ownerOf.set(key, coordinate);
+    aliasOf.set(coordinate, alias);
+    kindOf.set(coordinate, kind);
+  };
   for (const profile of profiles) {
+    const markerToId = new Map(Object.entries(profile.gradle.plugins).map(([id, m]) => [m, id]));
     for (const coordinate of wantedPackages(profile, answers)) {
       if (aliasOf.has(coordinate)) continue;
-      const alias = profile.gradle.aliases[coordinate] ?? defaultAlias(coordinate);
-      assertCatalogAlias(alias, coordinate);
-      // Gradle は -・_・. を同じ区切りとして扱うので、区切りをそろえた名前で重なりを調べる
-      const key = alias.replace(/[-_]/g, ".");
-      const other = ownerOf.get(key);
-      if (other !== undefined && other !== coordinate) {
-        throw new GenerateError(
-          `libs.versions.toml の別名 ${alias} が、${other} と ${coordinate} で重なっています（gradle.aliases で別名を分けてください）`,
-        );
+      const pluginId = markerToId.get(coordinate);
+      if (pluginId !== undefined) {
+        pluginIdOf.set(coordinate, pluginId);
+        register(profile, coordinate, "plugin", defaultPluginAlias(pluginId));
+      } else {
+        register(profile, coordinate, "library", defaultAlias(coordinate));
       }
-      ownerOf.set(key, coordinate);
-      aliasOf.set(coordinate, alias);
+    }
+  }
+  // 版を BOM が決める依存は、ほかのプロファイルが版つきで入れていなければ、module だけを書く
+  for (const profile of profiles) {
+    for (const coordinate of profile.gradle.managed) {
+      if (aliasOf.has(coordinate)) continue;
+      register(profile, coordinate, "managed", defaultAlias(coordinate));
     }
   }
 
-  const libraries: { alias: string; module: string; version: string }[] = [];
+  const libraries: { alias: string; module: string; version?: string }[] = [];
+  const plugins: { alias: string; id: string; version: string }[] = [];
   for (const [coordinate, alias] of aliasOf) {
+    const kind = kindOf.get(coordinate);
+    if (kind === "managed") {
+      libraries.push({ alias, module: coordinate });
+      continue;
+    }
     const version = adopted.get(coordinate);
     if (version === undefined) {
       throw new GenerateError(
         `依存 ${coordinate} の版が、選んだ版にありません（libs.versions.toml に入れられません）`,
       );
     }
-    libraries.push({ alias, module: coordinate, version });
+    if (kind === "plugin") {
+      plugins.push({ alias, id: pluginIdOf.get(coordinate) ?? coordinate, version });
+    } else {
+      libraries.push({ alias, module: coordinate, version });
+    }
   }
   libraries.sort((a, b) => compare(a.alias, b.alias));
+  plugins.sort((a, b) => compare(a.alias, b.alias));
 
   // 依存の種類ごとの行。種類は名前の昇順、座標は別名の昇順（同じ入力なら同じ出力）。回答に合わない座標は飛ばす
   const configurations = new Map<string, Set<string>>();
   const checkTasks = new Set<string>();
   for (const profile of profiles) {
     // 別のプロファイルが同じ座標を使っていても、このプロファイルの回答に合わない座標は足さない
-    const wanted = new Set(wantedPackages(profile, answers));
+    const wanted = new Set([...wantedPackages(profile, answers), ...profile.gradle.managed]);
     for (const [configuration, coordinates] of Object.entries(profile.gradle.configurations)) {
       for (const coordinate of coordinates) {
         const alias = aliasOf.get(coordinate);
@@ -131,21 +178,33 @@ export function buildGradle(input: BuildGradleInput): GradleOutput | undefined {
     .flatMap((configuration) =>
       [...(configurations.get(configuration) ?? [])]
         .sort(compare)
-        .map((alias) => `    ${configuration}(libs.${alias.replace(/[-_]/g, ".")})`),
+        .map((alias) => `    ${configuration}(libs.${accessor(alias)})`),
     );
+  const pluginLines = plugins.map((p) => `    alias(libs.plugins.${accessor(p.alias)})`);
   const tasks = [...checkTasks].sort(compare);
 
+  // [versions] には、版を持つ項目（依存とプラグイン）だけを入れる。版を BOM が決める依存には、版を書かない
+  const versioned: [string, string][] = [
+    ...libraries.flatMap((l): [string, string][] =>
+      l.version === undefined ? [] : [[l.alias, l.version]],
+    ),
+    ...plugins.map((p): [string, string] => [p.alias, p.version]),
+  ].sort((a, b) => compare(a[0], b[0]));
   const catalog = [
     "[versions]",
-    toToml(libraries.map((l): [string, string] => [l.alias, l.version])).trimEnd(),
+    toToml(versioned).trimEnd(),
     "",
     "[libraries]",
-    ...libraries.map(
-      (l) =>
-        `${l.alias} = { module = ${tomlString(l.module)}, version.ref = ${tomlString(l.alias)} }`,
+    ...libraries.map((l) =>
+      l.version === undefined
+        ? `${l.alias} = { module = ${tomlString(l.module)} }`
+        : `${l.alias} = { module = ${tomlString(l.module)}, version.ref = ${tomlString(l.alias)} }`,
     ),
     "",
     "[plugins]",
+    ...plugins.map(
+      (p) => `${p.alias} = { id = ${tomlString(p.id)}, version.ref = ${tomlString(p.alias)} }`,
+    ),
   ]
     .filter((line, i, all) => !(line === "" && all[i - 1] === ""))
     .join("\n");
@@ -172,6 +231,7 @@ export function buildGradle(input: BuildGradleInput): GradleOutput | undefined {
       { path: `${GRADLE_DIR}/gradle/libs.versions.toml`, content: `${catalog}\n` },
     ],
     values: {
+      gradle_plugins: pluginLines.join("\n"),
       gradle_dependencies: dependencies.join("\n"),
       gradle_check_tasks:
         tasks.length === 0

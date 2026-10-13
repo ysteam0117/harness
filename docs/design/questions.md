@@ -70,7 +70,7 @@ flowchart TD
 選択肢が1つの `select` は、聞かずに決めて表示する（「◯◯：△△（自動で決定）」）。
 
 - `project_type`・`layers`・`frontend`・`backend`・`infra`・`data_access`
-- `data_access` は `database` が `none` 以外のときだけ（`when`）
+- `data_access` は `database` が `none` 以外で、かつ `backend` が `hono` のときだけ（`when` の `all`）
 
 `backend` は今、選択肢が `hono` だけなので、自動で決まる。Spring Boot を選べるようにするのは #40 で、この Issue（#39）では選択肢を足さない（Spring Boot のプロファイルが無いまま、`--answers` で選んで生成に進む抜け道を作らないため）。#39 では、`backend: spring_boot` が今は選べない値として拒否されることを、`test/questions/answers.test.ts` で固定している。
 
@@ -78,16 +78,19 @@ flowchart TD
 
 1. `src/questions/definitions.ts` の `backend` の選択肢に `spring_boot`（見出し「Spring Boot（Javaで開発。ビルドは Gradle）」）を足す。選択肢が2つになるので、`backend` は自動で決まる質問ではなくなり、聞く質問になる
 2. `src/questions/answers.ts` の `Answers` の `backend` の型を `"hono" | "spring_boot"` にする
-3. `data/profile-selection.yaml`：`backend-framework/hono` の条件を `{ answer: backend, equals: hono }` にし、`backend-framework/spring-boot` を `equals: spring_boot` で足す
+3. `data/profile-selection.yaml`：`backend-framework/spring-boot` を `equals: spring_boot` で足す（`backend-framework/hono` ほか Hono のためのプロファイルの `backend=hono` の条件は、#40 の土台の PR で入れ済み）
 4. `data/consistency-rules.yaml`：`spring_boot` と `infra: cloudflare` の組み合わせをエラーにする規則を足す（F-08）
 5. 上の「自動で決まる質問」の一覧から `backend` を外し、`definitions.test.ts`・`flow.test.ts` の「選択肢が1つの select」の期待を直す
+6. `infra` に `container`（見出し「コンテナ（AWS ECS 等。デプロイの設定は今後追加）」）を足し、聞く質問にする（`initialValue` は付けない）。4 の規則は、`spring_boot` と `cloudflare`、`hono` と `container`、`spring_boot` と `database: d1`、`spring_boot` と `auth` が `app`・`oidc`・`both` の4つ
+
+#40 の土台の PR（Hono の生成結果を変えない）で入れたもの：質問の条件の `all`、`data_access` の `backend=hono` の条件、`--answers` で `backend`・`infra` を省いたときの互換（下の「質問の条件の `all`」）。上の 1〜6（選択肢と規則）は、Spring Boot のプロファイルと同じ PR で有効にする。
 
 ### 条件で決まる質問
 
 | 質問 | 聞く条件（`when`） |
 | --- | --- |
 | `postgres_provider` | `database` が `postgresql` |
-| `data_access` | `database` が `none` 以外 |
+| `data_access` | `database` が `none` 以外、かつ `backend` が `hono`（`all`。#40） |
 | `idp` | `auth` が `oidc` か `both`（聞かない質問のため、`--answers` に書いたときだけ。#79） |
 | `critical_ops_kinds` | `critical_ops` が `yes`（聞かない質問のため、`--answers` に書いたときだけ） |
 | `file_kinds` | `file_upload` が `yes`（聞かない質問のため、`--answers` に書いたときだけ。#79） |
@@ -101,6 +104,14 @@ flowchart TD
 - 整合性チェック（`data/consistency-rules.yaml`）：`team-needs-ci`・`public-needs-ci` は `repository` が `github` のときだけ。新しい警告 `team-without-remote`（複数人で、リポジトリが `local`。「共有のリモートがなく、ほかの人の変更を取り込む仕組みがありません」。直す質問は `team_size`・`repository`）
 
 条件に合わない質問は飛ばし、回答に入れない。条件の対象の回答がまだないときは、合わないものとして扱う。
+
+### 質問の条件の `all`（#40）
+
+`when` は、1つの質問への条件（`{ id, equals | in | notEquals }`）か、`{ all: [条件, ...] }`（並べた条件のすべてに合うときだけ合う。入れ子は書けない。生成側の `When` の `all` と同じ形）で書く（`definitions.ts` の `Condition`・`matchesCondition`・`conditionIds`・`unmetConditionIds`）。`forced.when` は、1つの質問への条件だけ。
+
+- 対話で、先に書かれた回答（`--answers`）が、条件に合わず聞かなくなった質問に入っていたときの矛盾（`flow.ts`）は、原因を「合っていない最初の質問」にする。理由の文には、その質問の見出しを出す
+- `--answers` で、条件に合わない質問への回答を書いたとき（`answers.ts`）は、合っていない質問のうち、回答が書かれているものがあれば「回答を書けません」、どれも書かれていなければ「条件となる ◯◯ も書く必要があります」（既定値で判断できる質問だけが対象）
+- `--answers` で `backend`・`infra` を省いたときは、以前の回答ファイルとの互換のため、`hono`・`cloudflare` とみなして条件を確かめる（`repository` を `github` とみなすのと同じ扱い。回答には入れない）。例：`database: d1`・`data_access: drizzle` だけを書いた以前のファイルは、そのまま通る
 
 ### 対話で聞かない質問（質問A〜G）
 

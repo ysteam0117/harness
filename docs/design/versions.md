@@ -85,6 +85,7 @@ flowchart TD
 | --- | --- |
 | `packages` | 各プロファイルの `packages` を、対象に加える |
 | `packages_when` | 「回答 → 追加するパッケージ」。回答に合うときだけ対象に加える。例：drizzle は、`database` が `postgresql` のとき `pg` を加える（D1・DB なしでは加えない） |
+| `packages_when` の `before` | 書くと、`packages` にあるその名前の直前にパッケージを並べる（書かなければ `packages` の後ろ）。条件つきにしたパッケージを、条件がなかったときと同じ位置に置くための指定（調べる対象の並びは、記録の `.harness/config.yaml` と `docs/tech-stack.md` の並びになるため、Hono の出力を変えない）。`before` の名前は `packages` にあること。例：`@cloudflare/vite-plugin` は、`backend` が `hono` のときだけ、`react` の前に入る（#40） |
 | 名前の確認 | `version_ranges`・`verified_versions`・`unverified` に書く名前は、`packages` と `packages_when` に書かれたすべてのパッケージの中にあることを、読み込み時に確かめる。対象に加えるのは、回答に合う条件のものだけ |
 | `external_tools` | npm で入れない道具（例：k6）。バージョンの調査の対象にしない（手順書で導入する）。`packages` と二重に書くとエラー |
 | `unverified` | 検証済みの版のないパッケージを明示する仕組み。方針にかかわらず範囲内の最新の安定版を使い、選定理由を「ハーネスで未検証」にし、確認の表示で警告する。取得できない場合や合う安定版がない場合は、戻せる版がないため進めない（終了コード1）。今の8つのプロファイルには、未検証のものはない（将来のプロファイルのために残す） |

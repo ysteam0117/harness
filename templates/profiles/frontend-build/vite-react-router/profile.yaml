@@ -3,7 +3,13 @@ id: vite-react-router
 category: frontend-build
 name: Vite＋React Router
 languages: [typescript]
-packages: [vite, "@vitejs/plugin-react", "@cloudflare/vite-plugin", react, react-dom, react-router, "@types/react", "@types/react-dom"]
+packages: [vite, "@vitejs/plugin-react", react, react-dom, react-router, "@types/react", "@types/react-dom"]
+# @cloudflare/vite-plugin は Workers（Hono）のときだけ使う（vite.config.ts が読む）。Spring Boot のときは使わない（#40）。
+# before で、条件がないときと同じ位置（react の前）に置く（生成する package.json・記録の並びを変えないため）
+packages_when:
+  - when: { backend: hono }
+    packages: ["@cloudflare/vite-plugin"]
+    before: react
 # ビルドの道具と型（生成する package.json の devDependencies に入れる）。残りは dependencies に入れる
 dev_packages: [vite, "@vitejs/plugin-react", "@cloudflare/vite-plugin", "@types/react", "@types/react-dom"]
 # ひな形で動作を確かめたバージョン（2026-09-30、Issue #19 の試作で確認）
@@ -23,16 +29,19 @@ compatibility_notes:
   - "2026-09-30 の確認で、初回に読み込むJavaScriptは圧縮後161KB（React・React Router・TanStack Query・React Hook Form・Zod・Axios）"
 skill_name: frontend-build
 files:
-  files/vite.config.ts: vite.config.ts
   files/index.html: index.html
-  files/_headers: public/_headers
   files/main.tsx: frontend/src/main.tsx
   files/HomePage.tsx: frontend/src/pages/HomePage.tsx
   files/health-api.ts: frontend/src/features/health/api/health.ts
   files/HealthStatus.tsx: frontend/src/features/health/HealthStatus.tsx
   files/HealthStatus.test.tsx: frontend/src/features/health/HealthStatus.test.tsx
+# vite.config.ts と public/_headers は、Workers（Hono）のときだけ出す（vite.config.ts が @cloudflare/vite-plugin を読むため）
 # 認証なし・未定のときだけ出す App.tsx（認証ありのときは、auth/session の App.tsx を同じ出力先に出す）
 files_when:
+  - when: { answer: backend, equals: hono }
+    files:
+      files/vite.config.ts: vite.config.ts
+      files/_headers: public/_headers
   - when: { answer: auth, in: [none, undecided] }
     files:
       files/App.tsx: frontend/src/App.tsx
@@ -49,17 +58,20 @@ wrangler:
     APP_ENV: production
     # 状態を変える要求を許可する送信元（環境ごとに設定する）
     ALLOWED_ORIGINS: "{{allowed_origins}}"
-package_json:
-  scripts:
-    dev: node scripts/run-local.ts development vite
-    dev:test: node scripts/run-local.ts test vite
-    build: node scripts/run-local.ts build vite build
-    preview: node scripts/run-local.ts development vite preview
-    types: node scripts/run-local.ts development wrangler types
-    types:test: node scripts/run-local.ts test wrangler types
-    predev: npm run env:check -- development && npm run types
-    predev:test: npm run env:check -- test && npm run types:test
-    docker:up:local: node scripts/compose-local.ts development up -d
-    docker:up:test: node scripts/compose-local.ts test up -d
-    docker:down:local: node scripts/compose-local.ts development down
-    docker:down:test: node scripts/compose-local.ts test down
+# scripts は Workers（Hono）の構成のもの（wrangler の型の生成・Docker の開発環境を使う）。Spring Boot の構成のものは別に足す
+package_json_when:
+  - when: { answer: backend, equals: hono }
+    package_json:
+      scripts:
+        dev: node scripts/run-local.ts development vite
+        dev:test: node scripts/run-local.ts test vite
+        build: node scripts/run-local.ts build vite build
+        preview: node scripts/run-local.ts development vite preview
+        types: node scripts/run-local.ts development wrangler types
+        types:test: node scripts/run-local.ts test wrangler types
+        predev: npm run env:check -- development && npm run types
+        predev:test: npm run env:check -- test && npm run types:test
+        docker:up:local: node scripts/compose-local.ts development up -d
+        docker:up:test: node scripts/compose-local.ts test up -d
+        docker:down:local: node scripts/compose-local.ts development down
+        docker:down:test: node scripts/compose-local.ts test down

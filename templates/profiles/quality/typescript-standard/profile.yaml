@@ -28,27 +28,32 @@ compatibility_notes:
   - "npm 11 では esbuild・workerd のインストール時の処理が既定で実行されないため、package.json に allowScripts を設定する"
   - "npm audit の合否は本番の依存（--omit=dev）で判定する。開発用の道具の脆弱性は記録して更新の判断に使う"
 package_json:
-  scripts:
-    # check は、Docker を使わない check:app（コンテナの中でも動く）に、Docker で動くセキュリティのテスト（security）を足したもの。ホストで実行する（C-61・C-82）
-    check: "npm run check:app && npm run security"
-    check:app: "npm run test:safety && npm run lint && npm run typecheck && npm run format:check && npm run deps:check && npm run dup:check && npm test && npm run audit:prod"
-    security: node scripts/security-check.mjs
-    security:semgrep: node scripts/security-check.mjs semgrep
-    security:secrets: node scripts/security-check.mjs secrets
-    security:osv: node scripts/security-check.mjs osv
-    test:safety: node scripts/test-safety.mjs
-    lint: "eslint ."
-    typecheck: "tsc -p ."
-    pretypecheck: "npm run types"
-    format:check: "prettier --check ."
-    deps:check: "depcruise frontend/src backend/src --config .dependency-cruiser.cjs"
-    dup:check: "jscpd frontend/src backend/src"
-    mutation: "stryker run"
-    audit:prod: "npm audit --omit=dev --audit-level=high"
-    env:check: "node scripts/env-check.mjs"
   allowScripts:
     esbuild: true
-    workerd: true
+# scripts と workerd の許可は Workers（Hono）の構成のもの（wrangler の型の生成・backend/src の検査を含む）。Spring Boot の構成のものは別に足す
+package_json_when:
+  - when: { answer: backend, equals: hono }
+    package_json:
+      scripts:
+        # check は、Docker を使わない check:app（コンテナの中でも動く）に、Docker で動くセキュリティのテスト（security）を足したもの。ホストで実行する（C-61・C-82）
+        check: "npm run check:app && npm run security"
+        check:app: "npm run test:safety && npm run lint && npm run typecheck && npm run format:check && npm run deps:check && npm run dup:check && npm test && npm run audit:prod"
+        security: node scripts/security-check.mjs
+        security:semgrep: node scripts/security-check.mjs semgrep
+        security:secrets: node scripts/security-check.mjs secrets
+        security:osv: node scripts/security-check.mjs osv
+        test:safety: node scripts/test-safety.mjs
+        lint: "eslint ."
+        typecheck: "tsc -p ."
+        pretypecheck: "npm run types"
+        format:check: "prettier --check ."
+        deps:check: "depcruise frontend/src backend/src --config .dependency-cruiser.cjs"
+        dup:check: "jscpd frontend/src backend/src"
+        mutation: "stryker run"
+        audit:prod: "npm audit --omit=dev --audit-level=high"
+        env:check: "node scripts/env-check.mjs"
+      allowScripts:
+        workerd: true
 # npm で入れない道具（Docker の公式イメージ）。tag とダイジェストで固定する（C-62）。値は scripts/security-check.mjs と docs/testing/ に {{名前_image}} などで差し込む。
 # 確かめ方：docker pull <image>:<tag> で取得し、docker inspect --format '{{json .RepoDigests}}' <image>:<tag> のダイジェストを写す。--version で版を確かめる。
 # 更新するときも同じ手順で確かめる（Dependabot は、このイメージを更新しない。手で更新する）。
@@ -79,7 +84,6 @@ container_images:
     note: "docker pull schemathesis/schemathesis:4.29.3 で取得し、docker inspect の RepoDigests でダイジェストを確かめた。schemathesis --version は 4.29.3（GitHub の最新の版。Docker Hub の stable の tag と同じ）"
 skill_name: quality-tools
 files:
-  files/tsconfig.json: tsconfig.json
   files/eslint.config.mjs: eslint.config.mjs
   files/dependency-cruiser.cjs: .dependency-cruiser.cjs
   files/stryker.config.json: stryker.config.json
@@ -98,3 +102,8 @@ files:
   files/semgrep/javascript-lang-security-audit-spawn-shell-true.yaml: .semgrep/javascript-lang-security-audit-spawn-shell-true.yaml
   files/semgrep/javascript-lang-security-detect-child-process.yaml: .semgrep/javascript-lang-security-detect-child-process.yaml
   files/semgrep/typescript-react-security-react-insecure-request.yaml: .semgrep/typescript-react-security-react-insecure-request.yaml
+# tsconfig.json は Workers（Hono）の構成のもの（wrangler の型・@cloudflare/vitest-pool-workers の型を読む）。Spring Boot の構成のものは別に足す
+files_when:
+  - when: { answer: backend, equals: hono }
+    files:
+      files/tsconfig.json: tsconfig.json

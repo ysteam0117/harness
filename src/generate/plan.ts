@@ -7,6 +7,7 @@ import { checkOutputPaths } from "./paths.js";
 import type { Answers } from "../questions/answers.js";
 import {
   containerImageValues,
+  fillDestination,
   mergePackageJson,
   resolveProfiles,
   selectProfileFiles,
@@ -64,7 +65,7 @@ export function buildOutputs(input: BuildOutputsInput): BuildOutputsResult {
         templatesDir,
         fileName: rel,
       });
-      outputs.push({ path: file.destination, content });
+      outputs.push({ path: fillDestination(file.destination, values), content });
     }
   }
   // AI向けの出力とプロファイルの files をまとめて、出力先の重なりを1か所で調べる

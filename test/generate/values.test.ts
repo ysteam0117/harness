@@ -14,7 +14,7 @@
 //   data/role-models.yaml：C-66 の表の初期値。Claude Code が主・Codex が主の2つの列。Claude のモデルは別名（opus・sonnet 等）
 import { describe, expect, it } from "vitest";
 import { judge } from "../../src/generate/judgment.js";
-import { buildValues } from "../../src/generate/values.js";
+import { buildValues, javaPackageName } from "../../src/generate/values.js";
 import { questionDefinitions } from "../../src/questions/definitions.js";
 import { AGENT_ROLES, fakeValues } from "./helpers.js";
 import { completeAnswers } from "./project-helpers.js";
@@ -232,5 +232,33 @@ describe("#34 AC-3: 役割とモデル（選んだ AI の分だけ）", () => {
     expect(await vals({ ais: ["claude", "codex"] })).toEqual(
       await vals({ ais: ["claude", "codex"] }),
     );
+  });
+});
+
+describe("#40: Java のパッケージ名（javaPackageName・java_package・java_package_path）", () => {
+  it.each([
+    ["my-app", "myapp"],
+    ["123-app", "_123app"],
+    ["a-1", "a1"],
+    ["9", "_9"],
+    ["class", "class_"],
+    ["true", "true_"],
+    ["null", "null_"],
+    ["goto", "goto_"],
+    ["const", "const_"],
+    ["testapp-001", "testapp001"],
+  ])("%s → %s", (appName, expected) => {
+    expect(javaPackageName(appName)).toBe(expected);
+  });
+
+  it("値 java_package・java_package_path は、アプリ名から com.example.<名前> を作る", async () => {
+    const v = await vals({ app_name: "my-app" });
+    expect(v["java_package"]).toBe("com.example.myapp");
+    expect(v["java_package_path"]).toBe("com/example/myapp");
+  });
+
+  it("予約語・数字始まりのアプリ名でも、パッケージ名として書ける形になる", async () => {
+    expect((await vals({ app_name: "class" }))["java_package"]).toBe("com.example.class_");
+    expect((await vals({ app_name: "123-app" }))["java_package_path"]).toBe("com/example/_123app");
   });
 });

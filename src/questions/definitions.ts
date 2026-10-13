@@ -1,11 +1,28 @@
 import { validateAppName } from "./app-name.js";
 
-/** 他の質問の回答への条件 */
-export interface Condition {
+/** 他の質問の回答への条件（1つの質問への条件） */
+export interface SingleCondition {
   id: string;
   equals?: string;
   in?: string[];
   notEquals?: string;
+}
+
+/** 条件。all を使うと、並べた条件のすべてに合うときだけ合う（入れ子は書けない。生成側の When の all と同じ形） */
+export type Condition = SingleCondition | { all: SingleCondition[] };
+
+/** 条件が見る質問の id を、書いた順に返す */
+export function conditionIds(cond: Condition): string[] {
+  return "all" in cond ? cond.all.map((c) => c.id) : [cond.id];
+}
+
+/** 合っていない条件の対象の質問の id を、書いた順に返す（すべて合っていれば空） */
+export function unmetConditionIds(
+  cond: Condition,
+  answers: Readonly<Record<string, unknown>>,
+): string[] {
+  const singles = "all" in cond ? cond.all : [cond];
+  return singles.filter((c) => !matchesCondition(c, answers)).map((c) => c.id);
 }
 
 export interface QuestionOption {
@@ -21,7 +38,7 @@ export interface QuestionDefinition {
   /** この条件のときだけ聞く（なければ常に聞く） */
   when?: Condition;
   /** この条件のとき、聞かずに value で決める */
-  forced?: { when: Condition; value: string };
+  forced?: { when: SingleCondition; value: string };
   /** 初期値（推奨） */
   initialValue?: string;
   /** false のとき、対話で聞かない（回答がなければ defaultValue を使う。なければ回答に入れない） */
@@ -32,11 +49,12 @@ export interface QuestionDefinition {
   validate?: (value: string) => string | undefined;
 }
 
-/** 条件に合うか。条件の対象の回答がまだない場合は合わない（判断できない）として扱う */
+/** 条件に合うか。条件の対象の回答がまだない場合は合わない（判断できない）として扱う。all は、すべてに合うときだけ合う */
 export function matchesCondition(
   cond: Condition,
   answers: Readonly<Record<string, unknown>>,
 ): boolean {
+  if ("all" in cond) return cond.all.every((c) => matchesCondition(c, answers));
   const value = answers[cond.id];
   if (typeof value !== "string") return false;
   if (cond.equals !== undefined) return value === cond.equals;
@@ -141,7 +159,13 @@ export const questionDefinitions: readonly QuestionDefinition[] = [
     title: "データアクセスのライブラリ",
     kind: "select",
     options: opts(["drizzle", "Drizzle ORM（標準）"]),
-    when: { id: "database", notEquals: "none" },
+    // Spring Boot のデータアクセスは別の質問で決める（#42）ため、Hono のときだけ聞く
+    when: {
+      all: [
+        { id: "database", notEquals: "none" },
+        { id: "backend", equals: "hono" },
+      ],
+    },
   },
   {
     id: "auth",

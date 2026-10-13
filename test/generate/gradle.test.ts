@@ -104,6 +104,7 @@ describe("buildGradle", () => {
       ].join("\n"),
     );
     expect(out?.values).toEqual({
+      gradle_plugins: "",
       gradle_dependencies:
         "    implementation(libs.demo.lib)\n    implementation(libs.demo.util)\n    testImplementation(libs.demo.testing)",
       gradle_check_tasks: 'tasks.named("check") {\n    dependsOn("spotlessCheck", "test")\n}',
@@ -333,5 +334,162 @@ describe("buildProject の Gradle", () => {
     await expect(
       project(true, (y) => y.replace("files/build.gradle.kts: backend/build.gradle.kts", "{}")),
     ).rejects.toThrow(/build\.gradle\.kts がありません|files は/);
+  });
+});
+
+// #40：gradle.plugins（プラグインのマーカー → [plugins]）と gradle.managed（版を BOM が決める依存）
+const PLUGIN_MARKER = "com.example.demo:com.example.demo.gradle.plugin";
+const MANAGED = "com.example:demo-managed";
+
+/** example-jvm に、プラグイン（com.example.demo）と、版を BOM が決める依存を足す */
+const withPluginAndManaged = (yaml: string): string =>
+  yaml
+    .replace("packages:\n", `packages:\n  - ${PLUGIN_MARKER}\n`)
+    .replace("verified_versions:\n", `verified_versions:\n  ${PLUGIN_MARKER}: "4.1.1"\n`)
+    .replace(
+      "  aliases:\n",
+      `  plugins:\n    com.example.demo: ${PLUGIN_MARKER}\n  managed: [${MANAGED}]\n  aliases:\n    ${PLUGIN_MARKER}: demo-plugin\n`,
+    )
+    .replace("    implementation:\n", `    implementation:\n      - ${MANAGED}\n`);
+
+const PLUGIN_ENTRIES = [...JVM_ENTRIES, entry(PLUGIN_MARKER, "4.1.1")];
+
+describe("gradle.plugins・gradle.managed（#40）", () => {
+  it("プラグインを [plugins] に、BOM が決める依存を version なしで [libraries] に出す", async () => {
+    const answers = await completeAnswers({ database: "none" });
+    const profiles = resolveProfiles(templatesWithJvm(withPluginAndManaged), [KEY]);
+    const out = buildGradle({ profiles, answers, versions: result(PLUGIN_ENTRIES), appName: "a" });
+    const toml = contentOf(out?.files ?? [], "backend/gradle/libs.versions.toml");
+    expect(toml).toBe(
+      [
+        "[versions]",
+        'demo-lib = "1.2.3"',
+        'demo-plugin = "4.1.1"',
+        'demo-testing = "3.1.0"',
+        'demo-util = "2.0"',
+        "",
+        "[libraries]",
+        'demo-lib = { module = "com.example:demo-lib", version.ref = "demo-lib" }',
+        'demo-managed = { module = "com.example:demo-managed" }',
+        'demo-testing = { module = "com.example:demo-test", version.ref = "demo-testing" }',
+        'demo-util = { module = "com.example:Demo_Util", version.ref = "demo-util" }',
+        "",
+        "[plugins]",
+        'demo-plugin = { id = "com.example.demo", version.ref = "demo-plugin" }',
+        "",
+      ].join("\n"),
+    );
+    // プラグインのマーカーは [libraries] に入れない
+    expect(toml).not.toContain("gradle.plugin");
+    expect(out?.values["gradle_plugins"]).toBe("    alias(libs.plugins.demo.plugin)");
+    expect(out?.values["gradle_dependencies"]).toContain("    implementation(libs.demo.managed)");
+  });
+
+  it("プラグインの別名を書かなければ、id の . を - にした名前にする", async () => {
+    const answers = await completeAnswers({ database: "none" });
+    const dir = templatesWithJvm((y) =>
+      withPluginAndManaged(y).replace(`    ${PLUGIN_MARKER}: demo-plugin\n`, ""),
+    );
+    const out = buildGradle({
+      profiles: resolveProfiles(dir, [KEY]),
+      answers,
+      versions: result(PLUGIN_ENTRIES),
+      appName: "a",
+    });
+    expect(out?.values["gradle_plugins"]).toBe("    alias(libs.plugins.com.example.demo)");
+    expect(contentOf(out?.files ?? [], "backend/gradle/libs.versions.toml")).toContain(
+      'com-example-demo = { id = "com.example.demo", version.ref = "com-example-demo" }',
+    );
+  });
+
+  it("マーカーの版が、選んだ版に無ければエラーにする。managed は版を調べない（選んだ版に無くてもよい）", async () => {
+    const answers = await completeAnswers({ database: "none" });
+    const profiles = resolveProfiles(templatesWithJvm(withPluginAndManaged), [KEY]);
+    expect(() =>
+      buildGradle({ profiles, answers, versions: result(JVM_ENTRIES), appName: "a" }),
+    ).toThrow(/com\.example\.demo\.gradle\.plugin の版が、選んだ版にありません/);
+    expect(() =>
+      buildGradle({ profiles, answers, versions: result(PLUGIN_ENTRIES), appName: "a" }),
+    ).not.toThrow();
+  });
+
+  it("別名が、プラグインとライブラリで重なったら、エラーにする", async () => {
+    const answers = await completeAnswers({ database: "none" });
+    const dir = templatesWithJvm((y) =>
+      withPluginAndManaged(y).replace(
+        `${PLUGIN_MARKER}: demo-plugin`,
+        `${PLUGIN_MARKER}: demo-lib`,
+      ),
+    );
+    expect(() =>
+      buildGradle({
+        profiles: resolveProfiles(dir, [KEY]),
+        answers,
+        versions: result(PLUGIN_ENTRIES),
+        appName: "a",
+      }),
+    ).toThrow(/別名 demo-lib が、.* で重なっています/);
+  });
+
+  it("読み込める（plugins・managed）", () => {
+    const profile = loadProfile(templatesWithJvm(withPluginAndManaged), KEY);
+    expect(profile.gradle.plugins).toEqual({ "com.example.demo": PLUGIN_MARKER });
+    expect(profile.gradle.managed).toEqual([MANAGED]);
+  });
+
+  it("managed と packages の両方に書いたら、エラーにする", () => {
+    const dir = templatesWithJvm((y) =>
+      withPluginAndManaged(y).replace(`managed: [${MANAGED}]`, "managed: [com.example:demo-lib]"),
+    );
+    expect(() => loadProfile(dir, KEY)).toThrow(
+      /gradle\.managed の com\.example:demo-lib が、packages（または packages_when）にも書かれています/,
+    );
+  });
+
+  it("managed が group:artifact の形でなければ、エラーにする", () => {
+    const dir = templatesWithJvm((y) =>
+      withPluginAndManaged(y).replace(`managed: [${MANAGED}]`, "managed: [not-a-coordinate]"),
+    );
+    expect(() => loadProfile(dir, KEY)).toThrow(/gradle\.managed は「group:artifact」の形/);
+  });
+
+  it("プラグインのマーカーを configurations に書いたら、エラーにする", () => {
+    const dir = templatesWithJvm((y) =>
+      withPluginAndManaged(y).replace(
+        "    implementation:\n",
+        `    implementation:\n      - ${PLUGIN_MARKER}\n`,
+      ),
+    );
+    expect(() => loadProfile(dir, KEY)).toThrow(/プラグインのマーカーです/);
+  });
+
+  it("plugins のマーカーが packages に無ければ、エラーにする", () => {
+    const dir = templatesWithJvm((y) =>
+      withPluginAndManaged(y).replace(`packages:\n  - ${PLUGIN_MARKER}\n`, "packages:\n"),
+    );
+    expect(() => loadProfile(dir, KEY)).toThrow(/gradle\.plugins の com\.example\.demo のマーカー/);
+  });
+
+  it("plugins の id の形が誤っていたら、エラーにする", () => {
+    const dir = templatesWithJvm((y) =>
+      withPluginAndManaged(y).replace("    com.example.demo: ", '    "bad id": '),
+    );
+    expect(() => loadProfile(dir, KEY)).toThrow(/gradle\.plugins の id "bad id"/);
+  });
+
+  it("managed を aliases に書ける。どこにも無い座標は、エラーにする", () => {
+    const ok = templatesWithJvm((y) =>
+      withPluginAndManaged(y).replace("  aliases:\n", `  aliases:\n    ${MANAGED}: managed-lib\n`),
+    );
+    expect(loadProfile(ok, KEY).gradle.aliases[MANAGED]).toBe("managed-lib");
+    const bad = templatesWithJvm((y) =>
+      withPluginAndManaged(y).replace("  aliases:\n", "  aliases:\n    com.example:none: x\n"),
+    );
+    expect(() => loadProfile(bad, KEY)).toThrow(/gradle\.aliases の com\.example:none/);
+  });
+
+  it("ecosystem が npm のプロファイルに gradle.plugins を書いたら、エラーにする", () => {
+    const dir = templatesWithJvm((y) => withPluginAndManaged(y).replace("ecosystem: maven\n", ""));
+    expect(() => loadProfile(dir, KEY)).toThrow(/gradle は、ecosystem が maven のときだけ/);
   });
 });
