@@ -18,7 +18,7 @@
 | 場所         | 役割                                                                                                 |
 | ------------ | ---------------------------------------------------------------------------------------------------- |
 | `src/`       | CLI のコード。入口（`cli.ts`）、コマンドの定義（`program.ts`）、各コマンド（`commands/`）            |
-| `src/generate/` | ひな形の差し込み・プロファイルの読み込み・AIごとの出し分け（[generator.md](generator.md)）、テンプレートの値の決定・判定・`package.json`・`wrangler.jsonc`・`.env.example`・知見の写し・`.harness/config.yaml`・一時的な場所での生成と移動（[generation.md](generation.md)、[skeleton.md](skeleton.md)） |
+| `src/generate/` | ひな形の差し込み・プロファイルの読み込み・AIごとの出し分け（[generator.md](generator.md)）、テンプレートの値の決定・判定・`package.json`・`wrangler.jsonc`・`.env.example`・Gradle のビルドファイル（`gradle.ts`。`backend/settings.gradle.kts`・`backend/gradle/libs.versions.toml`・`backend/build.gradle.kts`。maven のプロファイルがあるときだけ）・知見の写し・`.harness/config.yaml`・一時的な場所での生成と移動（[generation.md](generation.md)、[skeleton.md](skeleton.md)） |
 | `src/questions/` | 質問の定義・質問の進め方・`--answers` の読み込みと検証・入力の窓口（[questions.md](questions.md)） |
 | `src/checks/` | 整合性チェック（ルールの読み込みと判定）・事実の収集・手元の道具の確かめ（[questions.md](questions.md)） |
 | `src/versions/` | バージョンの調査と選定：使うプロファイルの決定・調べる対象・npm と Node.js の登録情報の取得・最新の安定版の選び方・利用者の選択・tech-stack.md の中身（[versions.md](versions.md)） |

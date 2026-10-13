@@ -333,6 +333,24 @@ Windows では、ウイルス対策ソフトなどの影響で `rename` が一�
 
 テスト：`test/verify/`（runner は小さな node の子プロセスで確かめる。固定の短い時間でなく、条件で待つ）、`test/commands/create-verify.test.ts`（偽の runner・偽の Docker）。本物の npm・Docker は使わない。
 
+## Gradle のビルドファイルの生成（#39）
+
+maven のプロファイル（`ecosystem: maven`）が1つでもあるときだけ、`backend/` に Gradle のビルドファイルを出す（`src/generate/gradle.ts`）。Hono だけのときは何も足さず、生成物は変わらない。
+
+| ファイル | 中身 |
+| --- | --- |
+| `backend/settings.gradle.kts` | `rootProject.name`。`dependencyResolutionManagement` と `pluginManagement` の両方に `mavenCentral()`（プラグインも Maven Central だけから解決する） |
+| `backend/gradle/libs.versions.toml` | `[versions]`・`[libraries]`・`[plugins]`。名前（別名）の昇順で、選んだ正確な版を書く。`toml.ts` で文字列をエスケープする |
+| `backend/build.gradle.kts` | 中身はプロファイルの `files` のひな形に任せる。ハーネスは `{{gradle_dependencies}}`・`{{gradle_check_tasks}}`・`{{java_version}}` を差し込む |
+
+- 別名は、プロファイルの `gradle.aliases`（座標 → 別名）に書く。書かない座標は、artifact 名を小文字にして `.`・`_` を `-` にした名前にする。別名が重なったらエラー
+- プロファイルの `gradle:` は、`aliases`・`configurations`（依存の種類 → 座標。`implementation(libs.x)` の行になる）・`check_tasks`（`check` に依存させるタスク。`tasks.named("check") { dependsOn(...) }`）を書ける。座標は `packages`・`packages_when` にあるものだけ。回答に合わない `packages_when` の座標は、`libs.versions.toml` にも依存の行にも入れない。`ecosystem` が npm のプロファイルに書いたらエラー
+- Java の版（`{{java_version}}`）は、バージョンの調査（[versions.md](versions.md)）で選んだ `java` の大きな版。依存の版は、選んだ版（`VersionResult`）から取る。選んだ版に無い座標・Java の版が無いときはエラー
+- `[plugins]` は、今は空の節だけを出す。プラグインの定義は、Spring Boot のプロファイルを入れる #40 で足す。プラグインのマーカーと実装を Maven Central から解決できるかは、#40 で Spring Boot のプラグインを入れるときに、Gradle の実行で確かめる
+- Gradle Wrapper（`gradlew`）は出さない。maven のプロファイルがあるときだけ、生成する `README.md` に「Gradle の使い方」の節（`templates/project/README-gradle.md`）を足す。`backend/` で `gradle wrapper` を1回実行して `gradlew`（Windows は `gradlew.bat`）を作り、その後 `backend/` で `./gradlew check` を実行する順序。maven のプロファイルが無いときは `README.md` を変えない
+- 3つのファイルは、`package.json` と同じく、プロジェクトのもの（利用者が依存や設定を足す）として扱い、管理するファイル（F-27）にしない。`managed_files` には載らない
+- テスト：`test/generate/gradle.test.ts`。架空のプロファイル `test/generate/fixtures/jvm-profiles/jvm/example-jvm` を、実際のひな形の一時的な写しに足して使う（`buildProject` の `profileKeys` で選ぶ）
+
 ## 秘密情報を生成物に入れないこと
 
 秘密情報を、生成するファイルに入れない。仕組みは次のとおり。
