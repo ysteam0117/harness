@@ -45,11 +45,13 @@ Superpowersが利用できない場合は、プラグインの導入状態やア
 Node.js 24 以上が必要です（推奨のバージョンは `.node-version` を参照）。
 
 ```text
-npm install -g github:ysteam0117/harness
+npm install -g https://github.com/ysteam0117/harness/releases/latest/download/harness.tgz
 harness --help
 ```
 
-新しいハーネスを使うときは、同じインストールのコマンドをもう一度実行します（`harness status` で、新しいバージョンがあるかを確かめられます）。
+新しいハーネスを使うときは、同じインストールのコマンドをもう一度実行します（`harness status` で、新しいバージョンがあるかを確かめられます）。`harness create` は、実行したフォルダの直下にプロジェクトを作るので、作りたい場所に移動してから実行します。
+
+`npm install -g github:ysteam0117/harness`（GitHub を直接指定する形）は、npm の仕様で入りません（ビルドに必要なパッケージが入らず、入れた先も一時フォルダへのリンクになります）。Release に付けた tgz を使ってください。
 
 | コマンド          | 内容                                     | 状態   |
 | ----------------- | ---------------------------------------- | ------ |

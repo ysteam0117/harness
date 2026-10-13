@@ -769,11 +769,13 @@ CLIは、生成するプロジェクトに次を出力する。
 
 ### 配布の方法
 
-ハーネスは、GitHubの組織（ysteam0117）の公開のリポジトリから配布する。npmの公開の登録には載せない。
+ハーネスは、GitHubの組織（ysteam0117）の公開のリポジトリのReleaseに付けたtgz（`harness.tgz`）から配布する。npmの公開の登録には載せない。タグ（`v0.0.0`の形）を付けるとGitHub Actions（`.github/workflows/release.yml`）がtgzを作ってReleaseに付ける。
+
+`npm install -g github:ysteam0117/harness`（GitHubを直接指定する形）は使わない。npmは、この形のインストールで`prepare`をグローバルの設定のまま実行して開発用パッケージを入れず、ビルドに失敗する。ビルドを直しても、入れた先が一時フォルダへのリンクになり、壊れる（#48）。
 
 ```bash
-# 最初に1回だけインストールする
-npm install -g github:ysteam0117/harness
+# 最初に1回だけインストールする（更新のときも同じコマンド）
+npm install -g https://github.com/ysteam0117/harness/releases/latest/download/harness.tgz
 
 # 以降は、次のコマンドで使う
 harness create

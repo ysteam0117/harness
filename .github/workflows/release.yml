@@ -1,0 +1,44 @@
+name: Release
+
+# タグ（v0.0.0 の形）を付けると、配布用の tgz を作り、GitHub の Release に付ける。
+# 利用者は Release の tgz をインストールする（README の「インストールと使い方」）。
+# GitHub のリポジトリを直接指定するインストールは、npm の仕様でビルドできず、入れた先も一時フォルダへのリンクになるため使わない（#48）。
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - name: タグと package.json の版が合っているか確認
+        run: |
+          expected="v$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF_NAME" != "$expected" ]; then
+            echo "タグ ($GITHUB_REF_NAME) と package.json の版 ($expected) が違います" >&2
+            exit 1
+          fi
+      - name: 配布物の確認（組み立て・パック・インストール・起動）
+        run: npm run pack:check
+      - name: 配布用の tgz を作る（名前は版によらず harness.tgz）
+        run: |
+          npm pack --silent
+          mv harness-*.tgz harness.tgz
+      - name: 作った tgz をグローバルにインストールして起動できるか確認
+        run: |
+          prefix="$(mktemp -d)"
+          npm install -g --prefix "$prefix" ./harness.tgz
+          "$prefix/bin/harness" --version
+      - name: Release を作り、tgz を付ける
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" harness.tgz --title "$GITHUB_REF_NAME" --generate-notes
