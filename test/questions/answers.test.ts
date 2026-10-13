@@ -117,6 +117,11 @@ describe("#32 AC-4: --answers のエラー（まとめて示す）", () => {
     expect(errors.some((e) => e.includes("infra"))).toBe(true);
   });
 
+  it("#39 AC-1: backend に spring_boot を書くと、今は選べない値としてエラー（選択肢は #40 で足す）", () => {
+    const errors = errorsOf(yaml(baseAnswers({ backend: "spring_boot" })));
+    expect(errors.some((e) => e.includes("backend"))).toBe(true);
+  });
+
   it("#32 AC-4: 複数の誤りは1回の AnswersError にまとめて入る", () => {
     const errors = errorsOf(
       yaml(

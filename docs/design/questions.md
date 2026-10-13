@@ -72,6 +72,16 @@ flowchart TD
 - `project_type`・`layers`・`frontend`・`backend`・`infra`・`data_access`
 - `data_access` は `database` が `none` 以外のときだけ（`when`）
 
+`backend` は今、選択肢が `hono` だけなので、自動で決まる。Spring Boot を選べるようにするのは #40 で、この Issue（#39）では選択肢を足さない（Spring Boot のプロファイルが無いまま、`--answers` で選んで生成に進む抜け道を作らないため）。#39 では、`backend: spring_boot` が今は選べない値として拒否されることを、`test/questions/answers.test.ts` で固定している。
+
+#40 で選択肢を足すときの手順（データの変更だけで済む）：
+
+1. `src/questions/definitions.ts` の `backend` の選択肢に `spring_boot`（見出し「Spring Boot（Javaで開発。ビルドは Gradle）」）を足す。選択肢が2つになるので、`backend` は自動で決まる質問ではなくなり、聞く質問になる
+2. `src/questions/answers.ts` の `Answers` の `backend` の型を `"hono" | "spring_boot"` にする
+3. `data/profile-selection.yaml`：`backend-framework/hono` の条件を `{ answer: backend, equals: hono }` にし、`backend-framework/spring-boot` を `equals: spring_boot` で足す
+4. `data/consistency-rules.yaml`：`spring_boot` と `infra: cloudflare` の組み合わせをエラーにする規則を足す（F-08）
+5. 上の「自動で決まる質問」の一覧から `backend` を外し、`definitions.test.ts`・`flow.test.ts` の「選択肢が1つの select」の期待を直す
+
 ### 条件で決まる質問
 
 | 質問 | 聞く条件（`when`） |
