@@ -79,7 +79,7 @@ exports[`#34 AC-4: 同じ入力から、同じ結果になる > #34 AC-4: スナ
   "P .github/workflows/check.yml 0dd343e9d82e25b599f12ab515f3e64cba43d786a2f677d8159c264a89c87519",
   "P .gitignore fd45c599ad5952284a536c250e9358f42a7337aa03b6b61b2f117cd3826570c0",
   "M .gitleaks.toml 11a80a42c0b98c362b38ba7322dc12949919893c20e41d2fe44e1c8da107e72e",
-  "P .harness/config.yaml 11f9b3d8a4680f0a9462a5cc231ab2b964108fd55c86ee9d7a6fa93ea3d12981",
+  "P .harness/config.yaml 63ebb4f8a8ac0a68ee2b1aa44754834b12f58898593a81dcf787e95678fa21c0",
   "P .jscpd.json 28d095fed27f81cb731db884fed7552997a5f3f88ff23e07ba4dd1a15d66923c",
   "P .node-version 7e8a2fa94951112b894a3dbe3d05efef5e9263741fa49125f0a70f40fedab4cc",
   "P .prettierignore 71e7ff2cbd7564fccd277f4f3ac3d202d7d03df5ab0826c54e7c86388f82b6b4",

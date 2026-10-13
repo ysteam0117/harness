@@ -2,7 +2,9 @@
 
 ハーネスのバージョンごとの主な変更点。`harness status` は、このファイルから、プロジェクトのバージョンより新しい項目を表示する。バージョンはセマンティックバージョニング（C-08）で付ける。
 
-## 次の版（未リリース。版はリリースのときに決める）
+## 0.0.1
+
+インストールを、GitHub の Release に付けた tgz から行う形にした（Issue #48。`npm install -g https://github.com/ysteam0117/harness/releases/latest/download/harness.tgz`）。GitHub を直接指定する形は、npm の仕様で入らない。
 
 セキュリティのテストの道具を、技術プロファイルに追加した（Issue #42）。
 
