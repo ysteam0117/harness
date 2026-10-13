@@ -212,6 +212,22 @@ harness create --answers answers.yaml --yes --try-wider-ranges
 - 生成先に中身のあるフォルダやファイルが同じ名前である場合は、何も書かずにエラーで終わります（空のフォルダなら生成できます）
 - 生成は、同じフォルダの中の一時的な場所（`.<アプリ名>.harness-tmp-...`）に書いてから、生成先へ移します。途中で失敗・中断したときは、一時的な場所を消して、生成先にファイルを残しません
 
+### Spring Boot を選んだとき（#40）
+
+`backend`（バックエンドの技術）に `spring_boot`、`infra`（インフラ・デプロイ先）に `container` を選ぶと、Hono の代わりに Spring Boot（Java。ビルドは Gradle）の構成を生成します。回答ファイルの例：
+
+```yaml
+backend: spring_boot
+infra: container
+database: none
+```
+
+- `backend/` に Gradle のプロジェクト（`build.gradle.kts`・`settings.gradle.kts`・`gradle/libs.versions.toml`）と、Spring Boot のコード（`src/main/java/com/example/<アプリ名>/`、`GET /api/health`）、JUnit・Testcontainers のテストを出します。Gradle Wrapper（`gradlew`）は出さないので、生成した `README.md` の手順で `backend/` に `gradle wrapper` を1回実行して作ります
+- Hono のための `wrangler.jsonc`・`infra/`・`docs/api/openapi.json`・Docker（Compose）の開発環境は出しません。**Docker の開発環境は今はありません**（デプロイ先の設定と合わせて、Issue #43 で扱います）。手元では、`backend/` で `./gradlew bootRun`（`:8080`）と、リポジトリの直下で `npm run dev`（画面）を使います。画面は Vite の proxy で `/api` を `:8080` に届けます（接続先は `.env.development` の `HARNESS_API_ORIGIN` で変えられます）
+- バックエンドのビルドとテスト（`./gradlew check`）は、Testcontainers を使うため Docker が要ります。画面側の品質チェックは、これまでどおり `npm run check` です
+- 組み合わせの制限（整合性チェックのエラー）：Spring Boot × Cloudflare、Hono × コンテナ、Spring Boot × D1、Spring Boot × 認証（アプリ独自認証・OIDC・併用。「なし」「未定」は可）。Spring Boot のデータアクセス（#42）・品質チェック（#41）・デプロイ（#43）は、まだありません
+- 旧い回答ファイル（`backend`・`infra` を書いていないもの）は、端末で聞かずに実行するとき（`--answers` のみ）、Hono・Cloudflare とみなします
+
 ### まだ生成されないもの
 
 次のものは、別の Issue で対応します。

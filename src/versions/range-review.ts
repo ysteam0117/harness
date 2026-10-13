@@ -42,6 +42,7 @@ export interface RangeReview {
 /** 範囲を持つ対象を、原因つきで取り出す（範囲の原因は、プロファイルの読み込みの検証で必ずある） */
 export function rangeTargets(profiles: Profile[], targets: Target[]): RangeTarget[] {
   const out: RangeTarget[] = [];
+  const names = new Set(targets.map((t) => t.name));
   for (const target of targets) {
     if (target.range === undefined) continue;
     // maven・java の範囲には、peer の考え方がなく、原因を確かめられない（Gradle の試しは #41 以降）
@@ -51,6 +52,8 @@ export function rangeTargets(profiles: Profile[], targets: Target[]): RangeTarge
     );
     const cause = owners.map((p) => p.rangeCauses[target.name]).find((c) => c !== undefined);
     if (cause === undefined) continue;
+    // 原因のパッケージが今回の対象にないとき（Spring Boot の構成の @cloudflare/vitest-pool-workers など）は、確かめる相手がない
+    if (cause.kind === "peer" && !names.has(cause.package)) continue;
     out.push({
       name: target.name,
       range: target.range,

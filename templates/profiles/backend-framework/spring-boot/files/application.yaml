@@ -1,0 +1,11 @@
+server:
+  # 画面の開発サーバー（Vite）の proxy の既定の接続先（http://localhost:8080）と合わせる
+  port: 8080
+
+spring:
+  application:
+    name: {{app_name}}
+
+app:
+  # 環境の名前。実際の環境では環境変数 APP_ENV で決める
+  env: ${APP_ENV:development}

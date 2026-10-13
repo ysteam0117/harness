@@ -61,11 +61,16 @@
 | 8 | このPCに必要なツールがない、またはバージョンが足りない | 警告 | 生成はできるが、そのままでは起動・テストできない。導入手順を表示する（[F-19](#f-19)） |
 | 9 | アプリ名が命名規則（英小文字・数字・ハイフン。先頭と末尾はハイフンにできない）に合わない | エラー | コンテナ名等に使えない。先頭・末尾のハイフンは、コマンドの引数と取り違えられ、Dockerのコンテナ名にも使えない（[C-36](common/project-env.md#c-36)） |
 | 10 | 生成先のフォルダが既に存在し、中身がある | エラー | 既存のファイルを上書きしてしまう |
+| 11 | バックエンドが「Spring Boot」で、デプロイ先が「Cloudflare」（`spring-boot-on-workers`） | エラー | Spring Boot（Java）はCloudflare Workersで動かせない |
+| 12 | バックエンドが「Hono」で、デプロイ先が「コンテナ」（`hono-needs-workers`） | エラー | ハーネスのHonoの構成はWorkersを前提にしており、コンテナ向けの構成（Dockerfile・デプロイの設定）を持たない |
+| 13 | バックエンドが「Spring Boot」で、DBが「Cloudflare D1」（`spring-boot-with-d1`） | エラー | D1はWorkersの中からだけ使えるDBで、Spring Bootからは接続できない |
+| 14 | バックエンドが「Spring Boot」で、認証が「アプリ独自認証」「OIDC」「併用」のいずれか（`spring-boot-with-auth`） | エラー | 認証の仕組み（セッション・OIDC）がまだHonoの構成にだけあり、Spring Bootの認証は未提供（認証が「なし」「未定」なら当たらない） |
 
 #### 後から追加するルールの例
 
 - モバイルアプリなのに、フロントエンドにWeb専用の技術を選んだ（警告）
-- バックエンドにSpring Bootを選び、デプロイ先にCloudflare Workersを選んだ（エラー：Workersでは動かない）
+
+（バックエンドにSpring Bootを選び、デプロイ先にCloudflare Workersを選んだ場合は、ルール11として追加済み（Issue #40））
 
 ## 生成するファイルの構成（仮決め）
 
@@ -440,7 +445,7 @@ Skillなどのテンプレートは共通仕様の要点を写したものなの
 
 ```text
 templates/profiles/
-└─ <分類>/                     例：data-access、logger、http-client、test-framework、backend-framework
+└─ <分類>/                     例：data-access、logger、http-client、test-framework、backend-framework、build（Gradle）
    ├─ _shared/                 分類の中で共通の部分
    └─ <ライブラリ>/
       ├─ profile.yaml          対応する言語・DB、バージョンを調べるパッケージ名（packages）、
@@ -453,8 +458,9 @@ templates/profiles/
       │                         引用する共通の部分（includes）、必要なほかのプロファイル（requires）、
       │                         package.json に加える設定（package_json）、出力するファイルの対応（files）、
       │                         回答に合うときだけ出すファイル（files_when。例：DBの種類で変わるスキーマ・vitest.config.ts）、
-      │                         回答に合うときだけ足す package.json の項目（package_json_when。例：DBのscripts）、
-      │                         wrangler.jsonc に加える設定（wrangler）と、回答に合うときだけ足す設定（wrangler_when。例：D1・Hyperdrive・R2）
+      │                         回答に合うときだけ足す package.json の項目（package_json_when。例：DBのscripts、バックエンドごとのscripts）、
+      │                         wrangler.jsonc に加える設定（wrangler）と、回答に合うときだけ足す設定（wrangler_when。例：D1・Hyperdrive・R2）、
+      │                         Gradle の設定（gradle。ecosystem が maven のとき。プラグイン・版をBOMが決める依存・依存の種類ごとの座標。Issue #39・#40）
       ├─ SKILL.md              そのライブラリ固有のルール
       └─ files/                生成するプロジェクトへ出力する、動作を確かめたコード・設定のひな形
 ```
@@ -578,17 +584,22 @@ templates/profiles/
 
 バックエンドのフレームワークは選択式とし、Spring Bootも選べるようにする。Honoのプロファイルで仕組みが正しく動くことを確かめた後に、同じ形で作る。
 
-| 分類 | Spring Bootの場合の候補 |
-| --- | --- |
-| データアクセス | MyBatis／JPA |
-| EntityとDTOの変換 | MapStruct／手書き |
-| ロガー | SLF4J＋Logback |
-| テスト | JUnit＋Testcontainers |
-| 品質チェック | Checkstyle・SpotBugs・PMD |
-| ビルド | Gradle（Maven は対象外） |
-| デプロイ先 | Cloudflare Workersでは動かないため、コンテナを動かせる場所（AWSのECS等）のインフラのプロファイルを用意する |
+| 分類 | Spring Bootの場合の候補 | 状態 |
+| --- | --- | --- |
+| バックエンドのフレームワーク | Spring Boot（`backend-framework/spring-boot`）。Controller・Service、ヘルスチェックのAPI（`GET /api/health`） | 作成済み（Issue #40） |
+| ビルド | Gradle（`build/gradle`。Mavenは対象外） | 作成済み（Issue #39・#40） |
+| ロガー | SLF4J＋Logback（`logger/slf4j-logback`） | 作成済み（Issue #40） |
+| テスト | JUnit＋Testcontainers（`test-framework/junit-testcontainers`）。`@WebMvcTest`・`@SpringBootTest`・Testcontainersで起動するPostgreSQL | 作成済み（Issue #40） |
+| データアクセス | MyBatis／JPA | 未作成（Issue #42） |
+| EntityとDTOの変換 | MapStruct／手書き | 未作成（Issue #42） |
+| 品質チェック | Checkstyle・SpotBugs・PMD | 未作成（Issue #41） |
+| デプロイ先 | Cloudflare Workersでは動かないため、コンテナを動かせる場所（AWSのECS等）のインフラのプロファイルを用意する | 未作成（Issue #43）。インフラの選択肢「コンテナ」は用意し、デプロイの設定は後で足す |
 
 - ビルドツールはGradleだけにする。Mavenは、ハーネスが依存の版を調べて固定する仕組み（Gradleの`libs.versions.toml`）と二重になり、確かめる範囲が増えるため対象外とする（依存の取得先としてのMaven Centralは使う）
+- Gradleのプラグイン（Spring Boot本体、`io.spring.dependency-management`）は、プラグインのマーカーの座標で版を調べ、`libs.versions.toml`の`[plugins]`に入れる。依存（starter・Testcontainersなど）の版は、Spring BootのBOMが決めるため、調べず、`[libraries]`に`module`だけを書く（[F-19](#f-19)）
+- 検証済みの版（2026年10月13日）：Spring Boot 4.1.1、`io.spring.dependency-management` 1.1.7（Testcontainersは、BOMが2.0.5に決める）。Mavenの登録情報の安定版の最新で、4.2.0-M2は試験版のため対象外。4.2が正式版になったら見直す。Javaは、17以上27未満（根拠：Spring Boot 4.1のSystem Requirements）の公開LTSの中で最新のもの（検証済みは25）
+- Spring Bootの構成では、HonoのためのファイルやCloudflareの設定（`wrangler.jsonc`・`infra/`・OpenAPI・Docker（Compose）の開発環境）を出さない。画面は`@cloudflare/vite-plugin`を使わず、Viteの開発サーバーが`/api`をSpring Boot（`:8080`）へ中継する。画面側の品質チェック・テスト（ESLint・`tsc`・Vitest）はHonoと同じで、バックエンドのTypeScriptの検査は含まれない。E2E（Playwright）はIssue #43以降
+- Spring Bootのビルドとテストは、`backend/`の`./gradlew check`で実行する（Testcontainersを使うためDockerが要る）。ハーネスの`--verify`でのGradleの実行はIssue #41
 
 - 追加の候補：Kysely（複雑なSQLを型付きで書きやすい。Drizzleと併用せず、プロジェクトごとにどちらか一方を選ぶ別のプロファイルとして追加する。Drizzleで複雑なSQLを書くのがつらいという知見がたまったら追加を判断する）、MyBatis・JPA（Java）
 
@@ -799,11 +810,11 @@ harness create
 | 5 | 公開・非公開 | 公開／非公開 | |
 | 6 | 開発人数 | 1人／複数人 | |
 | 7 | フロントエンドの技術 | React（TypeScript） | 自動で決定 |
-| 8 | バックエンドの技術 | Hono（TypeScript） | 自動で決定 |
-| 9 | インフラ・デプロイ先 | Cloudflare | 自動で決定。開発・検証は手元で環境変数を切り替え、Cloudflare上は本番だけ（[C-40](common/project-env.md#c-40)） |
+| 8 | バックエンドの技術 | Hono（TypeScript）／Spring Boot（Java。ビルドはGradle） | Issue #40で選択式にした。`--answers`で省いたときは、Honoとみなす（以前の回答ファイルとの互換） |
+| 9 | インフラ・デプロイ先 | Cloudflare／コンテナ（AWS ECS等。デプロイの設定は今後追加） | 開発・検証は手元で環境変数を切り替え、Cloudflare上は本番だけ（[C-40](common/project-env.md#c-40)）。`--answers`で省いたときは、バックエンドがHonoならCloudflareとみなす。Spring Bootは「コンテナ」を選ぶ（8との組み合わせはF-08のルール11・12）。「コンテナ」のデプロイの設定・Dockerfile・IaCは、Issue #43で追加する |
 | 10 | DB | Cloudflare D1（標準）／PostgreSQL（Hyperdrive経由）／なし | |
 | 11 | PostgreSQLの提供元 | Neon／Supabase／その他 | 10でPostgreSQLを選んだ場合だけ聞く |
-| 12 | データアクセスのライブラリ | Drizzle ORM | [F-24](#f-24)の技術プロファイルから選ぶ。初回はDrizzleのみのため自動で決定 |
+| 12 | データアクセスのライブラリ | Drizzle ORM | [F-24](#f-24)の技術プロファイルから選ぶ。初回はDrizzleのみのため自動で決定。8がHonoで、10がDBありのときだけ聞く（Spring Bootのデータアクセスは、Issue #42で追加する） |
 | 13 | 認証方式 | なし／アプリ独自認証／OIDC／両方の併用／未定（推奨：OIDC） | [C-12](common/security.md#c-12)。**対話では聞かない**（#79）。要件定義で決める。`--answers`に書かなければ「未定」 |
 | 14 | 外部IdP | Google／Microsoft／その他 | 13でOIDCか併用を`--answers`に書いた場合だけ書ける。対話では聞かない（#79） |
 | 14-1 | ファイルのアップロード | 使う／使わない／未定 | [F-20](#f-20)。保存先は非公開のCloudflare R2（自動で決定）。**対話では聞かない**（#79）。要件定義で決める。`--answers`に書かなければ「未定」 |

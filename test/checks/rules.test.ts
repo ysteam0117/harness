@@ -54,6 +54,10 @@ describe("#32 AC-3: ルールのデータ（data/consistency-rules.yaml）", () 
       "missing-tools",
       "invalid-app-name",
       "target-dir-not-empty",
+      "spring-boot-on-workers",
+      "hono-needs-workers",
+      "spring-boot-with-d1",
+      "spring-boot-with-auth",
     ]);
   });
 

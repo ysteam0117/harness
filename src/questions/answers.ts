@@ -19,8 +19,8 @@ export interface Answers {
   visibility: "public" | "private";
   team_size: "solo" | "team";
   frontend: "react";
-  backend: "hono";
-  infra: "cloudflare";
+  backend: "hono" | "spring_boot";
+  infra: "cloudflare" | "container";
   database: "d1" | "postgresql" | "none";
   postgres_provider?: "neon" | "supabase" | "other";
   data_access?: "drizzle";

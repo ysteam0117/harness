@@ -87,8 +87,8 @@ describe("#32 AC-1: 質問の定義（データ）", () => {
     expect(values("visibility")).toEqual(["public", "private"]);
     expect(values("team_size")).toEqual(["solo", "team"]);
     expect(values("frontend")).toEqual(["react"]);
-    expect(values("backend")).toEqual(["hono"]);
-    expect(values("infra")).toEqual(["cloudflare"]);
+    expect(values("backend")).toEqual(["hono", "spring_boot"]);
+    expect(values("infra")).toEqual(["cloudflare", "container"]);
     expect(values("database")).toEqual(["d1", "postgresql", "none"]);
     expect(values("postgres_provider")).toEqual(["neon", "supabase", "other"]);
     expect(values("data_access")).toEqual(["drizzle"]);
@@ -106,16 +106,9 @@ describe("#32 AC-1: 質問の定義（データ）", () => {
     expect(values("version_policy")).toEqual(["verified", "latest"]);
   });
 
-  it("#32 AC-1: 選択肢が1つの select は project_type・layers・frontend・backend・infra・data_access だけ", () => {
+  it("#32 AC-1: 選択肢が1つの select は project_type・layers・frontend・data_access だけ（backend・infra は #40 で選択肢が2つになった）", () => {
     const single = defs.filter((d) => d.kind === "select" && d.options?.length === 1);
-    expect(single.map((d) => d.id)).toEqual([
-      "project_type",
-      "layers",
-      "frontend",
-      "backend",
-      "infra",
-      "data_access",
-    ]);
+    expect(single.map((d) => d.id)).toEqual(["project_type", "layers", "frontend", "data_access"]);
   });
 
   it("#32 AC-1: DB の「Cloudflare D1」の選択肢に「（標準）」が付く", () => {

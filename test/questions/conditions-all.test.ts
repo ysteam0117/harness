@@ -60,6 +60,8 @@ describe("#40: data_access は、backend が hono で DB があるときだけ�
     repository: ["github"],
     visibility: ["private"],
     team_size: ["solo"],
+    backend: ["hono"],
+    infra: ["cloudflare"],
     database: [database],
     postgres_provider: ["neon"],
     check_location: ["both"],
@@ -144,7 +146,14 @@ describe("#40: --answers の読み込み（all の条件と、backend・infra �
 
   it("backend・infra を省いた以前の回答ファイル（database: d1・data_access: drizzle）は、そのまま通る", () => {
     const parsed = parseAnswersYaml(
-      yaml(baseAnswers({ backend: undefined, database: "d1", data_access: "drizzle" })),
+      yaml(
+        baseAnswers({
+          backend: undefined,
+          infra: undefined,
+          database: "d1",
+          data_access: "drizzle",
+        }),
+      ),
     );
     expect(parsed.answers.data_access).toBe("drizzle");
     // 互換の既定値は、条件の判定にだけ使い、回答には入れない

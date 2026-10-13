@@ -1,0 +1,47 @@
+# 技術プロファイル：Spring Boot（F-24、Issue #40）
+id: spring-boot
+ecosystem: maven
+category: backend-framework
+name: Spring Boot
+languages: [java]
+runtimes: [jvm]
+# Gradle のプラグイン（Spring Boot 本体と、依存の版をそろえる dependency-management）。マーカーの座標で版を調べる。
+# 依存（starter など）の版は、Spring Boot の BOM が決める（managed）ため、調べない
+packages:
+  - org.springframework.boot:org.springframework.boot.gradle.plugin
+  - io.spring.dependency-management:io.spring.dependency-management.gradle.plugin
+# 検証済みの版の決め方（2026-10-13）：Maven Central の maven-metadata.xml の安定版の最新（4.2.0-M2 は試験版のため対象外）。
+#   Spring Boot 4.1.1 の BOM が Testcontainers 2.0.5・JUnit 6.0.3 を管理することと、使う starter の成果物が Maven Central にあることを確かめた。
+#   Gradle 9.5.0・Java 25 での ./gradlew check（Testcontainers を含む）の実行結果は、Issue #40 の PR に記録する。Spring Boot 4.2 が正式版になったら見直す
+verified_versions:
+  org.springframework.boot:org.springframework.boot.gradle.plugin: "4.1.1"
+  io.spring.dependency-management:io.spring.dependency-management.gradle.plugin: "1.1.7"
+# Java の版の範囲。根拠：Spring Boot 4.1 の System Requirements（https://docs.spring.io/spring-boot/system-requirements.html、2026-10-13 に確認）。Java 17 以上、27 までに対応
+version_ranges:
+  java: ">=17 <27"
+compatibility_notes:
+  - "Spring Boot は Cloudflare Workers で動かない。デプロイ先は「コンテナ」を選ぶ（デプロイの設定は今後の Issue で追加する）"
+  - "starter の版は書かない。Spring Boot のプラグインと dependency-management が、BOM から決める"
+  - "Spring Boot 4 では starter の名前が変わった（web は webmvc）。@WebMvcTest は spring-boot-starter-webmvc-test に入っている"
+  - "画面（Vite の開発サーバー）から API（localhost:8080）へは、Vite の proxy（/api）でつなぐ。HARNESS_API_ORIGIN で接続先を変えられる"
+requires: [build/gradle, logger/slf4j-logback]
+skill_name: backend-spring-boot
+files:
+  files/build.gradle.kts: backend/build.gradle.kts
+  files/Application.java: backend/src/main/java/{{java_package_path}}/Application.java
+  files/HealthController.java: backend/src/main/java/{{java_package_path}}/health/HealthController.java
+  files/application.yaml: backend/src/main/resources/application.yaml
+gradle:
+  plugins:
+    org.springframework.boot: org.springframework.boot:org.springframework.boot.gradle.plugin
+    io.spring.dependency-management: io.spring.dependency-management:io.spring.dependency-management.gradle.plugin
+  aliases:
+    org.springframework.boot:org.springframework.boot.gradle.plugin: spring-boot
+    io.spring.dependency-management:io.spring.dependency-management.gradle.plugin: spring-dependency-management
+  managed:
+    - org.springframework.boot:spring-boot-starter-webmvc
+    - org.springframework.boot:spring-boot-starter-actuator
+  configurations:
+    implementation:
+      - org.springframework.boot:spring-boot-starter-webmvc
+      - org.springframework.boot:spring-boot-starter-actuator

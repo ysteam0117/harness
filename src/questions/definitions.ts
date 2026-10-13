@@ -125,13 +125,19 @@ export const questionDefinitions: readonly QuestionDefinition[] = [
     id: "backend",
     title: "バックエンドの技術",
     kind: "select",
-    options: opts(["hono", "Hono（TypeScriptで開発）"]),
+    options: opts(
+      ["hono", "Hono（TypeScriptで開発）"],
+      ["spring_boot", "Spring Boot（Javaで開発。ビルドは Gradle）"],
+    ),
   },
   {
     id: "infra",
     title: "インフラ・デプロイ先",
     kind: "select",
-    options: opts(["cloudflare", "Cloudflare（本番。開発・検証は手元で環境変数を切り替える）"]),
+    options: opts(
+      ["cloudflare", "Cloudflare（本番。開発・検証は手元で環境変数を切り替える）"],
+      ["container", "コンテナ（AWS ECS 等。デプロイの設定は今後追加）"],
+    ),
   },
   {
     id: "database",

@@ -1,0 +1,39 @@
+# 技術プロファイル：JUnit・Testcontainers（Spring Boot のテスト。F-24、Issue #40）
+id: junit-testcontainers
+ecosystem: maven
+category: test-framework
+name: JUnit・Spring Boot Test・Testcontainers
+languages: [java]
+runtimes: [jvm]
+# 依存の版は、Spring Boot の BOM が決める（Testcontainers の版も BOM が管理する。Spring Boot 4.1.1 は Testcontainers 2.0.5）
+packages: []
+compatibility_notes:
+  - "@WebMvcTest は spring-boot-starter-webmvc-test に入っている（spring-boot-starter-test には含まれない）"
+  - "Testcontainers 2 の座標は org.testcontainers:testcontainers-junit-jupiter と testcontainers-postgresql（PostgreSQLContainer は org.testcontainers.postgresql パッケージ）"
+  - "PostgresContainerTest は Docker を使う（Docker が動いていないと失敗する）。HealthControllerTest と ApplicationTests は Docker を使わない"
+requires: [backend-framework/spring-boot]
+skill_name: test-junit
+files:
+  files/HealthControllerTest.java: backend/src/test/java/{{java_package_path}}/health/HealthControllerTest.java
+  files/ApplicationTests.java: backend/src/test/java/{{java_package_path}}/ApplicationTests.java
+  files/PostgresContainerTest.java: backend/src/test/java/{{java_package_path}}/PostgresContainerTest.java
+gradle:
+  managed:
+    - org.springframework.boot:spring-boot-starter-test
+    - org.springframework.boot:spring-boot-starter-webmvc-test
+    - org.springframework.boot:spring-boot-testcontainers
+    - org.testcontainers:testcontainers-junit-jupiter
+    - org.testcontainers:testcontainers-postgresql
+    - org.postgresql:postgresql
+    - org.junit.platform:junit-platform-launcher
+  configurations:
+    testImplementation:
+      - org.springframework.boot:spring-boot-starter-test
+      - org.springframework.boot:spring-boot-starter-webmvc-test
+      - org.springframework.boot:spring-boot-testcontainers
+      - org.testcontainers:testcontainers-junit-jupiter
+      - org.testcontainers:testcontainers-postgresql
+    testRuntimeOnly:
+      - org.postgresql:postgresql
+      - org.junit.platform:junit-platform-launcher
+  check_tasks: [test]

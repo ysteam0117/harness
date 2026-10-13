@@ -49,6 +49,8 @@ const fullScript = (): Record<string, unknown[]> => ({
   repository: ["github"],
   visibility: ["public"],
   team_size: ["team"],
+  backend: ["hono"],
+  infra: ["cloudflare"],
   database: ["postgresql"],
   postgres_provider: ["neon"],
   check_location: ["both"],
@@ -69,6 +71,8 @@ describe("#32 AC-1: 質問の順番と回答", () => {
       "repository",
       "visibility",
       "team_size",
+      "backend",
+      "infra",
       "database",
       "postgres_provider",
       "check_location",
@@ -84,6 +88,8 @@ describe("#32 AC-1: 質問の順番と回答", () => {
       repository: "github",
       visibility: "public",
       team_size: "team",
+      backend: "hono",
+      infra: "cloudflare",
       database: "postgresql",
       postgres_provider: "neon",
       ...UNDECIDED_VALUES, // 質問A〜Gは聞かず「未定」
@@ -95,14 +101,7 @@ describe("#32 AC-1: 質問の順番と回答", () => {
     });
   });
 
-  for (const id of [
-    "project_type",
-    "layers",
-    "frontend",
-    "backend",
-    "infra",
-    "data_access",
-  ] as const) {
+  for (const id of ["project_type", "layers", "frontend", "data_access"] as const) {
     it(`#32 AC-1: ${id} は聞かれず、「見出し：選択肢（自動で決定）」と表示される`, async () => {
       const p = new FakePrompter(fullScript());
       const answers = await runQuestions(defs, p, {});
@@ -116,7 +115,7 @@ describe("#32 AC-1: 質問の順番と回答", () => {
   it("#32 AC-1: 自動で決まる質問ではない質問は「自動で決定」と表示されない", async () => {
     const p = new FakePrompter(fullScript());
     await runQuestions(defs, p, {});
-    expect(p.notes.filter((n) => n.includes("（自動で決定）")).length).toBe(6);
+    expect(p.notes.filter((n) => n.includes("（自動で決定）")).length).toBe(4);
   });
 
   it("#32 AC-1: 表示（note）は入力のメソッドとして記録されない", async () => {

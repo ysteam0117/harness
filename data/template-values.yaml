@@ -16,7 +16,10 @@
 check_command: npm run check
 
 # check.yml の .env.test 作成後に差し込むステップ。2行目はワークフローの字下げを含む。
+# Spring Boot では、Docker の開発・検証環境（Compose）を出さないので、起動のステップも出さない（Testcontainers が DB を起動する）
 workflow_test_db_step:
+  - when: { answer: backend, equals: spring_boot }
+    value: ""
   - when: { answer: database, equals: postgresql }
     value: "- name: 検証用の PostgreSQL を起動して待つ\n        run: npm run docker:up:test -- --wait db"
   - value: ""
@@ -68,29 +71,41 @@ postgres_migration_notes:
   - value: このプロジェクトはDBを使わないため、使わない
 
 data_access_library:
+  - when: { all: [{ answer: backend, equals: spring_boot }, { answer: database, notEquals: none }] }
+    value: 未定（Spring Boot のデータアクセスは別の Issue（#42）で足す）
   - when: { answer: database, notEquals: none }
     value: Drizzle ORM
   - value: 使わない
 
 data_access_skill:
+  - when: { answer: backend, equals: spring_boot }
+    value: 使わない（Spring Boot のデータアクセスは、まだプロファイルがない）
   - when: { answer: database, notEquals: none }
     value: data-access-drizzle
   - value: 使わない
 
 # AGENTS.md の「コードを書く前に、ルールを読んで従う」の表の、DB の行（#80）
 data_access_rule_row:
+  - when: { all: [{ answer: backend, equals: spring_boot }, { answer: database, notEquals: none }] }
+    value: "| DB・クエリ・マイグレーション | `backend`（Spring Boot のデータアクセスのライブラリは未定。決まるまでは、利用者と相談して技術を選び、理由をADRに記録する） |"
   - when: { answer: database, notEquals: none }
     value: "| DB・クエリ・マイグレーション | `backend`・`data-access-drizzle` |"
   - value: "| DB・クエリ・マイグレーション | このプロジェクトは DB を使わない。DB を使うことになったら、要件定義に戻る |"
 
 # 共通の Skill（バックエンド・エラー応答・セキュリティ）が案内する、良い例・悪い例を載せたライブラリの Skill（#37）。DB がないときは Drizzle の Skill は出ないため、書かない
 example_skills:
+  - when: { answer: backend, equals: spring_boot }
+    value: "APIの書き方は`backend-spring-boot`"
   - when: { answer: database, notEquals: none }
     value: "APIの書き方は`backend-hono`、DBアクセスは`data-access-drizzle`"
   - value: "APIの書き方は`backend-hono`"
 
 # Skill「バックエンド」の、データアクセスの案内の行（DBがないときは、DBを使わない旨だけを書く）
 data_access_guide:
+  - when: { all: [{ answer: backend, equals: spring_boot }, { answer: database, notEquals: none }] }
+    value: |-
+      - Spring Boot のデータアクセスのライブラリは、まだ決めていない（別の Issue（#42）で足す）
+      - 使うときは、利用者と相談して技術を選び、理由をADRに記録する
   - when: { answer: database, notEquals: none }
     value: |-
       - データアクセスのライブラリは、このプロジェクトでは Drizzle ORM を使う。1つのプロジェクトで書き方を複数用意しない
@@ -440,7 +455,10 @@ openapi_test_app:
 # harness adopt は、同じ名前の値を data/adopt-values.yaml で入れ替える（生成していないコマンド・文書を、導入先の文書に書かないため）。ひな形には分岐を入れない（F-28）。
 
 # AGENTS.md の「コードを書く前に、ルールを読んで従う」の表の、技術プロファイルの Skill を含む欄
-rule_skills_backend: "`backend`・`error-api`・`backend-hono`"
+rule_skills_backend:
+  - when: { answer: backend, equals: spring_boot }
+    value: "`backend`・`error-api`・`backend-spring-boot`"
+  - value: "`backend`・`error-api`・`backend-hono`"
 rule_skills_frontend: "`frontend`・`frontend-build`・`frontend-state`"
 rule_skills_frontend_api: "`frontend`・`http-client-axios`"
 rule_skills_logger: "`logger`"

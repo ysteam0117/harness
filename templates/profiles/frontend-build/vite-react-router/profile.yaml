@@ -35,13 +35,17 @@ files:
   files/health-api.ts: frontend/src/features/health/api/health.ts
   files/HealthStatus.tsx: frontend/src/features/health/HealthStatus.tsx
   files/HealthStatus.test.tsx: frontend/src/features/health/HealthStatus.test.tsx
-# vite.config.ts と public/_headers は、Workers（Hono）のときだけ出す（vite.config.ts が @cloudflare/vite-plugin を読むため）
+# vite.config.ts と public/_headers は、Workers（Hono）のときだけ出す（vite.config.ts が @cloudflare/vite-plugin を読むため）。
+# Spring Boot のときの vite.config.ts は、@cloudflare/vite-plugin を読まず、/api を Spring Boot（:8080）へ中継する
 # 認証なし・未定のときだけ出す App.tsx（認証ありのときは、auth/session の App.tsx を同じ出力先に出す）
 files_when:
   - when: { answer: backend, equals: hono }
     files:
       files/vite.config.ts: vite.config.ts
       files/_headers: public/_headers
+  - when: { answer: backend, equals: spring_boot }
+    files:
+      files/vite.spring.config.ts: vite.config.ts
   - when: { answer: auth, in: [none, undecided] }
     files:
       files/App.tsx: frontend/src/App.tsx
@@ -58,7 +62,7 @@ wrangler:
     APP_ENV: production
     # 状態を変える要求を許可する送信元（環境ごとに設定する）
     ALLOWED_ORIGINS: "{{allowed_origins}}"
-# scripts は Workers（Hono）の構成のもの（wrangler の型の生成・Docker の開発環境を使う）。Spring Boot の構成のものは別に足す
+# scripts は、Workers（Hono）の構成のもの（wrangler の型の生成・Docker の開発環境を使う）と、Spring Boot の構成のもの（wrangler・Docker を使わない。Docker の開発環境は #43 で扱う）
 package_json_when:
   - when: { answer: backend, equals: hono }
     package_json:
@@ -75,3 +79,10 @@ package_json_when:
         docker:up:test: node scripts/compose-local.ts test up -d
         docker:down:local: node scripts/compose-local.ts development down
         docker:down:test: node scripts/compose-local.ts test down
+  - when: { answer: backend, equals: spring_boot }
+    package_json:
+      scripts:
+        dev: node scripts/run-local.ts development vite
+        build: vite build
+        preview: node scripts/run-local.ts development vite preview
+        predev: npm run env:check -- development
