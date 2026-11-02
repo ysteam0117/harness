@@ -3,7 +3,7 @@
 # verified : ハーネスで動作を確かめた版。ハーネス自身の .node-version と同じにする（テストで確かめる）
 # policy   : 最新を選ぶときの基準。lts は、長期サポート（LTS）の版の中で最新のもの
 node:
-  verified: "24.19.0"
+  verified: "24.22.1"
   policy: lts
 
 # Java の検証済みの版（大きな版）と選び方。maven のプロファイルを選んだときだけ使う（F-19）。

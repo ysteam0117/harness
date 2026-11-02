@@ -8,7 +8,7 @@
 //   }
 //   export function buildPackageJson(input: BuildPackageJsonInput): Record<string, unknown>;
 //     - 先頭のキーの並び：name・version・private・type・engines
-//     - name：アプリ名、version："0.0.0"、private：true、type："module"、engines.node：">=<選んだ Node.js の大きな版>"
+//     - name：アプリ名、version："0.0.0"、private：true、type："module"、engines.node：">=<選んだ Node.js の完全な版>"
 //     - dependencies・devDependencies：実際に選ばれた（packages ＋ 回答に合う packages_when）パッケージを、
 //       dev_packages にあれば devDependencies、なければ dependencies に入れる。版は正確な版（^・~ なし。C-62）。名前の昇順
 //     - scripts・overrides 等：mergePackageJson（プロファイルの package_json）の結果。external_tools・optional_packages は加えない
@@ -87,11 +87,11 @@ describe("#34 R3: package.json の組み立て（小さなプロファイル）"
       version: "0.0.0",
       private: true,
       type: "module",
-      engines: { node: ">=24" },
+      engines: { node: ">=24.19.0" },
     });
   });
 
-  it("#34 R3: engines は選んだ Node.js の大きな版（22.20.0 なら >=22）", async () => {
+  it("#34 R3: engines は選んだ Node.js の完全な版（22.20.0 なら >=22.20.0）", async () => {
     const answers = await completeAnswers({ database: "d1" });
     const pkg = buildPackageJson({
       appName: "testapp-001",
@@ -99,7 +99,7 @@ describe("#34 R3: package.json の組み立て（小さなプロファイル）"
       profiles: [loadProfile(gammaDir(), "lib/gamma")],
       versions: result([entry("node", "22.20.0"), ...ALL_VERSIONS.slice(1)]),
     });
-    expect(pkg["engines"]).toEqual({ node: ">=22" });
+    expect(pkg["engines"]).toEqual({ node: ">=22.20.0" });
   });
 
   it("#34 R3: dev_packages にあるものは devDependencies、ないものは dependencies（D1：pg は入らない）", async () => {

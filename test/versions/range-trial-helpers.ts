@@ -76,7 +76,7 @@ const okTools = async (): Promise<ToolStatus[]> => [
 export function candidateRegistry(peer = "^4 || ^5", tsPeer = "^6.0.0 || ^7.0.0") {
   return registryForReal(
     {
-      vitest: ["4.1.11", "4.2.0", "5.0.0", "5.1.0"],
+      vitest: ["4.1.12", "4.2.0", "5.0.0", "5.1.0"],
       typescript: ["6.0.3", "6.0.9", "6.1.0", "7.0.0"],
     },
     {

@@ -13,8 +13,9 @@ packages:
 # 検証済みの版の決め方（2026-10-13）：Maven Central の maven-metadata.xml の安定版の最新（4.2.0-M2 は試験版のため対象外）。
 #   Spring Boot 4.1.1 の BOM が Testcontainers 2.0.5・JUnit 6.0.3 を管理することと、使う starter の成果物が Maven Central にあることを確かめた。
 #   Gradle 9.5.0・Java 25 での ./gradlew check（Testcontainers を含む）の実行結果は、Issue #40 の PR に記録する。Spring Boot 4.2 が正式版になったら見直す
+# 2026-10-23: セキュリティ更新。4.1.2 の管理依存は Tomcat 11.0.27（https://docs.spring.io/spring-boot/appendix/dependency-versions/coordinates.html）。
 verified_versions:
-  org.springframework.boot:org.springframework.boot.gradle.plugin: "4.1.1"
+  org.springframework.boot:org.springframework.boot.gradle.plugin: "4.1.2"
   io.spring.dependency-management:io.spring.dependency-management.gradle.plugin: "1.1.7"
 # Java の版の範囲。根拠：Spring Boot 4.1 の System Requirements（https://docs.spring.io/spring-boot/system-requirements.html、2026-10-13 に確認）。Java 17 以上、27 までに対応
 version_ranges:

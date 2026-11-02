@@ -18,7 +18,7 @@ exports[`#40: Spring Boot の生成物（database=none） > ファイルの一�
   "M .claude/skills/error-api/SKILL.md 986731a4b9374d805b630d9e60b3ec6f39e7f7068b2a7a228edff55dc86d7faf",
   "M .claude/skills/frontend-build/SKILL.md 70dddaed5a8592d430067c962fc7c926138c36fb5dfda79c255399a0c0007636",
   "M .claude/skills/frontend-state/SKILL.md de539048f33f98ada994ff9915ff32c5574e442f56be61f36efe9f23f353876e",
-  "M .claude/skills/frontend/SKILL.md e88710ae6d22282932667fd8041e5f506e22861b66cfb9c725dc879ae89e0ff3",
+  "M .claude/skills/frontend/SKILL.md 6b8e455f1cd359f0182fdc0b8e00319904d2ff30f5b7513a542798920a5d485c",
   "M .claude/skills/http-client-axios/SKILL.md 8cba8791bf81b69c2d5b578cfa699ada1c867ed1bb646e3dee45559b54422eac",
   "M .claude/skills/implementation-process/SKILL.md 511ec6247cdff181318b759053d1f3e5ca08c5e8c13fd7f0f1fc0e05ba47e039",
   "M .claude/skills/knowledge/SKILL.md 58584fc42ecbad8301903b2cb5c8813c1a9620b7dd22214c6ea724ba850909e7",
@@ -43,9 +43,9 @@ exports[`#40: Spring Boot の生成物（database=none） > ファイルの一�
   "P .github/workflows/check.yml 0dd343e9d82e25b599f12ab515f3e64cba43d786a2f677d8159c264a89c87519",
   "P .gitignore fd45c599ad5952284a536c250e9358f42a7337aa03b6b61b2f117cd3826570c0",
   "M .gitleaks.toml 11a80a42c0b98c362b38ba7322dc12949919893c20e41d2fe44e1c8da107e72e",
-  "P .harness/config.yaml 15cc2178e48726fd83c0839027a818eb0f0fe1d20dc9a1c6d3160b122625e7b6",
+  "P .harness/config.yaml 88607f9fe0ba4d9e3ecbf185864cd24c9defa0463fb0f1e34ff3747eaefae771",
   "P .jscpd.json 28d095fed27f81cb731db884fed7552997a5f3f88ff23e07ba4dd1a15d66923c",
-  "P .node-version 7e8a2fa94951112b894a3dbe3d05efef5e9263741fa49125f0a70f40fedab4cc",
+  "P .node-version d9f318747a126ce2247661af67852b185def7789492eabfad7bba322be087c33",
   "P .prettierignore 71e7ff2cbd7564fccd277f4f3ac3d202d7d03df5ab0826c54e7c86388f82b6b4",
   "M .semgrep/NOTICE.md 340ed40bc73157ec431f2fd6811c8d4c1b343e2b5ad37c54a209b620877ba832",
   "M .semgrep/javascript-browser-security-dom-based-xss.yaml 5fb825510e4fad506027229588abadc65ee1345f20d731560160dcbdde3f0859",
@@ -58,11 +58,11 @@ exports[`#40: Spring Boot の生成物（database=none） > ファイルの一�
   "M .semgrep/javascript-lang-security-audit-spawn-shell-true.yaml 310e6f7b264bf3dfa7c202f045bad1916b27e8dc24c9881476aac5785861b6c4",
   "M .semgrep/javascript-lang-security-detect-child-process.yaml 0e7dfd959d3e6791ebab63e28ef431c44c195a6ee7995d2b7f584c17278497eb",
   "M .semgrep/typescript-react-security-react-insecure-request.yaml 93cc213bd7af4c28a75c2e27be1d8fb99beac92c778457d2aaf8204b6091c4a8",
-  "M AGENTS.md 230783c616d4997560e7dad16dcb985b1f73778a9006f2672cbd4f417c5ff903",
+  "M AGENTS.md 63a5c441a45943d792a3a23d3ea51d858ebda5cc5fb501dd4ffb4950ffc51a94",
   "M CLAUDE.md 37ef01d1c88664f0d090927c81a1520ae48c8af0f5304b4f5ecc0c9d4b42747d",
   "P README.md 9a67aeb1607f6a94b13946a99cd939f5679136e67c88333c789d1cc81625dc83",
   "P backend/build.gradle.kts b867fd8ee5485fbb95b2ae7de52517bd2c8f9073e24ef70560b92ee626f36f10",
-  "P backend/gradle/libs.versions.toml 00375dd47d355f37ed61d87329ad3e23b13acd1e27ce298adbca98771401f78f",
+  "P backend/gradle/libs.versions.toml f5bfa7ba7e8e1329b5b43037648cc0b4eaacc784b0792ab9034c77b31ee2a1dd",
   "P backend/settings.gradle.kts 0982818b3cca39ce9f2dfb84da751d6b12e20a9329b3a0ca27419bfed4eca946",
   "P backend/src/main/java/com/example/testapp001/Application.java bb0121b1beb96fb813afa6238ba1deb6cf1c290260e1bcab5b56809a6c4f8d9e",
   "P backend/src/main/java/com/example/testapp001/health/HealthController.java 21bcbae871dc0ce094e7abe34e28a4efac5207450d0551466424f09904152445",
@@ -77,7 +77,7 @@ exports[`#40: Spring Boot の生成物（database=none） > ファイルの一�
   "P docs/project-rules.md 8799210035a342e13ddc01d1363a2f7434b6f79ad4072b1f4bca3b885f40744c",
   "P docs/requirements.md c7e03a4999a43d3983edf98e2a5f196e3236e1d1ad65893fc53bdd6c2f908495",
   "M docs/secrets.md 6e6ca6c3d833cee472130129acedfec1016acda3a3aee7b4e44cae365e70a90f",
-  "P docs/tech-stack.md abb8aac1a7f433c8186ade41cecc3b43951c87774be7bda7dd9cff0d05e30f66",
+  "P docs/tech-stack.md 53f3cc08720b9c7f70e99d20a35f105d5e3f36628c90a3512eddff8a89a57b91",
   "P docs/testing/README.md b1c3d4baaa29e8e15629b984feb0d7794ee3320bd5ca68e3e9d3d60f51eb93fb",
   "P docs/testing/e2e.md 115c826e20b91cea41bbfbb9be84143e061f3e5bca60f212847043629a485a58",
   "P docs/testing/integration.md e7fd6f3441d7ff325a6f2e4191175472c96dff994692c7a0c358c527ccdc3220",
@@ -102,7 +102,7 @@ exports[`#40: Spring Boot の生成物（database=none） > ファイルの一�
   "P frontend/src/test/server.ts 3171d11870fdd32ba50d3bd9dc4b90702f899859480346adf60ac49a949d8b51",
   "P frontend/src/test/setup.ts 292bce170740fd6a2adabf0ffa906c80698fc85f52138ba761e9f88c96d7d84d",
   "P index.html 48a9f300466757859b06a6279d00dd4b0fac8be70159b3942780b910e5e588d0",
-  "P package.json 313953244fb310be7f6fec7e5c0411b203cd1c5d396d96f0b3ff3de49a2e1a42",
+  "P package.json 7f3d7b83fed35e92db50c9347a449beea33fdc9ca5403f1f69aeec68a5618f06",
   "P prototype/README.md 111bf64f13269b1a8a56c7db10957d0c6d89c920e77293dd87406ad1467db31d",
   "P prototype/app.js ce5a0677a8afc970d33d47e8e665086dca1c9d1d7cd9406293a31bcd5d0440ed",
   "P prototype/index.html 3e9000f791f9adc3e84524f3c2451c6448a44a8cda66581e78937c42167259f2",
@@ -168,7 +168,7 @@ tasks.named("check") {
 }
 ",
   "backend/gradle/libs.versions.toml": "[versions]
-spring-boot = "4.1.1"
+spring-boot = "4.1.2"
 spring-dependency-management = "1.1.7"
 
 [libraries]
@@ -332,7 +332,7 @@ class HealthControllerTest {
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=24"
+    "node": ">=24.22.1"
   },
   "scripts": {
     "dev": "node scripts/run-local.ts development vite",
@@ -397,8 +397,8 @@ class HealthControllerTest {
     "prettier": "3.9.9",
     "typescript": "6.0.3",
     "typescript-eslint": "8.71.0",
-    "vite": "8.3.1",
-    "vitest": "4.1.11"
+    "vite": "8.3.3",
+    "vitest": "4.1.12"
   }
 }
 ",
@@ -510,7 +510,7 @@ exports[`#40: Spring Boot の生成物（database=postgresql） > ファイル�
   "M .claude/skills/error-api/SKILL.md 986731a4b9374d805b630d9e60b3ec6f39e7f7068b2a7a228edff55dc86d7faf",
   "M .claude/skills/frontend-build/SKILL.md 70dddaed5a8592d430067c962fc7c926138c36fb5dfda79c255399a0c0007636",
   "M .claude/skills/frontend-state/SKILL.md de539048f33f98ada994ff9915ff32c5574e442f56be61f36efe9f23f353876e",
-  "M .claude/skills/frontend/SKILL.md e88710ae6d22282932667fd8041e5f506e22861b66cfb9c725dc879ae89e0ff3",
+  "M .claude/skills/frontend/SKILL.md 6b8e455f1cd359f0182fdc0b8e00319904d2ff30f5b7513a542798920a5d485c",
   "M .claude/skills/http-client-axios/SKILL.md 8cba8791bf81b69c2d5b578cfa699ada1c867ed1bb646e3dee45559b54422eac",
   "M .claude/skills/implementation-process/SKILL.md 511ec6247cdff181318b759053d1f3e5ca08c5e8c13fd7f0f1fc0e05ba47e039",
   "M .claude/skills/knowledge/SKILL.md e328157cfe234dd8b057b7afe1eaeaefd9e26e43074720ffb226d0ebcfcee6f0",
@@ -537,9 +537,9 @@ exports[`#40: Spring Boot の生成物（database=postgresql） > ファイル�
   "P .github/workflows/check.yml 0dd343e9d82e25b599f12ab515f3e64cba43d786a2f677d8159c264a89c87519",
   "P .gitignore fd45c599ad5952284a536c250e9358f42a7337aa03b6b61b2f117cd3826570c0",
   "M .gitleaks.toml 11a80a42c0b98c362b38ba7322dc12949919893c20e41d2fe44e1c8da107e72e",
-  "P .harness/config.yaml a30dd3d516c785062a6e0172ae6cdd54964330c7990dbb02fb18deaa46724b35",
+  "P .harness/config.yaml 062405a79f83864439274277be8c0d598aab83fbc0fc862c47948c8dbb8bb1d9",
   "P .jscpd.json 28d095fed27f81cb731db884fed7552997a5f3f88ff23e07ba4dd1a15d66923c",
-  "P .node-version 7e8a2fa94951112b894a3dbe3d05efef5e9263741fa49125f0a70f40fedab4cc",
+  "P .node-version d9f318747a126ce2247661af67852b185def7789492eabfad7bba322be087c33",
   "P .prettierignore 71e7ff2cbd7564fccd277f4f3ac3d202d7d03df5ab0826c54e7c86388f82b6b4",
   "M .semgrep/NOTICE.md 340ed40bc73157ec431f2fd6811c8d4c1b343e2b5ad37c54a209b620877ba832",
   "M .semgrep/javascript-browser-security-dom-based-xss.yaml 5fb825510e4fad506027229588abadc65ee1345f20d731560160dcbdde3f0859",
@@ -552,11 +552,11 @@ exports[`#40: Spring Boot の生成物（database=postgresql） > ファイル�
   "M .semgrep/javascript-lang-security-audit-spawn-shell-true.yaml 310e6f7b264bf3dfa7c202f045bad1916b27e8dc24c9881476aac5785861b6c4",
   "M .semgrep/javascript-lang-security-detect-child-process.yaml 0e7dfd959d3e6791ebab63e28ef431c44c195a6ee7995d2b7f584c17278497eb",
   "M .semgrep/typescript-react-security-react-insecure-request.yaml 93cc213bd7af4c28a75c2e27be1d8fb99beac92c778457d2aaf8204b6091c4a8",
-  "M AGENTS.md b6cc69b35b990493c30bf8d2f44af97c2635b5e0739940f6da01b7a2ed636176",
+  "M AGENTS.md 9ef43f230d3553232c70ac9eb318ada03eeceb3a148eada149610f44e44faf75",
   "M CLAUDE.md 37ef01d1c88664f0d090927c81a1520ae48c8af0f5304b4f5ecc0c9d4b42747d",
   "P README.md a904de04978e472ded90af6b6532ff1ee383bb8816cc38a888108f5ee66104a4",
   "P backend/build.gradle.kts b867fd8ee5485fbb95b2ae7de52517bd2c8f9073e24ef70560b92ee626f36f10",
-  "P backend/gradle/libs.versions.toml 00375dd47d355f37ed61d87329ad3e23b13acd1e27ce298adbca98771401f78f",
+  "P backend/gradle/libs.versions.toml f5bfa7ba7e8e1329b5b43037648cc0b4eaacc784b0792ab9034c77b31ee2a1dd",
   "P backend/settings.gradle.kts 0982818b3cca39ce9f2dfb84da751d6b12e20a9329b3a0ca27419bfed4eca946",
   "P backend/src/main/java/com/example/testapp001/Application.java bb0121b1beb96fb813afa6238ba1deb6cf1c290260e1bcab5b56809a6c4f8d9e",
   "P backend/src/main/java/com/example/testapp001/health/HealthController.java 21bcbae871dc0ce094e7abe34e28a4efac5207450d0551466424f09904152445",
@@ -571,7 +571,7 @@ exports[`#40: Spring Boot の生成物（database=postgresql） > ファイル�
   "P docs/project-rules.md 8799210035a342e13ddc01d1363a2f7434b6f79ad4072b1f4bca3b885f40744c",
   "P docs/requirements.md c7e03a4999a43d3983edf98e2a5f196e3236e1d1ad65893fc53bdd6c2f908495",
   "M docs/secrets.md 4d09ac900bbd6a089238d9d852211d65821450f9a1706ea512e916b5a0b4d546",
-  "P docs/tech-stack.md abb8aac1a7f433c8186ade41cecc3b43951c87774be7bda7dd9cff0d05e30f66",
+  "P docs/tech-stack.md 53f3cc08720b9c7f70e99d20a35f105d5e3f36628c90a3512eddff8a89a57b91",
   "P docs/testing/README.md b1c3d4baaa29e8e15629b984feb0d7794ee3320bd5ca68e3e9d3d60f51eb93fb",
   "P docs/testing/e2e.md 115c826e20b91cea41bbfbb9be84143e061f3e5bca60f212847043629a485a58",
   "P docs/testing/integration.md 9ff65432f1c427493a13f7705e019f953f40c8f9348a56b9e54992453f62d9b4",
@@ -596,7 +596,7 @@ exports[`#40: Spring Boot の生成物（database=postgresql） > ファイル�
   "P frontend/src/test/server.ts 3171d11870fdd32ba50d3bd9dc4b90702f899859480346adf60ac49a949d8b51",
   "P frontend/src/test/setup.ts 292bce170740fd6a2adabf0ffa906c80698fc85f52138ba761e9f88c96d7d84d",
   "P index.html 48a9f300466757859b06a6279d00dd4b0fac8be70159b3942780b910e5e588d0",
-  "P package.json 313953244fb310be7f6fec7e5c0411b203cd1c5d396d96f0b3ff3de49a2e1a42",
+  "P package.json 7f3d7b83fed35e92db50c9347a449beea33fdc9ca5403f1f69aeec68a5618f06",
   "P prototype/README.md 111bf64f13269b1a8a56c7db10957d0c6d89c920e77293dd87406ad1467db31d",
   "P prototype/app.js ce5a0677a8afc970d33d47e8e665086dca1c9d1d7cd9406293a31bcd5d0440ed",
   "P prototype/index.html 3e9000f791f9adc3e84524f3c2451c6448a44a8cda66581e78937c42167259f2",
@@ -662,7 +662,7 @@ tasks.named("check") {
 }
 ",
   "backend/gradle/libs.versions.toml": "[versions]
-spring-boot = "4.1.1"
+spring-boot = "4.1.2"
 spring-dependency-management = "1.1.7"
 
 [libraries]
@@ -826,7 +826,7 @@ class HealthControllerTest {
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=24"
+    "node": ">=24.22.1"
   },
   "scripts": {
     "dev": "node scripts/run-local.ts development vite",
@@ -891,8 +891,8 @@ class HealthControllerTest {
     "prettier": "3.9.9",
     "typescript": "6.0.3",
     "typescript-eslint": "8.71.0",
-    "vite": "8.3.1",
-    "vitest": "4.1.11"
+    "vite": "8.3.3",
+    "vitest": "4.1.12"
   }
 }
 ",

@@ -78,7 +78,7 @@ const row = (md: string, name: string) =>
 /** vitest は 4 系と 5 系、typescript は 6.0 系・6.1・7 系があり、axios は大きな版が違う 2 系がある登録情報 */
 const newerRegistry = () =>
   registryForReal({
-    vitest: ["4.1.11", "4.2.0", "5.0.0", "5.1.0-rc.1"],
+    vitest: ["4.1.12", "4.2.0", "5.0.0", "5.1.0-rc.1"],
     typescript: ["6.0.3", "6.0.9", "6.1.0", "7.0.0"],
   });
 
@@ -100,7 +100,7 @@ describe("#33 R6・R8: 方針 verified（既定）でも調べて記録し、つ
       expect(e.surveyedOn).toBe(FIXED_DAY);
     }
     const vitest = entries.find((e) => e.name === "vitest");
-    expect(vitest).toMatchObject({ version: "4.1.11", latestStable: "4.2.0" });
+    expect(vitest).toMatchObject({ version: "4.1.12", latestStable: "4.2.0" });
     expect(out.versions?.newerThanVerified).toBe(false);
     expect(out.result?.warnings.map((w) => w.id)).not.toContain(RULE7);
   });
@@ -135,7 +135,7 @@ describe("#33 R6・R8: 方針 verified（既定）でも調べて記録し、つ
     );
     expect(out.techStack).toBeDefined();
     expect(row(out.techStack ?? "", "vitest")).toContain("未確認");
-    expect(row(out.techStack ?? "", "vitest")).toContain("4.1.11");
+    expect(row(out.techStack ?? "", "vitest")).toContain("4.1.12");
   });
 });
 
@@ -215,7 +215,7 @@ describe("#33 AC-1・AC-2・AC-3・AC-5: 方針 latest（--answers・対話し�
     });
     const out = await runCreate({ answers: file, yes: true }, s.deps);
     const get = (n: string) => out.versions?.entries.find((e) => e.name === n);
-    expect(get("vitest")?.version).toBe("4.1.11");
+    expect(get("vitest")?.version).toBe("4.1.12");
     expect(get("typescript")?.version).toBe("6.0.9");
   });
 
@@ -370,9 +370,9 @@ describe("#33 計画8：質問 → バージョンの調査と選択 → 事実�
     expect(tableAt).toBeLessThan(firstInput);
     // R7：最終の選択が、返す結果と tech-stack.md の中身に反映される
     const get = (n: string) => out.versions?.entries.find((e) => e.name === n);
-    expect(get("vitest")?.version).toBe("4.1.11");
+    expect(get("vitest")?.version).toBe("4.1.12");
     expect(get("typescript")?.version).toBe("6.0.9");
-    expect(row(out.techStack ?? "", "vitest")).toContain("4.1.11");
+    expect(row(out.techStack ?? "", "vitest")).toContain("4.1.12");
     expect(row(out.techStack ?? "", "typescript")).toContain("6.0.9");
   });
 
@@ -414,7 +414,7 @@ describe("#33 計画8：質問 → バージョンの調査と選択 → 事実�
       .map((e) => e.message)
       .join("\n");
     expect(before).toContain("vitest");
-    expect(before).toContain("4.1.11");
+    expect(before).toContain("4.1.12");
     expect(before).toContain("hono");
   });
 
@@ -518,7 +518,7 @@ describe("#33 R7・AC-5：結果と tech-stack.md の中身を返す（保存は
     const md = out.techStack ?? "";
     expect(md).not.toBe("");
     const vitest = row(md, "vitest");
-    expect(vitest).toContain("4.1.11"); // 採用した版・検証済み
+    expect(vitest).toContain("4.1.12"); // 採用した版・検証済み
     expect(vitest).toContain("4.2.0"); // 確認した最新の安定版
     expect(vitest).toContain(FIXED_DAY);
     expect(vitest).toContain("検証済み"); // 選定理由
@@ -591,7 +591,7 @@ describe("#6 PR-A: 範囲の見直し（確認の前に表示）", () => {
   it("#6 AC-2: 原因が 5 系にも対応していれば、候補と下書きを表示する。終了コードは 0 で、生成まで進む", async () => {
     const s = setup(
       registryForReal(
-        { vitest: ["4.1.11", "4.2.0", "5.0.0", "5.1.0"] },
+        { vitest: ["4.1.12", "4.2.0", "5.0.0", "5.1.0"] },
         { peers: poolPeers("^4 || ^5") },
       ),
     );
@@ -613,7 +613,7 @@ describe("#6 PR-A: 範囲の見直し（確認の前に表示）", () => {
 
   it("#6 AC-2: 原因が 4 系だけなら、候補も下書きも出さない", async () => {
     const s = setup(
-      registryForReal({ vitest: ["4.1.11", "4.2.0", "5.0.0"] }, { peers: poolPeers("^4") }),
+      registryForReal({ vitest: ["4.1.12", "4.2.0", "5.0.0"] }, { peers: poolPeers("^4") }),
     );
     const out = await runCreate(
       { answers: s.writeAnswers(baseAnswers() as Record<string, unknown>), yes: true },

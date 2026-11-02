@@ -16,7 +16,7 @@ dev_packages: [vitest, "@cloudflare/vitest-pool-workers", "@testing-library/reac
 external_tools: [k6]
 # ひな形で動作を確かめたバージョン（2026-09-30、Issue #19 の試作で確認）
 verified_versions:
-  vitest: "4.1.11"
+  vitest: "4.1.12"
   "@cloudflare/vitest-pool-workers": "0.22.0"
   "@testing-library/react": "16.3.3"
   "@testing-library/dom": "10.4.2"

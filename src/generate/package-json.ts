@@ -1,4 +1,4 @@
-import { major, valid } from "semver";
+import { valid } from "semver";
 import type { Answers } from "../questions/answers.js";
 import type { VersionResult } from "../versions/choose.js";
 import { wantedPackages } from "../versions/targets.js";
@@ -93,7 +93,7 @@ export function buildPackageJson(input: BuildPackageJsonInput): Record<string, u
     version: "0.0.0",
     private: true,
     type: "module",
-    engines: { node: `>=${String(major(nodeVersion))}` },
+    engines: { node: `>=${nodeVersion}` },
     ...merged,
     ...(Object.keys(dependencies).length > 0 ? { dependencies } : {}),
     ...(Object.keys(devDependencies).length > 0 ? { devDependencies } : {}),

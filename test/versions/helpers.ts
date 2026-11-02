@@ -251,7 +251,7 @@ export function registryForReal(
     },
     node: extra.node ?? [
       { version: "v25.1.0", lts: false },
-      { version: "v24.19.0", lts: "Krypton" },
+      { version: "v24.22.1", lts: "Krypton" },
       { version: "v22.20.0", lts: "Jod" },
     ],
   });

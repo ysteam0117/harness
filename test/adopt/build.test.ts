@@ -200,7 +200,7 @@ describe("#15 AC-3: 生成したアプリ専用のものを、導入先の文書
 });
 
 describe("#15 AC-3: create の出力は変わらない（R6）", () => {
-  it("#15 AC-3: create の AGENTS.md・Skill・エージェントの定義は、これまでの文言のまま", async () => {
+  it("#15 AC-3: create の AGENTS.md はCSS作業でもフロントエンドSkillを読む案内をする", async () => {
     const files = buildProject(await projectInput(BOTH)).files;
     const text = (p: string): string => files.find((f) => f.path === p)?.content ?? "";
     const agents = text("AGENTS.md");
@@ -208,7 +208,7 @@ describe("#15 AC-3: create の出力は変わらない（R6）", () => {
       "| バックエンド（API・業務の処理・外部APIの呼び出し） | `backend`・`error-api`・`backend-hono` |",
     );
     expect(agents).toContain(
-      "| フロントエンド（画面・部品・状態・フォーム） | `frontend`・`frontend-build`・`frontend-state` |",
+      "| フロントエンド（画面・部品・状態・フォーム・CSS） | `frontend`・`frontend-build`・`frontend-state` |",
     );
     expect(agents).toContain("| フロントエンドのAPI通信 | `frontend`・`http-client-axios` |");
     expect(agents).toContain("| ログ | `logger` |");

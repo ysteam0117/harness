@@ -14,7 +14,7 @@ packages_when:
 dev_packages: [vite, "@vitejs/plugin-react", "@cloudflare/vite-plugin", "@types/react", "@types/react-dom"]
 # ひな形で動作を確かめたバージョン（2026-09-30、Issue #19 の試作で確認）
 verified_versions:
-  vite: "8.3.1"
+  vite: "8.3.3"
   "@vitejs/plugin-react": "6.1.1"
   "@cloudflare/vite-plugin": "1.62.2"
   react: "19.3.0"

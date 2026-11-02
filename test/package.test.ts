@@ -7,10 +7,15 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const pkg = JSON.parse(readFileSync(path.join(rootDir, "package.json"), "utf8")) as {
   dependencies: Record<string, string>;
   devDependencies: Record<string, string>;
+  engines: { node: string };
 };
 const libs = ["@clack/prompts", "commander", "yaml", "diff", "semver"];
 
 describe("#30 AC-3: ライブラリのバージョンの固定", () => {
+  it("Node.js の最低対応版は脆弱性修正版の 24.22.1", () => {
+    expect(pkg.engines.node).toBe(">=24.22.1");
+  });
+
   it("#30 AC-3: dependencies と devDependencies のすべての値が x.y.z の形（範囲指定なし）", () => {
     const all = { ...pkg.dependencies, ...pkg.devDependencies };
     expect(Object.keys(all).length).toBeGreaterThan(0);

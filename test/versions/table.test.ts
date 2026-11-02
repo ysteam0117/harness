@@ -268,7 +268,7 @@ describe("#33 表示：確認の一覧「採用するバージョン」を、列
   });
 
   it("#33 表示：調査結果の表も、実際のプロファイルで、列がそろい、幅 80 以下（vitest の範囲 ^4 が範囲の列に出る）", async () => {
-    const { notes } = await createWith(registryForReal({ vitest: ["4.1.11", "4.2.0", "5.0.0"] }), {
+    const { notes } = await createWith(registryForReal({ vitest: ["4.1.12", "4.2.0", "5.0.0"] }), {
       version_policy: "latest",
       accepted_warnings: ["version-newer-than-verified"],
     });
