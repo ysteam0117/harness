@@ -49,7 +49,7 @@
 | --- | --- |
 | バックエンド（API・業務の処理・外部APIの呼び出し） | {{rule_skills_backend}} |
 {{data_access_rule_row}}
-| フロントエンド（画面・部品・状態・フォーム） | {{rule_skills_frontend}} |
+| フロントエンド（画面・部品・状態・フォーム・CSS） | {{rule_skills_frontend}} |
 | フロントエンドのAPI通信 | {{rule_skills_frontend_api}} |
 | ログ | {{rule_skills_logger}} |
 | 認証・認可・個人情報・入力チェック・ファイルのアップロード | `security`（上の表の該当するものに加えて） |

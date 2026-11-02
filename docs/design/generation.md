@@ -188,7 +188,7 @@ GitHub Actions でも検証用 DB が必要になるため、`workflow_test_db_s
 
 `buildPackageJson` が組み立てる。キーの並びは固定で、同じ入力なら同じ中身になる。
 
-- 先頭から：`name`（アプリ名）・`version`（`0.0.0`）・`private`（`true`）・`type`（`module`）・`engines`（`node` は選んだ Node.js の大きな版以上）。続けて、プロファイルの `package_json` と、回答に合う `package_json_when` を深くまとめたもの（`mergePackageJson`。`scripts`・`overrides` など）、`dependencies`、`devDependencies`
+- 先頭から：`name`（アプリ名）・`version`（`0.0.0`）・`private`（`true`）・`type`（`module`）・`engines`（`node` は選んだ Node.js の完全な版以上）。続けて、プロファイルの `package_json` と、回答に合う `package_json_when` を深くまとめたもの（`mergePackageJson`。`scripts`・`overrides` など）、`dependencies`、`devDependencies`
 - プロファイルの `package_json` に、ハーネスが決める項目（`name`・`version`・`private`・`type`・`engines`・`dependencies`・`devDependencies`）を書くと `GenerateError`
 - 入れるのは、実際に選ばれた依存だけ。`packages` と、回答に合う `packages_when`（`wantedPackages`）の和である。たとえば `pg` は PostgreSQL のときだけ入る
 - 版は、#33 で選んだ版を**正確な版**で書く（`^`・`~` なし。C-62）。選んだ版にない依存は `GenerateError`

@@ -158,7 +158,7 @@ describe("#57 AC-1：通ったとき", () => {
 
   it("未検証の新しい版で通ったときだけ、C-78 の提案（プロファイルの verified_versions の更新）を表示する。何も書き込まない", async () => {
     const fetcher = registryForReal({
-      vitest: ["4.1.11", "4.2.0"],
+      vitest: ["4.1.12", "4.2.0"],
       typescript: ["6.0.3", "6.0.9"],
     });
     const s = setup({ fetcher });

@@ -260,6 +260,13 @@ describe.each(CASES)("#85 F-24：フロントエンド・ロガーの例（$name
     expect(skill?.content).toContain("rules-examples");
   });
 
+  it("本番フロントエンドのCSSは独立したファイルに置く共通規則を含む", async () => {
+    const files = await generate(answers);
+    const skill = files.find((f) => f.path === ".claude/skills/frontend/SKILL.md");
+    expect(skill?.content).toContain(".css");
+    expect(skill?.content).toContain("インラインスタイル");
+  });
+
   it("例が使う部品（apiClient・ロガー・MSW のサーバー・テストの準備）が、同じ生成で出る", async () => {
     const files = await generate(answers);
     for (const path of [

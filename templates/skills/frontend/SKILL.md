@@ -1,6 +1,6 @@
 ---
 name: frontend
-description: フロントエンド（React・TypeScript）の設計・実装・レビューのルール。ディレクトリ構成、コンポーネント、型、状態管理、Hooks、API通信（Axios）、フォーム、画面の状態、アクセシビリティ、アイコンを扱うときに読む。
+description: フロントエンド（React・TypeScript）の設計・実装・レビューのルール。ディレクトリ構成、CSSの分離と整理、コンポーネント、型、状態管理、Hooks、API通信（Axios）、フォーム、画面の状態、アクセシビリティ、アイコンを扱うときに読む。
 ---
 
 <!-- もとになった共通仕様：C-06・C-43〜C-52・C-54・C-55・C-77・C-57 -->
@@ -19,7 +19,7 @@ description: フロントエンド（React・TypeScript）の設計・実装・�
 ```text
 src/
 ├─ pages/          ルーティング単位の画面（レイアウトと機能の組み合わせのみ）
-├─ features/       機能単位の実装
+├─ features/       機能単位の実装（固有の部品・ロジック・スタイル）
 ├─ components/     全体で使う共通UI
 ├─ hooks/          共通Custom Hook
 ├─ services/       共通のAPI通信（Axiosのインスタンス）
@@ -27,6 +27,7 @@ src/
 ├─ types/          共通の型
 ├─ utils/          純粋関数
 ├─ constants/      共通の定数
+├─ styles/         全体に共通するCSS（テーマ・リセット等）
 └─ test/           テストの共通処理
 ```
 
@@ -35,6 +36,13 @@ src/
 - **SHOULD**：ほかの機能の内部を直接参照せず、各機能の公開部分（`index.ts`）を通す
 - 1つの機能でしか使わないスキーマ・定数・Hookは、`features/<機能>/`に置く
 - **MUST NOT**：汎用ロジックを`components/`に置かない
+
+## CSSの配置と書き方
+
+- **MUST**：本番用フロントエンドのCSS宣言は、画面・コンポーネントのJSX/TSXやHTMLに埋め込まず、`.css`または`.module.css`ファイルに書く。必要な場所からimportする
+- **MUST NOT**：通常の見た目の指定に、インラインスタイル（JSX/HTMLの`style`属性）・`<style>`要素・CSS-in-JSを使わない。実行時に決まる値だけはCSSカスタムプロパティで渡してよい
+- **SHOULD**：全体共通のテーマ・リセットは`src/styles/`、機能やコンポーネント固有のスタイルは対応する`features/`またはコンポーネントの近くに置く
+- **SHOULD**：関連するルールを機能・コンポーネントごとにまとめ、意味の分かるクラス名を付ける。無関係な機能のCSSを1つの大きなファイルに集めない
 
 ## 命名と整形
 

@@ -398,7 +398,7 @@ describe("#6 PR-A adopt：範囲の見直しは、知らせるだけで、記録
   const registry = () =>
     fakeFetch({
       npm: {
-        vitest: ["4.1.11", "5.1.0"],
+        vitest: ["4.1.12", "5.1.0"],
         "@cloudflare/vitest-pool-workers": ["0.22.0"],
         typescript: ["6.0.3"],
         "typescript-eslint": ["8.71.0"],

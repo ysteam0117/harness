@@ -1,11 +1,11 @@
-// #72 認証の生成の仕組み：環境変数・要件定義書の未決定事項・認証なしの出力が変わらないこと（AC-2）
+// #72 認証の生成の仕組み：環境変数・要件定義書の未決定事項・認証なしの出力のベースライン
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { buildProject, type ProjectFile } from "../../src/generate/project.js";
 import { fingerprint } from "../../src/generate/config.js";
-import { contentOf, pathsOf, projectInput } from "./project-helpers.js";
+import { contentOf, historicalBaselineInput, pathsOf, projectInput } from "./project-helpers.js";
 
 async function generate(over: Record<string, unknown>): Promise<ProjectFile[]> {
   return buildProject(await projectInput(over)).files;
@@ -98,7 +98,7 @@ describe("#72 要件定義書の未決定事項（独自認証のときだけ4�
   });
 });
 
-describe("#72 AC-2: 認証が none の生成結果は、変更の前と同じ", () => {
+describe("#72 AC-2: 認証が none の生成結果は、記録したベースラインと一致する", () => {
   const baseline = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
     "fixtures/auth-none-baseline.json",
@@ -111,10 +111,12 @@ describe("#72 AC-2: 認証が none の生成結果は、変更の前と同じ", 
   };
 
   it.each(Object.keys(COMBOS))(
-    "#72 AC-2: %s のファイルの一覧と中身の指紋が、変更前の記録と一致する",
+    "#72 AC-2: %s のファイルの一覧と中身の指紋が、記録したベースラインと一致する",
     async (key) => {
       const expected = JSON.parse(readFileSync(baseline, "utf8")) as Record<string, string[]>;
-      const files = await generate({ ...AUTH.none, ...COMBOS[key] });
+      const files = buildProject(
+        await historicalBaselineInput({ ...AUTH.none, ...COMBOS[key] }),
+      ).files;
       expect(files.map((f) => `${f.path} ${fingerprint(f.content)}`)).toEqual(expected[key]);
     },
   );

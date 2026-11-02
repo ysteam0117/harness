@@ -261,7 +261,7 @@ describe("#40: Spring Boot の版の調査", () => {
         "org.springframework.boot:org.springframework.boot.gradle.plugin": metadataXml(
           "org.springframework.boot",
           "org.springframework.boot.gradle.plugin",
-          ["4.0.0", "4.1.1", "4.1.2", "4.2.0-M2"],
+          ["4.0.0", "4.1.2", "4.1.3", "4.2.0-M2"],
         ),
         "io.spring.dependency-management:io.spring.dependency-management.gradle.plugin":
           metadataXml(
@@ -282,7 +282,7 @@ describe("#40: Spring Boot の版の調査", () => {
     });
     if (out.status !== "ok") throw new Error(out.message);
     const boot = out.result.entries.find((e) => e.name.startsWith("org.springframework.boot:"));
-    expect(boot).toMatchObject({ version: "4.1.2", latestStable: "4.1.2", verified: "4.1.1" });
+    expect(boot).toMatchObject({ version: "4.1.3", latestStable: "4.1.3", verified: "4.1.2" });
     expect(boot?.newerThanVerified).toBe(true);
     expect(out.result.newerThanVerified).toBe(true);
     expect(out.result.entries.find((e) => e.name.startsWith("io.spring"))?.version).toBe("1.1.7");
