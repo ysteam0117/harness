@@ -32,6 +32,8 @@ const NO_FACTS: Facts = {
   missing_tools: [],
   target_dir_not_empty: false,
   invalid_app_name: false,
+  orchestrator_ai_not_in_ais: false,
+  orchestrator_without_orca: false,
 };
 
 const rules = loadRules();
@@ -58,6 +60,8 @@ describe("#32 AC-3: ルールのデータ（data/consistency-rules.yaml）", () 
       "hono-needs-workers",
       "spring-boot-with-d1",
       "spring-boot-with-auth",
+      "orchestrator-without-orca",
+      "orchestrator-not-in-ais",
     ]);
   });
 

@@ -154,3 +154,22 @@
   message: バックエンドが「Spring Boot」で、認証が「アプリ独自認証」「OIDC」「併用」のいずれかです
   reason: 認証の仕組み（セッション・OIDC）はまだ Hono の構成にだけあり、Spring Boot の認証は未提供です
   fix: [backend, auth]
+
+# Orca連携と統括に使うAI（#60、F-30）。orca は省略されうる（省略は none とみなす）ため、事実で判定する
+- id: orchestrator-without-orca
+  level: error
+  when:
+    all:
+      - { fact: orchestrator_without_orca, truthy: true }
+  message: Orca連携が「使わない」なのに、統括に使うAIが書かれています
+  reason: 統括に使うAIは、Orca連携を使うときだけ選びます（F-30）
+  fix: [orca, orchestrator_ai]
+
+- id: orchestrator-not-in-ais
+  level: error
+  when:
+    all:
+      - { fact: orchestrator_ai_not_in_ais, truthy: true }
+  message: 統括に使うAIが、使用するAIに含まれていません
+  reason: 統括は、使用するAIとして選んだAIの中から選びます（F-30）
+  fix: [orchestrator_ai, ais]

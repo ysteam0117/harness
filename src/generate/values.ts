@@ -361,7 +361,9 @@ export function buildValues(input: BuildValuesInput): Record<string, string> {
 
   expandReferences(values, Object.keys(loadDefinitions()));
 
-  for (const [role, model] of Object.entries(rolesFor(answers.ais))) {
+  for (const [role, model] of Object.entries(
+    rolesFor(answers.ais, answers.orca, answers.orchestrator_ai),
+  )) {
     if (model.claude) values[`claude_model_${role}`] = model.claude.model;
     if (model.codex) {
       values[`codex_model_${role}`] = model.codex.model;

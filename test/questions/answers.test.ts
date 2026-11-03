@@ -401,3 +401,47 @@ describe("#33 R4: versions・versions_offline の読み込みと検証", () => {
     expect(errors.some((m) => m.includes("vitest"))).toBe(true);
   });
 });
+
+describe("#60: orca・orchestrator_ai の回答ファイル", () => {
+  const base = () => baseAnswers() as Record<string, unknown>;
+  const without = (key: string) => {
+    const o = base();
+    delete o[key];
+    return o;
+  };
+
+  it("#60 AC-4: orca を省略した以前の回答ファイルがそのまま通り、回答には orca を補わない", () => {
+    const parsed = parseAnswersYaml(yaml(without("orca")));
+    expect(parsed.answers.orca).toBeUndefined();
+    expect("orca" in parsed.answers).toBe(false);
+  });
+
+  it("#60 AC-1: orca: use と orchestrator_ai: codex が通る", () => {
+    const parsed = parseAnswersYaml(
+      yaml({ ...base(), ais: ["claude", "codex"], orca: "use", orchestrator_ai: "codex" }),
+    );
+    expect(parsed.answers.orca).toBe("use");
+    expect(parsed.answers.orchestrator_ai).toBe("codex");
+  });
+
+  it("#60 AC-1: orca の選択肢にない値はエラー", () => {
+    expect(errorsOf(yaml({ ...base(), orca: "x" })).join("|")).toContain("orca");
+  });
+
+  it("#60 AC-6: orca: none と orchestrator_ai を一緒に書いても、parse ではエラーにしない（整合性チェックで示す）", () => {
+    const parsed = parseAnswersYaml(yaml({ ...base(), orca: "none", orchestrator_ai: "claude" }));
+    expect(parsed.answers.orchestrator_ai).toBe("claude");
+  });
+
+  it("#60 AC-6: orca を省いて orchestrator_ai だけ書いても、parse ではエラーにしない", () => {
+    const parsed = parseAnswersYaml(yaml({ ...without("orca"), orchestrator_ai: "claude" }));
+    expect(parsed.answers.orchestrator_ai).toBe("claude");
+  });
+
+  it("#60 AC-6: ais: [claude] と orchestrator_ai: codex でも、parse は通る", () => {
+    const parsed = parseAnswersYaml(
+      yaml({ ...base(), ais: ["claude"], orca: "use", orchestrator_ai: "codex" }),
+    );
+    expect(parsed.answers.orchestrator_ai).toBe("codex");
+  });
+});

@@ -25,6 +25,8 @@ describe("#32 AC-1: 質問の定義（データ）", () => {
     expect(defs.map((d) => d.id)).toEqual([
       "app_name",
       "ais",
+      "orca",
+      "orchestrator_ai",
       "project_type",
       "layers",
       "repository",
@@ -185,5 +187,35 @@ describe("#32 AC-1: 質問の定義（データ）", () => {
   it("#32 AC-2: 質問C の選択肢 publish の表示は「公開範囲を広げる」を含む", () => {
     const publish = byId("critical_ops_kinds")?.options?.find((o) => o.value === "publish");
     expect(publish?.label).toContain("公開範囲を広げる");
+  });
+});
+
+describe("#60: Orca連携・統括AIの質問", () => {
+  it("#60 AC-1: orca は ais の直後、orchestrator_ai はその次にある", () => {
+    const ids = defs.map((d) => d.id);
+    expect(ids.indexOf("orca")).toBe(ids.indexOf("ais") + 1);
+    expect(ids.indexOf("orchestrator_ai")).toBe(ids.indexOf("orca") + 1);
+  });
+
+  it("#60 AC-1: orca は none・use の select で、初期値は none", () => {
+    expect(byId("orca")?.kind).toBe("select");
+    expect(values("orca")).toEqual(["none", "use"]);
+    expect(byId("orca")?.initialValue).toBe("none");
+  });
+
+  it("#60 AC-2: orchestrator_ai は orca が use のときだけ、ais の中から選ぶ。条件に合わない回答は整合性チェックで示す", () => {
+    const def = byId("orchestrator_ai");
+    expect(values("orchestrator_ai")).toEqual(["claude", "codex"]);
+    expect(def?.when).toEqual({ id: "orca", equals: "use" });
+    expect(def?.optionsFrom).toBe("ais");
+    expect(def?.checkedByRules).toBe(true);
+  });
+
+  it("#60 AC-5: モデル・Automation に関する質問・選択肢が存在しない", () => {
+    for (const d of defs) {
+      expect(d.id).not.toMatch(/model|automation/i);
+      expect(d.title).not.toMatch(/model|automation|モデル/i);
+      for (const o of d.options ?? []) expect(o.value).not.toMatch(/model|automation/i);
+    }
   });
 });

@@ -86,7 +86,7 @@ flowchart TD
 | AC-3 | Orcaがなくても使える | [F-30](../requirements/functional.md#f-30)の(f)。本書の「目的」「処理の流れ」 |
 | AC-4 | 要件合意→担当の起動→レビュー・修正→完了判定と、利用者確認の境界 | [F-30](../requirements/functional.md#f-30)の(d)(h)。[C-76](../requirements/common/workflow.md#c-76)の参照 |
 | AC-5 | 統括・担当の利用上限時の待機・重複起動の防止・再開・非対応時の案内 | [F-30](../requirements/functional.md#f-30)の(e)。[C-66](../requirements/common/workflow.md#c-66)の「Claude Codeが使えないとき」の注記。本書の「利用量の上限に達したとき」 |
-| AC-6 | 統括のCodex側の食い違いの解消と、決定の記録 | [F-30](../requirements/functional.md#f-30)の(b)(g)、[C-66](../requirements/common/workflow.md#c-66)の注記。データとコードは#60 |
+| AC-6 | 統括のCodex側の食い違いの解消と、決定の記録 | [F-30](../requirements/functional.md#f-30)の(b)(g)、[C-66](../requirements/common/workflow.md#c-66)の注記。データとコードは#60で足した（`orca: use` かつ `orchestrator_ai: codex` のときだけ `roles` に入れる。エージェントの定義への反映は#62） |
 | AC-7 | F-21の更新箇所の洗い出し | 下の「F-21の更新が必要な箇所」 |
 
 ## 子Issueとの対応

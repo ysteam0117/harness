@@ -37,10 +37,15 @@ export async function collectFacts(answers: Partial<Answers>, deps: FactsDeps): 
   const targetDirNotEmpty = invalid
     ? false
     : await (deps.isNonEmptyDir ?? defaultIsNonEmptyDir)(path.join(deps.cwd, appName));
+  const orchestrator = answers.orchestrator_ai;
+  const hasOrchestrator = orchestrator !== undefined;
   return {
     versions_newer_than_verified: deps.versionsNewerThanVerified ?? false,
     missing_tools: missingTools,
     target_dir_not_empty: targetDirNotEmpty,
     invalid_app_name: invalid,
+    orchestrator_ai_not_in_ais:
+      hasOrchestrator && !(Array.isArray(answers.ais) && answers.ais.includes(orchestrator)),
+    orchestrator_without_orca: hasOrchestrator && answers.orca !== "use",
   };
 }

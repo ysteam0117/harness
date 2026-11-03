@@ -14,6 +14,10 @@ export interface Facts {
   missing_tools?: string[];
   target_dir_not_empty?: boolean;
   invalid_app_name?: boolean;
+  /** 統括に使うAIが書かれているのに、使用するAI（ais）に含まれない（F-30） */
+  orchestrator_ai_not_in_ais?: boolean;
+  /** 統括に使うAIが書かれているのに、Orca連携が use でない（省略を含む。F-30） */
+  orchestrator_without_orca?: boolean;
 }
 
 export const FACT_NAMES = [
@@ -21,6 +25,8 @@ export const FACT_NAMES = [
   "missing_tools",
   "target_dir_not_empty",
   "invalid_app_name",
+  "orchestrator_ai_not_in_ais",
+  "orchestrator_without_orca",
 ] as const;
 
 const LEVELS: readonly Level[] = ["error", "warning", "info"];

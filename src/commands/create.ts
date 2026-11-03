@@ -260,6 +260,8 @@ async function run(options: CreateOptions, deps: CreateDeps): Promise<CreateOutc
     if (initial.infra === undefined && initial.backend === "hono") {
       initial = { ...initial, infra: "cloudflare" };
     }
+    // Orca連携も、以前の回答ファイルにない項目のため、書かれていなければ none（使わない）とみなす（config.yaml には出ない）
+    if (initial.orca === undefined) initial = { ...initial, orca: "none" };
   }
 
   if (!deps.interactive) {

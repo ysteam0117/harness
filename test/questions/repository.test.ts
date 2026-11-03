@@ -43,6 +43,7 @@ describe("#61 AC-1: 質問 repository", () => {
     const p = new FakePrompter({
       app_name: ["testapp-001"],
       ais: [["claude"]],
+      orca: ["none"],
       repository: ["local"],
       team_size: ["solo"],
       backend: ["hono"],
@@ -66,6 +67,7 @@ describe("#61 AC-1: 質問 repository", () => {
     const p = new FakePrompter({
       app_name: ["testapp-001"],
       ais: [["claude"]],
+      orca: ["none"],
       repository: ["github"],
       visibility: ["public"],
       team_size: ["solo"],

@@ -113,6 +113,7 @@ export function baseAnswers(over: Record<string, unknown> = {}): Partial<Answers
   return {
     app_name: "testapp-001",
     ais: ["claude"],
+    orca: "none",
     repository: "github",
     visibility: "private",
     team_size: "solo",

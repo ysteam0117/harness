@@ -96,6 +96,15 @@ flowchart TD
 | `critical_ops_kinds` | `critical_ops` が `yes`（聞かない質問のため、`--answers` に書いたときだけ） |
 | `file_kinds` | `file_upload` が `yes`（聞かない質問のため、`--answers` に書いたときだけ。#79） |
 
+### Orca連携と統括に使うAI（`orca`・`orchestrator_ai`、F-30・Issue #60）
+
+- `orca`（`none`／`use`、初期値 `none`）は `ais` の直後に聞く。`--answers` で省いたとき、条件の判定には `none` とみなす（`COMPAT_DEFAULTS`。回答には補わない）。対話しない実行（`create`・`adopt`）では、`orca` を `none` として回答に入れる
+- `orchestrator_ai`（`claude`／`codex`）は `orca` が `use` のときだけ聞く。質問の定義に次の2つの印を持つ
+  - `optionsFrom: "ais"`：選択肢を、`ais` の回答に含まれる値だけに絞る。1つなら聞かずに決めて「（自動で決定）」と表示し、2つなら絞った選択肢で聞く。値が渡されていれば、`ais` の外の値でも黙って上書きせず残す
+  - `checkedByRules: true`：条件に合わない回答（`orca` が `none`・省略）や選択肢の外の回答を、質問の流れや `--answers` の検証では捨てず、整合性チェックのルール15・16で示す
+- `.harness/config.yaml` の `answers.orca` は `use` のときだけ出す（`none`・省略は出さない。連携なしの `config.yaml` を以前と同じにするため）。`answers.orchestrator_ai` は値があるときだけ出る
+- モデルの質問と Automation の質問は作らない。モデルは `roles.orchestrator`（`data/role-models.yaml`）を使う。統括の Codex 側は、`orca: use` かつ `orchestrator_ai: codex` のときだけ `roles` に入る
+
 ### リポジトリの置き場所（`repository`、C-83・Issue #61）
 
 `layers` の後・`visibility` の前に、質問 `repository`（GitHub／使わない（手元のGitだけ）。初期値は GitHub）を置く。
@@ -200,7 +209,10 @@ CLI の質問は開発環境に絞り、F-26 の質問A〜G（`personal_data`・
 | 9 | `invalid-app-name` | エラー | アプリ名が命名規則に合わない | `invalid_app_name` |
 | 10 | `target-dir-not-empty` | エラー | 生成先（`./<app_name>`）に中身がある | `target_dir_not_empty` |
 
-`fix` は、7・8 は空（警告のため）、9・10 は `app_name`、ほかは関係する質問を書く。
+| 15 | `orchestrator-without-orca` | エラー | `orchestrator_ai` が書かれているのに、`orca` が `use` でない（省略を含む） | `orchestrator_without_orca`（#60） |
+| 16 | `orchestrator-not-in-ais` | エラー | `orchestrator_ai` が `ais` に含まれない | `orchestrator_ai_not_in_ais`（#60） |
+
+`fix` は、7・8 は空（警告のため）、9・10 は `app_name`、ほかは関係する質問を書く。ルール11〜14は `docs/requirements/functional.md` の表を参照（15・16 は #60 で足した。`orca` は補われないため、回答の条件ではなく事実で判定する）。
 
 ### 事実の収集（`collectFacts`）
 
@@ -208,6 +220,7 @@ CLI の質問は開発環境に絞り、F-26 の質問A〜G（`personal_data`・
 - `target_dir_not_empty`：`isNonEmptyDir`（生成先は `cwd` の下の `<app_name>`）。**アプリ名が不正なときは、生成先を調べない**（不正な名前でファイルを操作しない）。このときはルール9だけが報告される
 - `missing_tools`：`checkTools` の結果から、足りない・古い・確かめられない道具の説明を作る（導入の案内を含む）
 - `versions_newer_than_verified`：既定は偽（#33 が渡す）
+- `orchestrator_ai_not_in_ais`・`orchestrator_without_orca`：`orchestrator_ai` が書かれているときの、`ais` に含まれないか・`orca` が `use` でないか（#60）
 
 ## 手元の道具の確かめ方（`checkTools`）
 
