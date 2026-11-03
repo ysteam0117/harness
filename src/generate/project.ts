@@ -512,7 +512,7 @@ export function buildProject(input: BuildProjectInput): { files: ProjectFile[] }
     acceptedWarnings,
     judgment,
     versions,
-    roles: rolesFor(ais),
+    roles: rolesFor(ais, answers.orca, answers.orchestrator_ai),
     managed: withManaged.filter((f) => f.managed),
     now,
   });

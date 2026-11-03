@@ -255,6 +255,7 @@ describe("#32 AC-1: 確認（--yes と対話）", () => {
       {
         app_name: ["testapp-001"],
         ais: [["claude"]],
+        orca: ["none"],
         repository: ["github"],
         visibility: ["private"],
         team_size: ["solo"],
@@ -466,11 +467,12 @@ describe("#32 AC-5: 質問の途中でやめる（Ctrl+C）", () => {
     expect(listing(s.tmp.cwd)).toEqual([]); // 生成先（一時フォルダ）が空のまま
   });
 
-  it("#32 AC-5: 質問の途中（4問目）で中断しても、同じ結果になり、それ以降の質問は聞かれない", async () => {
+  it("#32 AC-5: 質問の途中（5問目）で中断しても、同じ結果になり、それ以降の質問は聞かれない", async () => {
     const s = setup(
       {
         app_name: ["testapp-001"],
         ais: [["claude"]],
+        orca: ["none"],
         repository: ["github"],
         visibility: [new CancelledError()],
       },
@@ -479,7 +481,7 @@ describe("#32 AC-5: 質問の途中でやめる（Ctrl+C）", () => {
     const out = await runCreate({}, s.deps);
     expect(out.exitCode).toBe(130);
     expect(s.err()).toContain(CANCEL_MESSAGE);
-    expect(s.prompter.askedIds).toEqual(["app_name", "ais", "repository", "visibility"]);
+    expect(s.prompter.askedIds).toEqual(["app_name", "ais", "orca", "repository", "visibility"]);
     expect(listing(s.tmp.cwd)).toEqual([]);
   });
 
@@ -1279,3 +1281,56 @@ process.exitCode = out.exitCode;
     }, 120_000);
   },
 );
+
+describe("#60: Orca連携・統括AIの回答ファイル", () => {
+  const configOf = (cwd: string) =>
+    parse(readFileSync(path.join(cwd, "testapp-001", ".harness", "config.yaml"), "utf8")) as {
+      answers: Record<string, unknown>;
+      roles: Record<string, { codex?: unknown }>;
+    };
+
+  it("#60 AC-4: orca を省いた以前の回答ファイルで成功し、config に orca が出ない", async () => {
+    const s = setup();
+    const answers = baseAnswers() as Record<string, unknown>;
+    delete answers.orca;
+    const out = await runCreate({ answers: s.writeAnswers(answers), yes: true }, s.deps);
+    expect(out.exitCode).toBe(0);
+    expect("orca" in configOf(s.tmp.cwd).answers).toBe(false);
+  });
+
+  it("#60 AC-1: orca: use と AI が1つなら統括が自動で決まり、config に記録される", async () => {
+    const s = setup();
+    const answers = baseAnswers({ orca: "use", ais: ["codex"] }) as Record<string, unknown>;
+    const out = await runCreate({ answers: s.writeAnswers(answers), yes: true }, s.deps);
+    expect(out.exitCode).toBe(0);
+    const cfg = configOf(s.tmp.cwd);
+    expect(cfg.answers["orca"]).toBe("use");
+    expect(cfg.answers["orchestrator_ai"]).toBe("codex");
+    expect(cfg.roles["orchestrator"]?.codex).toBeDefined();
+  });
+
+  it("#60 AC-6: orca: none と orchestrator_ai を一緒に書くと、orchestrator-without-orca で終了コード1", async () => {
+    const s = setup();
+    const answers = baseAnswers({ orca: "none", orchestrator_ai: "claude" }) as Record<
+      string,
+      unknown
+    >;
+    const out = await runCreate({ answers: s.writeAnswers(answers), yes: true }, s.deps);
+    expect(out.exitCode).toBe(1);
+    expect(s.err()).toContain("orchestrator-without-orca");
+    expect(generated(s.tmp.cwd)).toBe(false);
+  });
+
+  it("#60 AC-6: ais: [claude] と orchestrator_ai: codex は、orchestrator-not-in-ais で終了コード1", async () => {
+    const s = setup();
+    const answers = baseAnswers({
+      ais: ["claude"],
+      orca: "use",
+      orchestrator_ai: "codex",
+    }) as Record<string, unknown>;
+    const out = await runCreate({ answers: s.writeAnswers(answers), yes: true }, s.deps);
+    expect(out.exitCode).toBe(1);
+    expect(s.err()).toContain("orchestrator-not-in-ais");
+    expect(generated(s.tmp.cwd)).toBe(false);
+  });
+});

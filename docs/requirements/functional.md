@@ -66,6 +66,8 @@
 | 12 | バックエンドが「Hono」で、デプロイ先が「コンテナ」（`hono-needs-workers`） | エラー | ハーネスのHonoの構成はWorkersを前提にしており、コンテナ向けの構成（Dockerfile・デプロイの設定）を持たない |
 | 13 | バックエンドが「Spring Boot」で、DBが「Cloudflare D1」（`spring-boot-with-d1`） | エラー | D1はWorkersの中からだけ使えるDBで、Spring Bootからは接続できない |
 | 14 | バックエンドが「Spring Boot」で、認証が「アプリ独自認証」「OIDC」「併用」のいずれか（`spring-boot-with-auth`） | エラー | 認証の仕組み（セッション・OIDC）がまだHonoの構成にだけあり、Spring Bootの認証は未提供（認証が「なし」「未定」なら当たらない） |
+| 15 | Orca連携が「使わない」（省略を含む）で、統括に使うAIが書かれている（`orchestrator-without-orca`） | エラー | 統括に使うAIは、Orca連携を使うときだけ選ぶ（[F-30](#f-30)） |
+| 16 | 統括に使うAIが、使用するAIに含まれていない（`orchestrator-not-in-ais`） | エラー | 統括は、使用するAIとして選んだAIの中から選ぶ（[F-30](#f-30)） |
 
 #### 後から追加するルールの例
 
@@ -810,8 +812,8 @@ harness create
 | --- | --- | --- | --- |
 | 1 | アプリ名 | 自由入力（英小文字・数字・ハイフン。先頭と末尾はハイフンにできない） | `-`で始まるとコマンドの引数と取り違えられ、Dockerのコンテナ名にも使えないため、先頭・末尾のハイフンは不可。Dockerのコンテナ名（[C-36](common/project-env.md#c-36)）、仮のアイコン（[C-55](common/frontend.md#c-55)）、各ファイルの名前に使う |
 | 2 | 使用AI | Claude Code／Codex（複数選択） | |
-| 2-1 | Orca連携（案。項目名`orca`、確定は#60） | 使わない／使う（省略時は使わない） | [F-30](#f-30)。Automation（定期実行）の質問は作らない |
-| 2-2 | 統括に使うAI（案。項目名`orchestrator_ai`、確定は#60） | 2で選んだAIから1つ（Claude Code／Codex） | 2-1が「使う」のときだけ聞く。2で選んだAIが1つなら自動で決める。モデルは聞かず、[C-66](common/workflow.md#c-66)の`roles.orchestrator`を使う |
+| 2-1 | Orca連携（項目名`orca`） | 使わない／使う（初期値は使わない。省略時は使わない） | [F-30](#f-30)。`.harness/config.yaml`には「使う」のときだけ記録する（「使わない」と省略は記録しない。読み戻すと「使わない」とみなす）。Automation（定期実行）の質問は作らない |
+| 2-2 | 統括に使うAI（項目名`orchestrator_ai`） | 2で選んだAIから1つ（Claude Code／Codex） | 2-1が「使う」のときだけ聞く。2で選んだAIが1つなら自動で決める。モデルは聞かず、[C-66](common/workflow.md#c-66)の`roles.orchestrator`を使う |
 | 3 | プロジェクト種別 | Webアプリ | 自動で決定 |
 | 4 | フロントエンド・バックエンドの有無 | 両方あり | Webアプリなので自動で決定 |
 | 4-1 | リポジトリの置き場所 | GitHub／使わない（手元のGitだけ） | [C-83](common/workflow.md#c-83)。使わない場合は、5（公開・非公開）を聞かずに「非公開」とし、15（品質チェックの実行場所）を聞かずに「ローカルのみ」とする |
@@ -911,10 +913,10 @@ harness create
 
 | 項目 | 決め |
 | --- | --- |
-| 質問`orca`（案、確定は#60） | `none`（使わない。既定）／`use`（使う）。省略時は`none` |
-| 質問`orchestrator_ai`（案、確定は#60） | `claude`／`codex`。`orca`が`use`のときだけ。`ais`（[F-02](#f-02)）に含まれる値から選ぶ。AIが1つだけなら自動で決める |
+| 質問`orca` | `none`（使わない。既定）／`use`（使う）。省略時は`none`とみなす（回答には補わない） |
+| 質問`orchestrator_ai` | `claude`／`codex`。`orca`が`use`のときだけ。`ais`（[F-02](#f-02)）に含まれる値から選ぶ。AIが1つだけなら自動で決める |
 | 整合性チェック（[F-08](#f-08)） | `orca`が`none`で`orchestrator_ai`が書かれている：エラー。`orchestrator_ai`が`ais`に含まれない：エラー |
-| `.harness/config.yaml`に記録するもの | `answers.orca`・`answers.orchestrator_ai`・`roles.orchestrator`（統括のAIとモデル） |
+| `.harness/config.yaml`に記録するもの | `answers.orca`（`use`のときだけ。`none`と省略は記録しない。読み戻すと`none`とみなす）・`answers.orchestrator_ai`（書かれているとき）・`roles.orchestrator`（統括のAIとモデル） |
 | 記録しないもの | Orcaの拠点のパス、Orcaのアカウント、認証の状態、Run・Task・Dispatchの識別子（個人の環境の情報と、実行のたびに変わる値のため） |
 | 生成物（`orca`が`use`のときだけ） | 統括の指示（ハーネスが管理するもの）、進行の記録のひな形（プロジェクトのもの）。置き場所は`docs/orca/`（案、確定は#62） |
 | 生成物（`orca`が`none`のとき） | 今の生成物と同一。Orcaに関するファイル・記述を増やさない |
@@ -934,7 +936,7 @@ harness create
 
 - 統括のAIは、`ais`のうち統括を担わせるものを1つ選ぶ。Claude Code・Codexのどちらでも統括を担える（[C-66](common/workflow.md#c-66)の表の統括）
 - モデルは質問にしない。[C-66](common/workflow.md#c-66)の`roles.orchestrator`を使い、`.harness/config.yaml`で変えられる
-- 決定（2026-11-03、利用者）：統括は、Codex側も正式に持つ。表の初期値はGPT-6 Sol（medium）。`data/role-models.yaml`と`src/generate/roles.ts`にCodex側の統括を足す作業は#60で行う。#59は仕様と設計書に記録するだけである
+- 決定（2026-11-03、利用者）：統括は、Codex側も正式に持つ。表の初期値はGPT-6 Sol（medium）。`data/role-models.yaml`と`src/generate/roles.ts`にCodex側の統括を#60で足した。統括のCodex側は、`orca`が`use`かつ`orchestrator_ai`が`codex`のときだけ`.harness/config.yaml`の`roles`に入れる（Claude側は、Claude Codeを選べば常に入る）。エージェントの定義への反映は#62
 
 ### (c) 生成と起動の分離・拠点・担当の配置
 

@@ -424,6 +424,7 @@ describe("#35 増えた質問・新しい版・新しい警告", () => {
     const dir = await freshProject();
     editConfig(dir, (doc) => {
       delete doc.answers["check_location"];
+      doc.answers["orca"] = "none"; // orca の記録を持つ config にして、聞かれる質問を check_location だけにする（#60）
     });
     const s = updateSetup(dir, { check_location: ["local"] }, { interactive: true });
     const out = await runUpdate({}, s.deps);
@@ -431,6 +432,25 @@ describe("#35 増えた質問・新しい版・新しい警告", () => {
     expect(s.prompter.askedIds).toEqual(["check_location"]);
     expect(readConfig(dir).answers["check_location"]).toBe("local");
     expect(section(s.out(), "増えた質問")).toContain("check_location");
+  });
+
+  it("#60 orca は config に none を保存しないため、対話の更新では増えた質問として聞かれ、none なら config に出ない", async () => {
+    const dir = await freshProject();
+    expect("orca" in readConfig(dir).answers).toBe(false);
+    const s = updateSetup(dir, {}, { interactive: true });
+    const out = await runUpdate({}, s.deps);
+    expect(out.exitCode, s.err()).toBe(0);
+    expect(s.prompter.askedIds).toContain("orca");
+    expect("orca" in readConfig(dir).answers).toBe(false);
+  });
+
+  it("#60 --yes では orca の初期値（none）で進み、聞かれず、config に出ない", async () => {
+    const dir = await freshProject();
+    const s = updateSetup(dir);
+    const out = await runUpdate({ yes: true }, s.deps);
+    expect(out.exitCode, s.err()).toBe(0);
+    expect(s.prompter.askedIds).not.toContain("orca");
+    expect("orca" in readConfig(dir).answers).toBe(false);
   });
 
   it("#35 --yes で、既定の値がない質問が増えていたら、何も書かずに止まって案内する", async () => {
@@ -811,6 +831,7 @@ describe("#35 R5・R7: 判定の後にファイルが変わったら、何も書
       // 生のハッシュで確かめるため、編集は改行だけを変える。
       const original = read(dir, unchanged);
       const prompter = new HookPrompter({
+        orca: ["none"], // 古い config 相当（orca の記録なし）は増えた質問として聞かれる（#60）
         [`update_conflict:${CONFLICT}`]: ["keep"],
         [`update_restore:${MISSING}`]: [false],
       });
@@ -837,6 +858,7 @@ describe("#35 R5・R7: 判定の後にファイルが変わったら、何も書
   it("#35 R5: 対話の途中（判定の後）に、置き換える対象を書き換えると、止まる。利用者の編集が残る", async () => {
     const { dir } = await prepared();
     const prompter = new HookPrompter({
+      orca: ["none"], // 古い config 相当（orca の記録なし）は増えた質問として聞かれる（#60）
       [`update_conflict:${CONFLICT}`]: ["keep"],
       [`update_restore:${MISSING}`]: [false],
     });
@@ -859,11 +881,12 @@ describe("#35 R5・R7: 判定の後にファイルが変わったら、何も書
   it("#35 R5: 判定の後に、.harness-new の置き場所にファイルができていたら、止まる（上書きしない）", async () => {
     const { dir } = await prepared();
     const prompter = new HookPrompter({
+      orca: ["none"], // 古い config 相当（orca の記録なし）は増えた質問として聞かれる（#60）
       [`update_conflict:${CONFLICT}`]: ["new"],
       [`update_restore:${MISSING}`]: [false],
     });
     prompter.before = (_m, id) => {
-      if (id === `update_conflict:${CONFLICT}`) return;
+      if (id === `update_conflict:${CONFLICT}` || id === "orca") return; // orca は増えた質問（#60）
       write(dir, `${CONFLICT}.harness-new`, "後からできたファイル\n");
     };
     const s = updateSetup(dir, {}, { interactive: true }, prompter);
@@ -876,6 +899,7 @@ describe("#35 R5・R7: 判定の後にファイルが変わったら、何も書
   it("#35 R5: 判定の後に、追加する場所にファイルができていたら、止まる", async () => {
     const { dir } = await prepared();
     const prompter = new HookPrompter({
+      orca: ["none"], // 古い config 相当（orca の記録なし）は増えた質問として聞かれる（#60）
       [`update_conflict:${CONFLICT}`]: ["keep"],
       [`update_restore:${MISSING}`]: [false],
     });

@@ -363,7 +363,11 @@ describe("#56 AC-1: 回答の YAML の生成（架空の値）", () => {
       const parsed = parseAnswersYaml(c.answersYaml);
       expect(parsed.answers.app_name, c.id).toBe("testapp-001");
       expect(parsed.answers.database, c.id).toBe(c.database);
-      const complete = await runQuestions(questionDefinitions, new FakePrompter(), parsed.answers);
+      // orca は回答ファイルに書かない（省略は連携なし）。create の対話しない実行と同じく none を入れる
+      const complete = await runQuestions(questionDefinitions, new FakePrompter(), {
+        orca: "none",
+        ...parsed.answers,
+      });
       const result = evaluateRules(rules, complete, {
         versions_newer_than_verified: false,
         missing_tools: [],
@@ -393,7 +397,10 @@ describe("#56 AC-1: 回答の YAML の生成（架空の値）", () => {
     for (const k of ["auth", "idp", "file_upload", "file_kinds", "admin", "collaborative"]) {
       expect(parsed.answers, k).not.toHaveProperty(k);
     }
-    const complete = await runQuestions(questionDefinitions, new FakePrompter(), parsed.answers);
+    const complete = await runQuestions(questionDefinitions, new FakePrompter(), {
+      orca: "none",
+      ...parsed.answers,
+    });
     expect(complete).toMatchObject({ auth: "undecided", file_upload: "undecided" });
   });
 

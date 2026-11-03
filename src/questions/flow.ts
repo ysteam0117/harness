@@ -4,6 +4,7 @@ import {
   unmetConditionIds,
   validateValue,
   type QuestionDefinition,
+  type QuestionOption,
 } from "./definitions.js";
 import type { Prompter } from "./prompter.js";
 
@@ -21,7 +22,13 @@ function plan(
   answers: Readonly<Record<string, unknown>>,
   initial: Readonly<Record<string, unknown>>,
 ): Step {
-  if (def.when && !matchesCondition(def.when, answers)) return { kind: "skip" };
+  if (def.when && !matchesCondition(def.when, answers)) {
+    // 整合性チェックで示す質問は、値が渡されていれば残す（黙って捨てない）
+    if (def.checkedByRules && def.id in initial && initial[def.id] !== undefined) {
+      return { kind: "given", value: initial[def.id] };
+    }
+    return { kind: "skip" };
+  }
   if (def.forced && matchesCondition(def.forced.when, answers)) {
     return { kind: "auto", value: def.forced.value };
   }
@@ -31,6 +38,14 @@ function plan(
   if (def.id in initial && initial[def.id] !== undefined) {
     return { kind: "given", value: initial[def.id] };
   }
+  if (def.optionsFrom) {
+    // 別の質問の回答に含まれる選択肢だけに絞る。1つなら聞かずに決める
+    const from = answers[def.optionsFrom];
+    const chosen = Array.isArray(from) ? from : [];
+    const narrowed = (def.options ?? []).filter((o) => chosen.includes(o.value));
+    if (narrowed.length === 1)
+      return { kind: "auto", value: (narrowed[0] as { value: string }).value };
+  }
   if (def.interactive === false) {
     // 対話で聞かない質問（質問A〜G）：回答がなければ既定の値（なければ回答に入れない）
     return def.defaultValue !== undefined
@@ -38,6 +53,18 @@ function plan(
       : { kind: "none" };
   }
   return { kind: "ask" };
+}
+
+/** optionsFrom があるとき、別の質問の回答に含まれる選択肢だけに絞る */
+function narrowedOptions(
+  def: QuestionDefinition,
+  answers: Readonly<Record<string, unknown>>,
+): QuestionOption[] {
+  const options = def.options ?? [];
+  if (!def.optionsFrom) return options;
+  const from = answers[def.optionsFrom];
+  const chosen = Array.isArray(from) ? from : [];
+  return options.filter((o) => chosen.includes(o.value));
 }
 
 function labelOf(def: QuestionDefinition, value: string): string {
@@ -117,7 +144,7 @@ async function pass(
       answers[def.id] = asked[def.id] = await prompter.select({
         id: def.id,
         message: def.title,
-        options: def.options ?? [],
+        options: narrowedOptions(def, answers),
         ...(def.initialValue !== undefined ? { initialValue: def.initialValue } : {}),
       });
     } else {

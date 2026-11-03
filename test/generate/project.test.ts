@@ -219,7 +219,10 @@ describe("#34 AC-3: .harness/config.yaml", () => {
       postgres_provider: "neon",
     });
     const cfg = configOf(buildProject(input).files);
-    expect(cfg.answers).toEqual(JSON.parse(JSON.stringify(input.answers)));
+    // orca は "use" のときだけ記録する（none は出さない。#60）
+    const { orca: _none, ...recorded } = input.answers;
+    expect(_none).toBe("none");
+    expect(cfg.answers).toEqual(JSON.parse(JSON.stringify(recorded)));
     expect(cfg.answers).toMatchObject({
       app_name: "testapp-001",
       project_type: "web",

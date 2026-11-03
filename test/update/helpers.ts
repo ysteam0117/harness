@@ -124,7 +124,8 @@ export function updateSetup(
   dir: string,
   script: Record<string, unknown[]> = {},
   over: Partial<UpdateDeps> = {},
-  prompter: FakePrompter = new FakePrompter(script),
+  // orca は config に none を保存しないため、対話の更新では「増えた質問」として聞かれる（#60）。none と答える
+  prompter: FakePrompter = new FakePrompter({ orca: ["none"], ...script }),
 ): UpdateSetup {
   const errs: string[] = [];
   const outs: string[] = [];
