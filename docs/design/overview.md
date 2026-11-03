@@ -63,4 +63,5 @@ flowchart LR
 - [生成の仕組みと記録（Issue #34）](generation.md)
 - [動くアプリの土台（Issue #56）](skeleton.md)
 - [環境の分離（Issue #51）](environment-isolation.md)
+- [Orca連携と統括AIによる進行（Issue #59。実装前の設計）](orca.md)
 - 決定の記録：[0001 CIでコンテナを使わない](../adr/0001-ci-without-container.md)
