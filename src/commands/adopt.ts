@@ -260,6 +260,8 @@ async function run(options: AdoptOptions, deps: AdoptDeps): Promise<AdoptOutcome
     );
   }
   if (!deps.interactive) {
+    // Orca連携は、以前の回答ファイルにない項目のため、書かれていなければ none（使わない）とみなす（config.yaml には出ない）
+    if (initial.orca === undefined) initial = { ...initial, orca: "none" };
     const missing = findMissing(questionDefinitions, initial);
     if (missing.length > 0) {
       deps.stderr("エラー: 端末で実行していないため質問できません。次の回答が足りません。\n");
@@ -1047,7 +1049,7 @@ async function adopt(
     acceptedWarnings: [],
     judgment: judge(answers),
     versions: { entries: [], newerThanVerified: false },
-    roles: rolesFor(answers.ais),
+    roles: rolesFor(answers.ais, answers.orca, answers.orchestrator_ai),
     managed,
     now,
     mode: "adopt",

@@ -126,7 +126,7 @@ when: { all: [{ answer: database, equals: d1 }, { answer: auth, notEquals: none 
 
 ### 役割とモデル（`data/role-models.yaml`）
 
-C-66 の表の初期値を持つ。Claude Code が主の場合の列（別名：`opus`・`sonnet`）と、Codex が主の場合の列（モデル名と推論の強さ）の2つ。統括（`orchestrator`）は会話そのもののモデルのため、Claude Code の分だけ持つ。モデルは変わるので、プロジェクトごとに `.harness/config.yaml` とエージェントの定義の両方で変えられる。
+C-66 の表の初期値を持つ。Claude Code が主の場合の列（別名：`opus`・`sonnet`）と、Codex が主の場合の列（モデル名と推論の強さ）の2つ。統括（`orchestrator`）は Claude Code・Codex の両方を持つ（#60）。Claude 側は Claude Code を選べば常に出し、Codex 側は `orca: use` かつ `orchestrator_ai: codex` のときだけ `.harness/config.yaml` の `roles` と展開値（`codex_model_orchestrator`・`codex_effort_orchestrator`）に出す（連携なしの生成物を変えないため。エージェントの定義への反映は #62）。モデルは変わるので、プロジェクトごとに `.harness/config.yaml` とエージェントの定義の両方で変えられる。
 
 ### Codex のモデル名の確かめ方
 

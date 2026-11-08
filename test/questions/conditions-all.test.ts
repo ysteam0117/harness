@@ -57,6 +57,7 @@ describe("#40: data_access は、backend が hono で DB があるときだけ�
   const script = (database: string) => ({
     app_name: ["testapp-001"],
     ais: [["claude"]],
+    orca: ["none"],
     repository: ["github"],
     visibility: ["private"],
     team_size: ["solo"],

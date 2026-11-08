@@ -313,7 +313,8 @@ version_policy: verified
 
   it("足りない回答がなく、整合性チェックのエラーに当たらない", () => {
     const { answers } = parseAnswersYaml(EXAMPLE);
-    expect(findMissing(questionDefinitions, answers)).toEqual([]);
+    // orca は、対話しない実行で create が none として補う（回答ファイルには書かなくてよい）
+    expect(findMissing(questionDefinitions, { ...answers, orca: "none" })).toEqual([]);
   });
 
   it("buildProject で生成でき、Java のソースと Gradle のファイルが出る", async () => {

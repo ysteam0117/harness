@@ -13,6 +13,10 @@ type YesNoUndecided = "no" | "yes" | "undecided";
 export interface Answers {
   app_name: string;
   ais: ("claude" | "codex")[];
+  /** Orca連携。config.yaml には use のときだけ記録する（省略は none とみなす） */
+  orca?: "none" | "use";
+  /** 統括に使うAI（orca が use のときだけ） */
+  orchestrator_ai?: "claude" | "codex";
   project_type: "web";
   layers: "frontend_backend";
   repository: "github" | "local";
@@ -68,7 +72,11 @@ const VERSIONS_OFFLINE_KEY = "versions_offline";
 const REPOSITORY_ID = "repository";
 const DEFAULT_REPOSITORY = "github";
 /** 書かれていなければ、これとみなす回答（以前の回答ファイルとの互換。条件の判定にだけ使い、回答には入れない） */
-const COMPAT_DEFAULTS: Readonly<Record<string, string>> = { backend: "hono", infra: "cloudflare" };
+const COMPAT_DEFAULTS: Readonly<Record<string, string>> = {
+  backend: "hono",
+  infra: "cloudflare",
+  orca: "none",
+};
 const EXTRA_KEYS: readonly string[] = [ACCEPTED_WARNINGS_KEY, VERSIONS_KEY, VERSIONS_OFFLINE_KEY];
 
 /**
@@ -163,13 +171,16 @@ export function parseAnswersYaml(
       effective[def.id] = def.defaultValue;
     }
   }
-  // backend・infra は、以前は選択肢が1つで回答ファイルに書かなくてもよかったため、書かれていなければ Hono・Cloudflare とみなす
+  // backend・infra は、以前は選択肢が1つで回答ファイルに書かなくてもよかったため、書かれていなければ Hono・Cloudflare とみなす。
+  // orca は、以前の回答ファイルにない項目のため、書かれていなければ none（連携なし）とみなす
   for (const [id, value] of Object.entries(COMPAT_DEFAULTS)) {
     if (!(id in effective) && definitions.some((d) => d.id === id)) effective[id] = value;
   }
 
   for (const def of definitions) {
     if (!(def.id in valid)) continue;
+    // 整合性チェックで示す質問（orchestrator_ai）は、ここでは捨てない
+    if (def.checkedByRules) continue;
     // 条件に合わない質問への回答。all のときは、合っていない条件のうち、判断できるもの（回答か既定値があるもの）を原因にする
     const unmet = def.when ? unmetConditionIds(def.when, effective) : [];
     const judged = unmet.filter((id) => id in effective);

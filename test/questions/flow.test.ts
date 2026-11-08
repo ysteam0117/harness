@@ -46,6 +46,7 @@ const ASVS_IDS = [
 const fullScript = (): Record<string, unknown[]> => ({
   app_name: ["testapp-001"],
   ais: [["claude", "codex"]],
+  orca: ["none"],
   repository: ["github"],
   visibility: ["public"],
   team_size: ["team"],
@@ -68,6 +69,7 @@ describe("#32 AC-1: 質問の順番と回答", () => {
     expect(p.askedIds).toEqual([
       "app_name",
       "ais",
+      "orca",
       "repository",
       "visibility",
       "team_size",
@@ -85,6 +87,7 @@ describe("#32 AC-1: 質問の順番と回答", () => {
     expect(answers).toEqual({
       app_name: "testapp-001",
       ais: ["claude", "codex"],
+      orca: "none",
       repository: "github",
       visibility: "public",
       team_size: "team",
@@ -373,11 +376,12 @@ describe("#32 AC-5: 中断", () => {
     const p = new FakePrompter({
       app_name: ["testapp-001"],
       ais: [["claude"]],
+      orca: ["none"],
       repository: ["github"],
       visibility: [new CancelledError()],
     });
     await expect(runQuestions(defs, p, {})).rejects.toBeInstanceOf(CancelledError);
-    expect(p.askedIds).toEqual(["app_name", "ais", "repository", "visibility"]);
+    expect(p.askedIds).toEqual(["app_name", "ais", "orca", "repository", "visibility"]);
   });
 });
 
@@ -454,5 +458,67 @@ describe("#32 AC-4: 先に書かれた回答との矛盾（forced の値）は�
     expect(p.askedIds).toEqual(["mode", "fix_question"]);
     expect(p.notes.join("\n")).toContain("段階");
     expect(answers).toEqual({ mode: "a", level: "low" });
+  });
+});
+
+describe("#60: Orca連携・統括AIの質問の流れ", () => {
+  const initialFor = (over: Record<string, unknown>) => baseAnswers(over);
+
+  it("#60 AC-1: orca が none なら、orchestrator_ai を聞かず、回答に入れない", async () => {
+    const p = new FakePrompter(fullScript());
+    const answers = await runQuestions(defs, p, {});
+    expect(p.askedIds).toContain("orca");
+    expect(p.askedIds).not.toContain("orchestrator_ai");
+    expect(answers.orca).toBe("none");
+    expect(answers.orchestrator_ai).toBeUndefined();
+  });
+
+  it("#60 AC-2: orca が use でAIが1つなら、聞かずに決めて「自動で決定」と表示する", async () => {
+    const p = new FakePrompter({ ...fullScript(), ais: [["codex"]], orca: ["use"] });
+    const answers = await runQuestions(defs, p, {});
+    expect(p.askedIds).not.toContain("orchestrator_ai");
+    expect(answers.orchestrator_ai).toBe("codex");
+    expect(p.notes).toContain("統括に使うAI：Codexを統括にする（自動で決定）");
+  });
+
+  it("#60 AC-2: orca が use でAIが2つなら、2つの選択肢の select で聞く", async () => {
+    const p = new FakePrompter({ ...fullScript(), orca: ["use"], orchestrator_ai: ["codex"] });
+    const answers = await runQuestions(defs, p, {});
+    const event = p.inputs.find((e) => e.id === "orchestrator_ai");
+    expect(event?.method).toBe("select");
+    expect(event?.opts.options.map((o: { value: string }) => o.value)).toEqual(["claude", "codex"]);
+    expect(answers.orchestrator_ai).toBe("codex");
+  });
+
+  it("#60 AC-6: ais の外の orchestrator_ai は黙って上書きせず、そのまま残す", async () => {
+    const p = new FakePrompter({});
+    const answers = await runQuestions(
+      defs,
+      p,
+      initialFor({ ais: ["claude"], orca: "use", orchestrator_ai: "codex" }),
+    );
+    expect(answers.orchestrator_ai).toBe("codex");
+    expect(p.askedIds).not.toContain("orchestrator_ai");
+  });
+
+  it("#60 AC-6: orca: none と一緒に渡された orchestrator_ai も残し、矛盾の質問にはしない", async () => {
+    const p = new FakePrompter({});
+    const answers = await runQuestionsResolvingConflicts(
+      defs,
+      p,
+      initialFor({ orca: "none", orchestrator_ai: "claude" }),
+    );
+    expect(answers.orchestrator_ai).toBe("claude");
+    expect(p.askedIds).not.toContain("fix_question");
+  });
+
+  it("#60 AC-1: findMissing は、use・AIが2つで orchestrator_ai が無ければ足りないとし、AIが1つなら足りないとしない", () => {
+    expect(findMissing(defs, initialFor({ ais: ["claude", "codex"], orca: "use" }))).toContain(
+      "orchestrator_ai",
+    );
+    expect(findMissing(defs, initialFor({ ais: ["claude"], orca: "use" }))).not.toContain(
+      "orchestrator_ai",
+    );
+    expect(findMissing(defs, initialFor({ orca: "none" }))).not.toContain("orchestrator_ai");
   });
 });

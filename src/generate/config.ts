@@ -91,6 +91,8 @@ function orderedAnswers(answers: Answers): Record<string, unknown> {
   const record = answers as unknown as Record<string, unknown>;
   const out: Record<string, unknown> = {};
   for (const def of questionDefinitions) {
+    // orca は use のときだけ記録する（none・未設定は出さない。読み戻すと none とみなす）
+    if (def.id === "orca" && record[def.id] !== "use") continue;
     if (record[def.id] !== undefined) out[def.id] = record[def.id];
   }
   return out;

@@ -912,7 +912,7 @@ async function update(
         acceptedWarnings: recorded.acceptedWarnings,
         judgment: judge(answers),
         versions,
-        roles: rolesFor(answers.ais),
+        roles: rolesFor(answers.ais, answers.orca, answers.orchestrator_ai),
         managed: [],
         now,
         mode: "adopt",

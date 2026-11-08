@@ -45,6 +45,10 @@ export interface QuestionDefinition {
   interactive?: boolean;
   /** 聞かない質問の、回答がないときの値 */
   defaultValue?: string;
+  /** 選択肢を、この id の回答（配列）に含まれる値だけに絞る */
+  optionsFrom?: string;
+  /** 条件に合わない回答・選択肢の外の回答を、質問の流れでは捨てず、整合性チェックで示す */
+  checkedByRules?: boolean;
   placeholder?: string;
   validate?: (value: string) => string | undefined;
 }
@@ -82,6 +86,22 @@ export const questionDefinitions: readonly QuestionDefinition[] = [
     title: "使用するAI",
     kind: "multiselect",
     options: opts(["claude", "Claude Codeを使う"], ["codex", "Codexを使う"]),
+  },
+  {
+    id: "orca",
+    title: "Orca連携",
+    kind: "select",
+    options: opts(["none", "使わない"], ["use", "使う"]),
+    initialValue: "none",
+  },
+  {
+    id: "orchestrator_ai",
+    title: "統括に使うAI",
+    kind: "select",
+    options: opts(["claude", "Claude Codeを統括にする"], ["codex", "Codexを統括にする"]),
+    when: { id: "orca", equals: "use" },
+    optionsFrom: "ais",
+    checkedByRules: true,
   },
   {
     id: "project_type",
