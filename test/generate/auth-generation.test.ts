@@ -4,8 +4,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { buildProject, type ProjectFile } from "../../src/generate/project.js";
-import { fingerprint } from "../../src/generate/config.js";
-import { contentOf, historicalBaselineInput, pathsOf, projectInput } from "./project-helpers.js";
+import {
+  baselineFingerprint,
+  contentOf,
+  historicalBaselineInput,
+  pathsOf,
+  projectInput,
+} from "./project-helpers.js";
 
 async function generate(over: Record<string, unknown>): Promise<ProjectFile[]> {
   return buildProject(await projectInput(over)).files;
@@ -117,7 +122,7 @@ describe("#72 AC-2: 認証が none の生成結果は、記録したベースラ
       const files = buildProject(
         await historicalBaselineInput({ ...AUTH.none, ...COMBOS[key] }),
       ).files;
-      expect(files.map((f) => `${f.path} ${fingerprint(f.content)}`)).toEqual(expected[key]);
+      expect(files.map((f) => `${f.path} ${baselineFingerprint(f)}`)).toEqual(expected[key]);
     },
   );
 

@@ -6,7 +6,6 @@ import { evaluateRules, loadRules } from "../../src/checks/rules.js";
 import { parseAnswersYaml } from "../../src/questions/answers.js";
 import { questionDefinitions } from "../../src/questions/definitions.js";
 import { findMissing } from "../../src/questions/flow.js";
-import { fingerprint } from "../../src/generate/config.js";
 import { buildProject, type ProjectFile } from "../../src/generate/project.js";
 import { chooseVersions } from "../../src/versions/choose.js";
 import { rangeTargetsFor } from "../../src/versions/range-review.js";
@@ -14,7 +13,13 @@ import { targetsFor } from "../../src/versions/targets.js";
 import { FakePrompter } from "../questions/helpers.js";
 import { FIXED_NOW } from "../versions/helpers.js";
 import { fakeMaven, metadataXml } from "../versions/maven-helpers.js";
-import { cleanupProjectTmp, contentOf, pathsOf, projectInput } from "./project-helpers.js";
+import {
+  baselineFingerprint,
+  cleanupProjectTmp,
+  contentOf,
+  pathsOf,
+  projectInput,
+} from "./project-helpers.js";
 
 afterEach(cleanupProjectTmp);
 
@@ -56,7 +61,7 @@ describe.each(Object.keys(SPRING_DBS))("#40: Spring Boot の生成物（database
   it("ファイルの一覧（管理する・しないの別）と指紋のスナップショット", async () => {
     const files = await generate(over);
     expect(
-      files.map((f) => `${f.managed ? "M" : "P"} ${f.path} ${fingerprint(f.content)}`),
+      files.map((f) => `${f.managed ? "M" : "P"} ${f.path} ${baselineFingerprint(f)}`),
     ).toMatchSnapshot();
   });
 
