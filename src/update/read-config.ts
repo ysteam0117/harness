@@ -3,7 +3,7 @@ import { parse, stringify } from "yaml";
 import type { ProfileMatch } from "../adopt/detect.js";
 import { readDetectedStack, readProfiles, type RecordedStack } from "../adopt/record.js";
 import type { AcceptedWarning } from "../checks/review.js";
-import type { SecretScanRecord } from "../generate/config.js";
+import { CONFIG_PATH, type SecretScanRecord } from "../generate/config.js";
 import { GenerateError } from "../generate/errors.js";
 import { isManagedPath } from "../generate/project.js";
 import { checkRelative } from "../generate/write.js";
@@ -48,8 +48,6 @@ export interface RecordedConfig {
 export type ConfigMode = "create" | "update" | "adopt";
 const MODES: readonly string[] = ["create", "update", "adopt"];
 
-const FILE = ".harness/config.yaml";
-
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -62,9 +60,10 @@ function need<T>(
   ok: (v: unknown) => v is T,
   form: string,
 ): T {
-  if (!(key in raw)) throw new ConfigError(`${FILE} に ${key} がありません`);
+  if (!(key in raw)) throw new ConfigError(`${CONFIG_PATH} に ${key} がありません`);
   const v = raw[key];
-  if (!ok(v)) throw new ConfigError(`${FILE} の ${key} が誤っています（${form}で書いてください）`);
+  if (!ok(v))
+    throw new ConfigError(`${CONFIG_PATH} の ${key} が誤っています（${form}で書いてください）`);
   return v;
 }
 
@@ -76,7 +75,7 @@ function relativePath(p: string, where: string): void {
     checkRelative(p);
   } catch (e) {
     if (e instanceof GenerateError) {
-      throw new ConfigError(`${FILE} の ${where} に、使えないパスがあります：${e.message}`);
+      throw new ConfigError(`${CONFIG_PATH} の ${where} に、使えないパスがあります：${e.message}`);
     }
     throw e;
   }
@@ -91,7 +90,9 @@ function toEntry(raw: unknown, index: number): VersionEntry {
     !isString(v["version"]) ||
     typeof v["reason"] !== "string"
   ) {
-    throw new ConfigError(`${FILE} の ${at} が誤っています（name・version・reason が必要です）`);
+    throw new ConfigError(
+      `${CONFIG_PATH} の ${at} が誤っています（name・version・reason が必要です）`,
+    );
   }
   const verified = typeof v["verified"] === "string" ? v["verified"] : null;
   const latest = typeof v["latest_stable"] === "string" ? v["latest_stable"] : null;
@@ -122,22 +123,22 @@ export function parseConfig(text: string): RecordedConfig {
     doc = parse(text);
   } catch (e) {
     throw new ConfigError(
-      `${FILE} を YAML として読めません：${e instanceof Error ? e.message : String(e)}`,
+      `${CONFIG_PATH} を YAML として読めません：${e instanceof Error ? e.message : String(e)}`,
     );
   }
   const raw = record(doc);
-  if (raw === undefined) throw new ConfigError(`${FILE} の先頭が連想配列ではありません`);
+  if (raw === undefined) throw new ConfigError(`${CONFIG_PATH} の先頭が連想配列ではありません`);
 
   const harnessVersion = need(raw, "harness_version", isString, "文字列");
   if (semver.valid(harnessVersion) === null) {
     throw new ConfigError(
-      `${FILE} の harness_version が、バージョンの形ではありません：${harnessVersion}`,
+      `${CONFIG_PATH} の harness_version が、バージョンの形ではありません：${harnessVersion}`,
     );
   }
   const mode = "mode" in raw ? raw["mode"] : "create";
   if (typeof mode !== "string" || !MODES.includes(mode)) {
     throw new ConfigError(
-      `${FILE} の mode が誤っています（${MODES.join("・")} のどれかで書いてください）`,
+      `${CONFIG_PATH} の mode が誤っています（${MODES.join("・")} のどれかで書いてください）`,
     );
   }
   const generatedOn = need(raw, "generated_on", isString, "文字列");
@@ -150,7 +151,7 @@ export function parseConfig(text: string): RecordedConfig {
   } catch (e) {
     if (e instanceof AnswersError) {
       throw new ConfigError(
-        `${FILE} の answers に問題があります：\n${e.errors.map((m) => `- ${m}`).join("\n")}`,
+        `${CONFIG_PATH} の answers に問題があります：\n${e.errors.map((m) => `- ${m}`).join("\n")}`,
       );
     }
     throw e;
@@ -158,13 +159,15 @@ export function parseConfig(text: string): RecordedConfig {
 
   const warningsRaw = "accepted_warnings" in raw ? raw["accepted_warnings"] : [];
   if (!Array.isArray(warningsRaw)) {
-    throw new ConfigError(`${FILE} の accepted_warnings が誤っています（一覧で書いてください）`);
+    throw new ConfigError(
+      `${CONFIG_PATH} の accepted_warnings が誤っています（一覧で書いてください）`,
+    );
   }
   const acceptedWarnings = warningsRaw.map((w, i): AcceptedWarning => {
     const r = record(w);
     if (r === undefined || !isString(r["id"])) {
       throw new ConfigError(
-        `${FILE} の accepted_warnings の ${String(i + 1)} 番目に id がありません`,
+        `${CONFIG_PATH} の accepted_warnings の ${String(i + 1)} 番目に id がありません`,
       );
     }
     return {
@@ -184,7 +187,7 @@ export function parseConfig(text: string): RecordedConfig {
     relativePath(p, "managed_files");
     if (typeof fp !== "string" || !/^[0-9a-f]{64}$/.test(fp)) {
       throw new ConfigError(
-        `${FILE} の managed_files の ${p} の指紋が誤っています（64 桁の16進で書いてください）`,
+        `${CONFIG_PATH} の managed_files の ${p} の指紋が誤っています（64 桁の16進で書いてください）`,
       );
     }
     // 管理の対象でないパス（プロジェクトのもの）は、更新の対象にしない
@@ -194,7 +197,9 @@ export function parseConfig(text: string): RecordedConfig {
 
   const removedRaw = "removed_files" in raw ? raw["removed_files"] : [];
   if (!Array.isArray(removedRaw) || !removedRaw.every((p) => typeof p === "string")) {
-    throw new ConfigError(`${FILE} の removed_files が誤っています（パスの一覧で書いてください）`);
+    throw new ConfigError(
+      `${CONFIG_PATH} の removed_files が誤っています（パスの一覧で書いてください）`,
+    );
   }
   const removedFiles: string[] = [];
   for (const p of removedRaw as string[]) {
@@ -205,7 +210,9 @@ export function parseConfig(text: string): RecordedConfig {
 
   const markedRaw = "marked_files" in raw ? raw["marked_files"] : [];
   if (!Array.isArray(markedRaw) || !markedRaw.every((p) => typeof p === "string")) {
-    throw new ConfigError(`${FILE} の marked_files が誤っています（パスの一覧で書いてください）`);
+    throw new ConfigError(
+      `${CONFIG_PATH} の marked_files が誤っています（パスの一覧で書いてください）`,
+    );
   }
   const markedFiles: string[] = [];
   for (const p of markedRaw as string[]) {

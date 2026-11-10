@@ -52,7 +52,7 @@ import {
   localDay,
   type SecretScanRecord,
 } from "../generate/config.js";
-import { GenerateError } from "../generate/errors.js";
+import { codeOf, GenerateError, messageOf } from "../generate/errors.js";
 import { judge } from "../generate/judgment.js";
 import { rolesFor } from "../generate/roles.js";
 import { AnswersError, parseAnswersYaml, type Answers } from "../questions/answers.js";
@@ -64,6 +64,7 @@ import {
   applyUpdate,
   ApplyFailed,
   ChangedAfterJudgment,
+  LOCK_PATH,
   RollbackIncomplete,
   UpdateInterrupted,
   type ApplyOp,
@@ -76,7 +77,7 @@ import { buildTargets } from "../versions/targets.js";
 import { formatDiff } from "../update/diff.js";
 import { realUpdateFs, type UpdateFs } from "../update/fs.js";
 import type { FileState } from "../update/plan.js";
-import { isUtf8Text, messageOf, readState, type FileSnapshot } from "../update/state.js";
+import { isUtf8Text, readState, type FileSnapshot } from "../update/state.js";
 import { interruptible, realRunGit, type RunGit } from "./update.js";
 
 export interface AdoptDeps {
@@ -121,7 +122,6 @@ export interface AdoptOutcome {
 }
 
 const CANCEL_MESSAGE = "中断しました。ファイルは変更していません。";
-const LOCK_PATH = ".harness/.update-lock";
 const HARNESS_DIR = ".harness";
 const DOC_PATH = "docs/harness-adoption.md";
 const START_NOTICE =
@@ -154,9 +154,6 @@ class Stop extends Error {
     this.exitCode = exitCode;
   }
 }
-
-const codeOf = (e: unknown): string | undefined =>
-  typeof e === "object" && e !== null ? (e as NodeJS.ErrnoException).code : undefined;
 
 /** 既存のアプリに、AI 向けのルールを足す（F-29 の最小限）。判定 → 確認 → 原子的な書き込み */
 export async function runAdopt(options: AdoptOptions, deps: AdoptDeps): Promise<AdoptOutcome> {

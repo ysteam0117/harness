@@ -15,6 +15,7 @@ import {
   parseMavenVersion,
   satisfiesMavenRange,
 } from "../versions/maven-version.js";
+import { isPlainObject } from "./data.js";
 import { GenerateError } from "./errors.js";
 
 export type ProfileFile = { source: string; destination: string };
@@ -169,10 +170,6 @@ const KNOWN_FIELDS = new Set([
 
 const CONTAINER_IMAGE_FIELDS = ["image", "tag", "digest", "checked_on", "note"];
 const CONTAINER_TOOL_RE = /^[a-z][a-z0-9_]*$/;
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function isFile(file: string): boolean {
   try {

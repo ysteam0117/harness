@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 import { GenerateError } from "../generate/errors.js";
 import { parseWhen, whenMatches, type When } from "../generate/conditions.js";
+import { isPlainObject } from "../generate/data.js";
 import { loadProfile } from "../generate/profile.js";
 import { findTemplatesDir } from "../generate/templates-dir.js";
 import type { Answers } from "../questions/answers.js";
@@ -15,10 +16,6 @@ export interface SelectionRule {
 }
 
 const DATA_FILE = "data/profile-selection.yaml";
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 /** data/profile-selection.yaml の中身を検証して読む。誤りは GenerateError（日本語） */
 export function parseProfileSelection(

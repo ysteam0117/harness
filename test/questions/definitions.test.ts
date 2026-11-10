@@ -13,7 +13,11 @@
 //   export const questionDefinitions: readonly QuestionDefinition[];
 //   選択肢が1つだけの select は「自動で決定」として扱う
 import { describe, expect, it } from "vitest";
-import { questionDefinitions as defs } from "../../src/questions/definitions.js";
+import {
+  questionDefinitions as defs,
+  titleOf,
+  type QuestionDefinition,
+} from "../../src/questions/definitions.js";
 import { validateAppName } from "../../src/questions/app-name.js";
 
 const byId = (id: string) => defs.find((d) => d.id === id);
@@ -185,5 +189,13 @@ describe("#32 AC-1: 質問の定義（データ）", () => {
   it("#32 AC-2: 質問C の選択肢 publish の表示は「公開範囲を広げる」を含む", () => {
     const publish = byId("critical_ops_kinds")?.options?.find((o) => o.value === "publish");
     expect(publish?.label).toContain("公開範囲を広げる");
+  });
+});
+
+describe("C-38 #76 AC-1: 質問の見出しを引く共通の関数", () => {
+  it("C-38 #76 AC-1: titleOf は、渡した質問の一覧にある id の見出しを返し、無い id はそのまま返す", () => {
+    const custom: readonly QuestionDefinition[] = [{ id: "a", title: "見出しA", kind: "text" }];
+    expect(titleOf("a", custom)).toBe("見出しA");
+    expect(titleOf("zzz", custom)).toBe("zzz");
   });
 });

@@ -319,6 +319,11 @@ export const questionDefinitions: readonly QuestionDefinition[] = [
   },
 ];
 
+/** 質問の見出し（一覧に無い id は、id をそのまま返す） */
+export function titleOf(id: string, definitions: readonly QuestionDefinition[]): string {
+  return definitions.find((d) => d.id === id)?.title ?? id;
+}
+
 /** 回答の値が、定義に合っているかを確かめる（対話と --answers で同じ確かめを使う）。問題がなければ undefined */
 export function validateValue(def: QuestionDefinition, value: unknown): string | undefined {
   const allowed = (def.options ?? []).map((o) => o.value);

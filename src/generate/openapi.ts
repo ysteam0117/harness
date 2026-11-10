@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { Answers } from "../questions/answers.js";
 import { whenMatches, type When } from "./conditions.js";
+import { isPlainObject } from "./data.js";
 import { GenerateError } from "./errors.js";
 import { renderTemplate } from "./template.js";
 
@@ -16,10 +17,6 @@ const FRAGMENTS: { source: string; when?: When }[] = [
 
 type Json = Record<string, unknown>;
 
-function isObject(value: unknown): value is Json {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 /** 部品を深く重ねる。同じ場所に違う値があれば、部品の誤り */
 function mergeFragment(target: Json, source: Json, where: string, location = ""): void {
   for (const [key, value] of Object.entries(source)) {
@@ -27,7 +24,7 @@ function mergeFragment(target: Json, source: Json, where: string, location = "")
     const existing = target[key];
     if (existing === undefined) {
       target[key] = value;
-    } else if (isObject(existing) && isObject(value)) {
+    } else if (isPlainObject(existing) && isPlainObject(value)) {
       mergeFragment(existing, value, where, here);
     } else {
       throw new GenerateError(`${where}：${here} が、ほかの部品と重なっています`);
@@ -60,7 +57,7 @@ export function buildOpenApi(input: {
     } catch (e) {
       throw new GenerateError(`${fragment.source} を JSON として読めません`, { cause: e });
     }
-    if (!isObject(parsed))
+    if (!isPlainObject(parsed))
       throw new GenerateError(`${fragment.source}：オブジェクトで書いてください`);
     mergeFragment(spec, parsed, fragment.source);
   }

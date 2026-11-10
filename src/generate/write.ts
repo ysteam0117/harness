@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { Stats } from "node:fs";
 import { chmod, lstat, mkdir, readdir, rename, rm, rmdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { GenerateError } from "./errors.js";
+import { codeOf, GenerateError, messageOf } from "./errors.js";
 
 /** ファイル操作の窓口。テストでは一部だけを差し替える（本物は node:fs/promises と setTimeout） */
 export interface FsOps {
@@ -62,14 +62,6 @@ const MAX_ATTEMPTS = 8;
 const RETRY_WAIT_MS = 50;
 
 type TargetState = "absent" | "empty";
-
-function codeOf(e: unknown): string | undefined {
-  return typeof e === "object" && e !== null ? (e as NodeJS.ErrnoException).code : undefined;
-}
-
-function messageOf(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
 
 /** 出力先の相対パスの形を確かめる（出力先の外へ出るパスは使えない） */
 export function checkRelative(p: string): void {

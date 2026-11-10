@@ -1,6 +1,7 @@
 import type { Answers } from "./answers.js";
 import {
   matchesCondition,
+  titleOf,
   unmetConditionIds,
   validateValue,
   type QuestionDefinition,
@@ -69,7 +70,6 @@ async function pass(
   const asked: Record<string, unknown> = {};
   const conflicts: Conflict[] = [];
   const defaulted: string[] = [];
-  const titleOf = (id: string) => definitions.find((d) => d.id === id)?.title ?? id;
   for (const def of definitions) {
     const step = plan(def, answers, given);
     const hasGiven = def.id in given && given[def.id] !== undefined;
@@ -80,7 +80,7 @@ async function pass(
         conflicts.push({
           id: def.id,
           cause,
-          reason: `「${titleOf(cause)}」の回答により、この質問は聞かない質問になりましたが、先に書かれた回答があります`,
+          reason: `「${titleOf(cause, definitions)}」の回答により、この質問は聞かない質問になりましたが、先に書かれた回答があります`,
         });
       }
       continue;
@@ -96,7 +96,7 @@ async function pass(
         conflicts.push({
           id: def.id,
           cause: def.forced.when.id,
-          reason: `「${titleOf(def.forced.when.id)}」の回答により「${labelOf(def, step.value)}」に決まりますが、先に書かれた回答は別の値です`,
+          reason: `「${titleOf(def.forced.when.id, definitions)}」の回答により「${labelOf(def, step.value)}」に決まりますが、先に書かれた回答は別の値です`,
         });
       }
       answers[def.id] = step.value;
@@ -170,13 +170,15 @@ export async function runQuestionsResolvingConflicts(
     const { answers, asked, conflicts } = await pass(definitions, prompter, current);
     if (conflicts.length === 0) return answers as unknown as Answers;
     Object.assign(current, asked); // 対話で答えた内容は、聞き直さない
-    const titleOf = (id: string) => definitions.find((d) => d.id === id)?.title ?? id;
-    prompter.note(conflicts.map((c) => `${titleOf(c.id)}：${c.reason}`).join("\n"), "回答の矛盾");
+    prompter.note(
+      conflicts.map((c) => `${titleOf(c.id, definitions)}：${c.reason}`).join("\n"),
+      "回答の矛盾",
+    );
     const candidates = [...new Set(conflicts.flatMap((c) => [c.cause, c.id]))];
     const target = await prompter.select({
       id: "fix_question",
       message: "どの質問の回答を直しますか（矛盾している質問を選ぶと、先に書かれた回答を捨てます）",
-      options: candidates.map((id) => ({ value: id, label: titleOf(id) })),
+      options: candidates.map((id) => ({ value: id, label: titleOf(id, definitions) })),
     });
     delete current[target];
   }
