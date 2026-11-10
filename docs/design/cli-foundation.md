@@ -24,7 +24,7 @@
 | `test/spec-coverage.test.ts`                                                   | 共通仕様の対応の確認のテスト                                                                                  |
 | `test/package.test.ts`                                                         | バージョンの固定と `docs/tech-stack.md` との一致のテスト                                                      |
 | `test/pack-check.test.ts`                                                      | `runWithCleanup` のテスト                                                                                     |
-| `.github/workflows/ci.yml`                                                     | 3つの OS で `npm ci` → `npm run check` → `npm run pack:check`                                                 |
+| `.github/workflows/ci.yml`                                                     | 3つの OS で `npm ci` → `npm run check:all`（`check` → `test:smoke` → `pack:check`。手元と同じ1つのコマンド、#74） |
 | `.node-version`・`.npmrc`                                                      | Node.js のバージョンの固定・ライブラリの完全一致の固定                                                        |
 | `tsconfig.json`・`tsconfig.build.json`                                         | 型チェック（src・test・scripts）・ビルド（src → dist）                                                        |
 | `eslint.config.mjs`・`.prettierrc.json`・`.prettierignore`・`vitest.config.ts` | Lint・整形・テストの設定。整形の対象は CLI のコードと設定ファイルだけで、`docs/`・`templates/`・`knowledge/` は外す |
@@ -91,7 +91,7 @@ flowchart TD
 | 受け入れ条件                                             | テスト                                                                                                                                                         |
 | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | AC-1：`--help` で3つのコマンドが日本語で出る             | `test/cli.test.ts`（一覧・説明・英語の見出しを含まない・未実装の表示と終了コード・知らないコマンド・`--version`・サブコマンドの `--help` とエラーの日本語化） |
-| AC-2：`npm run check` が通る。CI で3つの OS で実行される | `npm run check` 自体と `.github/workflows/ci.yml`。配布物の確認は `npm run pack:check`（`test/pack-check.test.ts` は後片付けの処理を確かめる）                 |
+| AC-2：`npm run check` が通る。CI で3つの OS で実行される | `npm run check` 自体と `.github/workflows/ci.yml`（`npm run check:all` で、`check`・`test:smoke`・`pack:check` を順に実行する。`test/package.test.ts` が、CI と `package.json` の一致を確かめる）。配布物の確認は `npm run pack:check`（`test/pack-check.test.ts` は後片付けの処理を確かめる） |
 | AC-3：ライブラリのバージョンが固定され、選定理由がある   | `test/package.test.ts`（すべて `x.y.z` の完全一致、`docs/tech-stack.md` との一致）                                                                             |
 | AC-4：共通仕様の対応の確認が CI で実行される             | `test/spec-coverage.test.ts`（各関数・仮のフォルダ・今のリポジトリ全体で未割り当て0件）と `npm run check` の `spec:check`                                      |
 
