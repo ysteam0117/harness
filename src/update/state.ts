@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
-import { GenerateError } from "../generate/errors.js";
+import { codeOf, GenerateError, messageOf } from "../generate/errors.js";
 import { checkRelative } from "../generate/write.js";
 import type { UpdateFs } from "./fs.js";
 
@@ -10,14 +10,6 @@ export type FileSnapshot = { kind: "absent" } | { kind: "file"; text: string; sh
 /** 生のバイト列の sha256（改行をそろえない） */
 export function rawSha(data: Buffer | string): string {
   return createHash("sha256").update(data).digest("hex");
-}
-
-function codeOf(e: unknown): string | undefined {
-  return typeof e === "object" && e !== null ? (e as NodeJS.ErrnoException).code : undefined;
-}
-
-export function messageOf(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
 }
 
 /** 既存の文書が、UTF-8 として正しく読めるか。UTF-16・Shift_JIS 等（読み替えると元に戻らないもの）と、NUL を含むものは読めないとする */

@@ -2,6 +2,7 @@ import type { Answers } from "../questions/answers.js";
 import {
   conditionIds,
   questionDefinitions,
+  titleOf,
   type Condition,
   type QuestionDefinition,
 } from "../questions/definitions.js";
@@ -71,7 +72,6 @@ const describeHit = (h: RuleHit): string => `・${h.message}（理由：${h.reas
 /** チェック → 警告の承知 → エラーの聞き直し */
 export async function reviewAnswers(opts: ReviewOptions): Promise<ReviewOutcome> {
   const definitions = opts.definitions ?? questionDefinitions;
-  const titleOf = (id: string) => definitions.find((d) => d.id === id)?.title ?? id;
   const accepted = new Set(opts.acceptedWarningIds ?? []);
   let answers = opts.answers;
 
@@ -88,7 +88,7 @@ export async function reviewAnswers(opts: ReviewOptions): Promise<ReviewOutcome>
       const target = await opts.prompter.select({
         id: "fix_question",
         message: "どの質問の回答を直しますか",
-        options: candidates.map((id) => ({ value: id, label: titleOf(id) })),
+        options: candidates.map((id) => ({ value: id, label: titleOf(id, definitions) })),
       });
       const next: Record<string, unknown> = { ...answers };
       for (const id of [target, ...dependentsOf(definitions, target)]) delete next[id];

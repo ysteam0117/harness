@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { isPlainObject, readDataYaml } from "../generate/data.js";
-import { GenerateError } from "../generate/errors.js";
+import { codeOf, GenerateError } from "../generate/errors.js";
 import { findTemplatesDir } from "../generate/templates-dir.js";
 import type { UpdateFs } from "../update/fs.js";
 
@@ -254,9 +254,6 @@ const REASON_UNSUPPORTED = "対応していない書き方のため読まない"
 const REASON_DEPTH = "深さの範囲外のため読まない";
 const SKIP_NAMES = new Set(["node_modules", ".git"]);
 const MAX_DEPTH = 2;
-
-const codeOf = (e: unknown): string | undefined =>
-  typeof e === "object" && e !== null ? (e as NodeJS.ErrnoException).code : undefined;
 
 /** 秘密情報のファイル（.env・.env.*・.dev.vars）。.env.example だけは読んでよい */
 function isSecretFileName(name: string): boolean {

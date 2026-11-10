@@ -14,7 +14,7 @@
 
 | ファイル | 役割 |
 | --- | --- |
-| `src/generate/errors.ts` | `GenerateError`。日本語のメッセージで、どのファイル・どの名前かを示す |
+| `src/generate/errors.ts` | `GenerateError`。日本語のメッセージで、どのファイル・どの名前かを示す。例外から値を取り出す共通の関数 `messageOf`（本文）・`codeOf`（`ENOENT` などの code） |
 | `src/generate/template.ts` | `renderTemplate`：`{{名前}}` と `{{include:...}}` の差し込み。`expandExamples`：`{{example:...}}`（出力のファイルの `#region example:<名前>` の範囲を差し込む。#37、[generation.md](generation.md)）。`normalizeNewlines`（改行を LF にそろえる） |
 | `src/generate/comments.ts` | ハーネス用の説明のコメントの除去（`stripHarnessComments`・`stripPreambleComments`） |
 | `src/generate/profile.ts` | `loadProfile`・`resolveProfiles`・`mergePackageJson`：`profile.yaml` の読み込みと検証 |

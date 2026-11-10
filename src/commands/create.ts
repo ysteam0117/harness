@@ -22,7 +22,7 @@ import {
   type Answers,
   type ParsedAnswers,
 } from "../questions/answers.js";
-import { questionDefinitions } from "../questions/definitions.js";
+import { questionDefinitions, titleOf } from "../questions/definitions.js";
 import { findMissing, runQuestionsResolvingConflicts } from "../questions/flow.js";
 import { CancelledError, createClackPrompter, type Prompter } from "../questions/prompter.js";
 import { chooseVersions, type VersionResult } from "../versions/choose.js";
@@ -120,10 +120,6 @@ export interface CreateOutcome {
 
 const RULE7 = "version-newer-than-verified";
 const CANCEL_MESSAGE = "中断しました。ファイルは作成していません。";
-
-function titleOf(id: string): string {
-  return questionDefinitions.find((d) => d.id === id)?.title ?? id;
-}
 
 /** 回答の一覧（日本語の見出しと値） */
 function formatAnswers(answers: Answers): string {
@@ -266,7 +262,7 @@ async function run(options: CreateOptions, deps: CreateDeps): Promise<CreateOutc
     const missing = findMissing(questionDefinitions, initial);
     if (missing.length > 0) {
       deps.stderr("エラー: 端末で実行していないため質問できません。次の回答が足りません。\n");
-      for (const id of missing) deps.stderr(`  - ${id}（${titleOf(id)}）\n`);
+      for (const id of missing) deps.stderr(`  - ${id}（${titleOf(id, questionDefinitions)}）\n`);
       deps.stderr("--answers で回答ファイルを指定してください。\n");
       return { exitCode: 1 };
     }

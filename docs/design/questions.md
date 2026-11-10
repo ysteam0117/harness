@@ -15,7 +15,7 @@
 
 | ファイル | 役割 |
 | --- | --- |
-| `src/questions/definitions.ts` | `questionDefinitions`：質問の定義（データ）。`matchesCondition`（条件の判定）・`validateValue`（値の確かめ） |
+| `src/questions/definitions.ts` | `questionDefinitions`：質問の定義（データ）。`matchesCondition`（条件の判定）・`validateValue`（値の確かめ）・`titleOf`（id から質問の見出しを引く。一覧に無ければ id） |
 | `src/questions/app-name.ts` | `validateAppName`：アプリ名の確かめ。対話の入力と、ルール9の事実の両方がこれだけを使う |
 | `src/questions/answers.ts` | `Answers`（回答の型）・`parseAnswersYaml`（`--answers` の読み込みと検証）・`AnswersError` |
 | `src/questions/flow.ts` | `runQuestions`（定義の順に質問する）・`runQuestionsResolvingConflicts`（YAML と対話の矛盾の扱い）・`findMissing`（足りない質問の一覧） |

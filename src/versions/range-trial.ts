@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { AcceptedWarning } from "../checks/review.js";
+import { messageOf } from "../generate/errors.js";
 import { buildProject } from "../generate/project.js";
 import { GenerationInterrupted, writeProject } from "../generate/write.js";
 import type { Answers } from "../questions/answers.js";
@@ -157,10 +158,6 @@ export function trialAppName(appName: string, runId: string, index: number): str
 
 function newRunId(): string {
   return randomBytes(4).toString("hex");
-}
-
-function messageOf(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
 }
 
 const DOWN = ["run", "docker:down:test"];

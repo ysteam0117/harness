@@ -2,7 +2,7 @@ import path from "node:path";
 import { Command } from "commander";
 import semver from "semver";
 import { CONFIG_PATH, fingerprint, harnessVersion } from "../generate/config.js";
-import { GenerateError } from "../generate/errors.js";
+import { GenerateError, messageOf } from "../generate/errors.js";
 import { changesSince, parseChangelog, readBundledChangelog } from "../update/changelog.js";
 import { realUpdateFs, type UpdateFs } from "../update/fs.js";
 import {
@@ -13,7 +13,7 @@ import {
 } from "../update/latest.js";
 import { extractBlock } from "../adopt/markers.js";
 import { ConfigError, parseConfig, type RecordedConfig } from "../update/read-config.js";
-import { messageOf, readState } from "../update/state.js";
+import { readState } from "../update/state.js";
 import { reviewRanges, type RangeReview } from "../versions/range-review.js";
 import { limitFetchConcurrency } from "../versions/registry.js";
 import {

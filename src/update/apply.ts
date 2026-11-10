@@ -1,8 +1,9 @@
 import { randomBytes } from "node:crypto";
 import path from "node:path";
+import { codeOf, messageOf } from "../generate/errors.js";
 import { checkRelative } from "../generate/write.js";
 import { realUpdateFs, type UpdateFs } from "./fs.js";
-import { assertNoLinks, messageOf, rawSha } from "./state.js";
+import { assertNoLinks, rawSha } from "./state.js";
 
 export type { UpdateFs } from "./fs.js";
 export { rawSha } from "./state.js";
@@ -67,14 +68,13 @@ export class RollbackIncomplete extends Error {
   }
 }
 
+/** 更新・導入の間のロック。harness update と harness adopt が、同じファイルで互いを防ぐ */
+export const LOCK_PATH = ".harness/.update-lock";
+
 /** rename が一時的に失敗する場合（Windows のウイルス対策ソフト・インデクサ等）のやり直し */
 const RETRY_CODES = ["EPERM", "EBUSY", "EACCES"];
 const MAX_ATTEMPTS = 5;
 const RETRY_WAIT_MS = 50;
-
-function codeOf(e: unknown): string | undefined {
-  return typeof e === "object" && e !== null ? (e as NodeJS.ErrnoException).code : undefined;
-}
 
 async function renameWithRetry(fs: UpdateFs, from: string, to: string): Promise<void> {
   for (let attempt = 1; ; attempt += 1) {

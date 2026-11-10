@@ -18,12 +18,12 @@ import {
   localDay,
   toUpdateConfigText,
 } from "../generate/config.js";
-import { GenerateError } from "../generate/errors.js";
+import { GenerateError, messageOf } from "../generate/errors.js";
 import { judge } from "../generate/judgment.js";
 import { buildAdr, buildProject, type ProjectFile } from "../generate/project.js";
 import { rolesFor } from "../generate/roles.js";
 import { type Answers } from "../questions/answers.js";
-import { questionDefinitions } from "../questions/definitions.js";
+import { questionDefinitions, titleOf } from "../questions/definitions.js";
 import { findMissing, runQuestions } from "../questions/flow.js";
 import { CancelledError, createClackPrompter, type Prompter } from "../questions/prompter.js";
 import { targetsFor } from "../versions/targets.js";
@@ -32,6 +32,7 @@ import {
   applyUpdate,
   ApplyFailed,
   ChangedAfterJudgment,
+  LOCK_PATH,
   RollbackIncomplete,
   UpdateInterrupted,
   type ApplyOp,
@@ -41,7 +42,7 @@ import { formatDiff, settingChangeNotes } from "../update/diff.js";
 import { realUpdateFs, type UpdateFs } from "../update/fs.js";
 import { planUpdate, type Decision, type FileState, type NewFile } from "../update/plan.js";
 import { ConfigError, parseConfig, type RecordedConfig } from "../update/read-config.js";
-import { isUtf8Text, messageOf, readState, type FileSnapshot } from "../update/state.js";
+import { isUtf8Text, readState, type FileSnapshot } from "../update/state.js";
 
 export interface GitResult {
   /** 実行できなかった（git がない等）ときは null */
@@ -93,7 +94,6 @@ export interface UpdateOutcome {
 }
 
 const CANCEL_MESSAGE = "中断しました。ファイルは変更していません。";
-const LOCK_PATH = ".harness/.update-lock";
 const EDIT_NOTICE = "更新の間は、ファイルを編集しないでください。";
 
 export const realRunGit: RunGit = (args, cwd) =>
@@ -134,10 +134,6 @@ interface Outcome {
 
 function formatHit(hit: RuleHit): string {
   return `[${hit.id}] ${hit.message}\n    理由：${hit.reason}`;
-}
-
-function titleOf(id: string): string {
-  return questionDefinitions.find((d) => d.id === id)?.title ?? id;
 }
 
 /** 結果の一覧（PR の本文に貼れる Markdown） */
@@ -219,7 +215,7 @@ function renderReport(input: {
   section(
     "増えた質問",
     "新しいバージョンで増えた質問です（回答は config.yaml に記録しました）。",
-    input.addedQuestions.map((id) => `\`${id}\`（${titleOf(id)}）`),
+    input.addedQuestions.map((id) => `\`${id}\`（${titleOf(id, questionDefinitions)}）`),
   );
   section(
     "新しい警告",
@@ -499,12 +495,13 @@ async function update(
     if (pendingQuestions.length > 0) {
       if (dryRun) {
         deps.stdout(
-          `## ハーネスの更新（${recorded.harnessVersion} → ${cliVersion}）\n\n--dry-run のため、何も書いていません。\n\n### 増えた質問\n\n新しいバージョンで質問が増えています。実行すると、次の質問をします。\n\n${pendingQuestions.map((id) => `- \`${id}\`（${titleOf(id)}）`).join("\n")}\n`,
+          `## ハーネスの更新（${recorded.harnessVersion} → ${cliVersion}）\n\n--dry-run のため、何も書いていません。\n\n### 増えた質問\n\n新しいバージョンで質問が増えています。実行すると、次の質問をします。\n\n${pendingQuestions.map((id) => `- \`${id}\`（${titleOf(id, questionDefinitions)}）`).join("\n")}\n`,
         );
         return { exitCode: 0 };
       }
       deps.stderr("エラー: 新しいバージョンで質問が増えましたが、既定の値がない質問があります。\n");
-      for (const id of pendingQuestions) deps.stderr(`  - ${id}（${titleOf(id)}）\n`);
+      for (const id of pendingQuestions)
+        deps.stderr(`  - ${id}（${titleOf(id, questionDefinitions)}）\n`);
       deps.stderr("--yes を付けずに、端末で実行して、質問に答えてください。\n");
       throw new Stop(1);
     }
