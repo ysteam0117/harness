@@ -33,6 +33,8 @@ const ISSUE_1 = "docs/issues/0001-replace-icons.md";
 
 let baseRoot = "";
 let baseProject = "";
+/** 既定の準備（最初のコミットまで）を済ませたリポジトリ。baseRoot の中に置き、afterAll で一緒に消す */
+let seedHome = "";
 const roots: string[] = [];
 
 beforeAll(async () => {
@@ -45,6 +47,7 @@ beforeAll(async () => {
   });
   await writeProject({ cwd: baseRoot, appName: APP, files: buildProject(input).files });
   baseProject = path.join(baseRoot, APP);
+  seedHome = createRepo(path.join(baseRoot, "seed")).home;
 });
 
 afterAll(() => {
@@ -246,15 +249,13 @@ function installFakeTools(dir: string): void {
         '  echo "fake ' + name + ': forced failure" >&2',
         "  exit 1",
         "fi",
-        'for arg in "$@"; do',
-        '  case "$arg" in',
-        "    -*) ;;",
-        "    *) if grep -q " + word + ' "$arg" 2>/dev/null; then',
-        '         echo "fake ' + name + ": " + word + ' in $arg" >&2',
-        "         exit 1",
-        "       fi ;;",
-        "  esac",
-        "done",
+        // grep は、引数のファイルをまとめて1回で調べる。ファイルごとに起動すると、最初のコミット（生成物の全ファイル）に
+        // Windows で数秒かかる（#73）。オプション（--check など）は、ファイルとして見つからないだけで、結果に影響しない
+        "hit=$(grep -l " + word + ' -- "$@" 2>/dev/null | head -n 1)',
+        'if [ -n "$hit" ]; then',
+        '  echo "fake ' + name + ": " + word + ' in $hit" >&2',
+        "  exit 1",
+        "fi",
         "exit 0",
         "",
       ].join("\n"),
@@ -265,10 +266,32 @@ function installFakeTools(dir: string): void {
   fakeTool("eslint", "BAD_LINT");
 }
 
-/** 生成したプロジェクトを一時フォルダに写し、偽の道具を置き、git init して最初のコミットをする（README の手順と同じ並び） */
-function setupRepo(options: { initialCommit?: boolean; fakeCheck?: string } = {}): Repo {
+type RepoOptions = { initialCommit?: boolean; fakeCheck?: string };
+
+/** テストごとの一時フォルダ（afterEach で消す） */
+function newHome(): string {
   const home = mkdtempSync(path.join(os.tmpdir(), "harness-q61-"));
   roots.push(home);
+  return home;
+}
+
+/**
+ * テスト用のリポジトリを用意する。既定の準備（最初のコミットまで）は、beforeAll で1回だけ作ったもの（seedHome）を
+ * .git ごと写す。毎回 最初のコミットからやり直すと、テストの時間のほとんどを準備が占めるため（#73）。
+ * 既定と違う準備（最初のコミットをしない・別の偽の check）は、その場で作る。
+ */
+function setupRepo(options: RepoOptions = {}): Repo {
+  const home = newHome();
+  if (options.initialCommit === false || options.fakeCheck !== undefined) {
+    return createRepo(home, options);
+  }
+  cpSync(seedHome, home, { recursive: true });
+  return new Repo(path.join(home, APP), home);
+}
+
+/** 生成したプロジェクトを home に写し、偽の道具を置き、git init して最初のコミットをする（README の手順と同じ並び） */
+function createRepo(home: string, options: RepoOptions = {}): Repo {
+  mkdirSync(home, { recursive: true });
   writeFileSync(path.join(home, "empty-gitconfig"), "");
   const dir = path.join(home, APP);
   cpSync(baseProject, dir, { recursive: true });
@@ -309,7 +332,8 @@ function setupRepo(options: { initialCommit?: boolean; fakeCheck?: string } = {}
 
 describe.skipIf(!gitAvailable)("#61 AC-2: pre-commit のフック", GIT_TEST_OPTIONS, () => {
   it("#61 AC-2: 最初のコミットは、main の上でも、HEAD がないので通る", () => {
-    const repo = setupRepo();
+    // 写しではなく、この場で 最初のコミットをする
+    const repo = createRepo(newHome());
     expect(repo.branch()).toBe("main");
     expect(repo.mustGit(["rev-list", "--count", "HEAD"])).toBe("1");
   });
