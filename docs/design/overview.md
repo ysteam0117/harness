@@ -49,8 +49,9 @@ flowchart LR
 
 | コマンド             | 内容                                                                                                                   |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `npm run check`      | Lint・型チェック・整形の確認・共通仕様の対応の確認・テスト・依存の脆弱性の確認を順に実行する。CI も同じコマンドを使う |
-| `npm run pack:check` | 組み立て・パック・一時フォルダへのインストール・`harness --help` の起動までを確かめる。CI でも実行する                 |
+| `npm run check:all`  | PR を出す前の確認。`check` → `test:smoke`（smoke のスクリプトの単体テスト）→ `pack:check` を順に実行する。CI も同じコマンドを使う（C-61、#74） |
+| `npm run check`      | Lint・型チェック・整形の確認・共通仕様の対応の確認・テスト・依存の脆弱性の確認を順に実行する。`check:all` に含まれる |
+| `npm run pack:check` | 組み立て・パック・一時フォルダへのインストール・`harness --help` の起動までを確かめる。`check:all` に含まれる          |
 | `npm run build`      | `src/` を `dist/` に組み立てる                                                                                         |
 | `npm run smoke:generated` | D1・PostgreSQL・DB なしの 3 通りを生成し、`npm install`・`npm run check`・`npm run build`・開発サーバー・Docker を確かめる（時間がかかる。CI では手動のワークフロー `smoke.yml`。smoke のスクリプトの単体テストは `npm run test:smoke`）（[skeleton.md](skeleton.md)） |
 

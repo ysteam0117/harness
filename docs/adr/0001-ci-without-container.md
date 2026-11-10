@@ -35,3 +35,7 @@ C-61 は「CI でも開発環境と同じコンテナのイメージを使う」
 - OS の差（改行・パスの区切り・シェル）による差が残りうる。`.gitattributes` で改行を LF にそろえ、テストやスクリプトではシェルを使わず、パスは `node:path` で扱う
 - Node.js 以外のツールの差は、コンテナほど厳密には防げない。必要になったら見直す
 - 生成するプロジェクト（利用者の側）の CI は、この例外の対象ではない
+
+## 追記（2026-11-10、Issue #74）
+
+手元と CI で使うコマンドを、`npm run check:all`（`npm run check` → `npm run test:smoke` → `npm run pack:check`）の1つにまとめた。CI が `npm run check` に加えて `npm run test:smoke` も実行しており、手元で `npm run check` が通っても CI で落ちることがあったため。決定（選択肢2）は変えていない。

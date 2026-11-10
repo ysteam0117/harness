@@ -357,12 +357,14 @@ harness status
 
 ```text
 npm ci               # ライブラリのインストール（lock ファイルどおり）
+npm run check:all    # PR を出す前の確認（CI と同じ）。下の check → test:smoke → pack:check を順に実行する
 npm run check        # Lint・型チェック・整形の確認・共通仕様の対応の確認・テスト・脆弱性の確認
+npm run test:smoke   # smoke のスクリプトの単体テスト（Docker があれば、Docker を使うテストも実行する）
 npm run pack:check   # 配布物の確認（組み立て・パック・インストール・起動）
 npm run build        # src/ を dist/ に組み立てる
 npm run smoke:generated  # 生成したプロジェクトの動作の確認（D1・PostgreSQL・DB なしの 3 通りを生成し、npm install・npm run check（ホスト）・npm run build・開発サーバー・Docker（コンテナの中は npm run check:app）を確かめる。時間がかかり、Docker が必要）
 ```
 
-CI（GitHub Actions）は、push・PR のたびに、Windows・macOS・Linux で `npm run check` と `npm run pack:check` を実行します（手動でも実行できます）。生成したプロジェクトの動作の確認（smoke）は時間がかかるため、手動で実行するワークフロー（`.github/workflows/smoke.yml`。Actions の画面の「Run workflow」）に分けています。smoke のスクリプトの単体テストは、`npm run check` には入れず、`npm run test:smoke` で実行します（CI では、push・PR のたびに実行します）。
+CI（GitHub Actions）は、push・PR のたびに、Windows・macOS・Linux で、手元と同じ `npm run check:all` を実行します（手動でも実行できます）。PR を出す前に、手元でも `npm run check:all` を通します。生成したプロジェクトの動作の確認（smoke）は時間がかかるため、手動で実行するワークフロー（`.github/workflows/smoke.yml`。Actions の画面の「Run workflow」）に分けています。smoke のスクリプトの単体テストは、`npm run check` には入れず、`npm run test:smoke` で実行します（`npm run check:all` に含まれます）。
 
 `npm run smoke:generated` は、環境変数 `SMOKE_CASES=d1,none` で通りを絞れます。生成したプロジェクトの `npm run check` が Docker で動くセキュリティのテストを含むため、Docker は D1・DB なしの通りにも要ります。Docker が使えない手元では、全部の通りを飛ばします（`SMOKE_REQUIRE_DOCKER=1` で失敗にできます）。途中で中断（Ctrl+C）しても、起動したプロセス・Docker のコンテナとボリューム・一時的なフォルダを片付けます。詳細は[動くアプリの土台](docs/design/skeleton.md)を参照してください。

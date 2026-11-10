@@ -60,5 +60,5 @@ setup-node v7 でも `node-version-file` と `cache: npm` が使えることは�
 1. 上げる対象の更新内容（変更履歴）を確認する
 2. `npm install --save-exact <名前>@<バージョン>` で上げる
 3. この文書の表のバージョンと確認日を更新する（`test/package.test.ts` が `package.json` との一致を確認する）
-4. `npm run check` を実行して通ることを確認する
+4. `npm run check:all`（CI と同じ内容）を実行して通ることを確認する
 5. 組み合わせの条件（上の節）に影響がないか確認する

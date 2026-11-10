@@ -2,12 +2,14 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { parse } from "yaml";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(readFileSync(path.join(rootDir, "package.json"), "utf8")) as {
   dependencies: Record<string, string>;
   devDependencies: Record<string, string>;
   engines: { node: string };
+  scripts: Record<string, string>;
 };
 const libs = ["@clack/prompts", "commander", "yaml", "diff", "semver"];
 
@@ -75,5 +77,33 @@ describe("#35: 配布物に、変更履歴（status が読む）が入る", () =
       JSON.parse(readFileSync(path.join(rootDir, "package.json"), "utf8")) as { files: string[] }
     ).files;
     expect(files).toContain("CHANGELOG.md");
+  });
+});
+
+describe("C-61 #74: 手元の確認と CI が、同じ1つのコマンド", () => {
+  const PARTS = ["check", "test:smoke", "pack:check"];
+
+  it("C-61 #74 AC-1: check:all は、check・test:smoke・pack:check を、この順に実行する", () => {
+    expect(pkg.scripts["check:all"]).toBe(PARTS.map((name) => `npm run ${name}`).join(" && "));
+  });
+
+  it("C-61 #74 AC-3: check・test:smoke・pack:check は、単独のコマンドとしても残っている", () => {
+    for (const name of PARTS) {
+      expect(pkg.scripts[name], name).toBeTypeOf("string");
+    }
+    // check が check:all を呼ぶと、呼び出しが循環する
+    expect(pkg.scripts["check"]).not.toContain("check:all");
+  });
+
+  it("C-61 #74 AC-2: ci.yml が実行するのは、npm ci と npm run check:all だけ（手元と違う手順を持たない）", () => {
+    const workflow = parse(
+      readFileSync(path.join(rootDir, ".github", "workflows", "ci.yml"), "utf8"),
+    ) as { jobs: Record<string, { steps: { run?: string }[] }> };
+    const jobs = Object.values(workflow.jobs);
+    expect(jobs.length).toBeGreaterThan(0);
+    for (const job of jobs) {
+      const commands = job.steps.flatMap((step) => (step.run === undefined ? [] : [step.run]));
+      expect(commands).toEqual(["npm ci", "npm run check:all"]);
+    }
   });
 });
