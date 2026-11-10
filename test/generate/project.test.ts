@@ -46,6 +46,7 @@ import { FIXED_DAY } from "../versions/helpers.js";
 import { AGENT_ROLES, LEFTOVER_NAME, realTemplatesDir } from "./helpers.js";
 import {
   SAMPLE_WARNINGS,
+  baselineFingerprint,
   cleanupProjectTmp,
   completeAnswers,
   contentOf,
@@ -578,7 +579,7 @@ describe("#34 AC-4: 同じ入力から、同じ結果になる", () => {
       await projectInput({ ...BOTH, database: "d1" }, { acceptedWarnings: SAMPLE_WARNINGS }),
     );
     const listing = files.map(
-      (f) => `${f.managed ? "M" : "P"} ${f.path} ${fingerprint(f.content)}`,
+      (f) => `${f.managed ? "M" : "P"} ${f.path} ${baselineFingerprint(f)}`,
     );
     expect(listing).toMatchSnapshot();
   });

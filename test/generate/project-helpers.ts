@@ -13,6 +13,7 @@ import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from
 import os from "node:os";
 import path from "node:path";
 import type { AcceptedWarning } from "../../src/checks/review.js";
+import { CONFIG_PATH, fingerprint } from "../../src/generate/config.js";
 import type { Answers } from "../../src/questions/answers.js";
 import { questionDefinitions } from "../../src/questions/definitions.js";
 import { runQuestions } from "../../src/questions/flow.js";
@@ -21,6 +22,28 @@ import { targetsFor } from "../../src/versions/targets.js";
 import { FakePrompter, baseAnswers } from "../questions/helpers.js";
 import { FIXED_NOW, offlineFetch } from "../versions/helpers.js";
 import { realTemplatesDir } from "./helpers.js";
+
+/** 指紋を計算する前に harness_version を置き換える先の、固定の値。基準（fixture・スナップショット）を作り直しても、ハーネスの版を上げても、変えない */
+const BASELINE_HARNESS_VERSION = "0.0.1";
+const HARNESS_VERSION_LINE = /^harness_version: .*$/gm;
+
+/**
+ * 基準と比べるための指紋。`.harness/config.yaml` の harness_version の行だけを、固定の値（BASELINE_HARNESS_VERSION）に
+ * 置き換えてから計算する。ハーネスの版を上げても、基準を作り直さずに済む（#84）。
+ * harness_version に今の版が入ることは、project.test.ts の「#34 AC-3」が直接確かめる。
+ */
+export function baselineFingerprint(file: { path: string; content: string }): string {
+  if (file.path !== CONFIG_PATH) return fingerprint(file.content);
+  const found = file.content.match(HARNESS_VERSION_LINE) ?? [];
+  if (found.length !== 1) {
+    throw new Error(
+      `${CONFIG_PATH} の harness_version の行が、ちょうど1つではありません（${String(found.length)} 行）`,
+    );
+  }
+  return fingerprint(
+    file.content.replace(HARNESS_VERSION_LINE, `harness_version: ${BASELINE_HARNESS_VERSION}`),
+  );
+}
 
 /** 質問に全部答えた状態の回答（自動で決まる値・既定の「未定」も入る）。baseAnswers に上書きを重ねる */
 export async function completeAnswers(over: Record<string, unknown> = {}): Promise<Answers> {
