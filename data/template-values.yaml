@@ -15,6 +15,10 @@
 
 check_command: npm run check
 
+# 全役割に共通する委譲時の指示（C-66）
+delegated_worker_rule: >-
+  承認が必要な操作の範囲は、`AGENTS.md`の「破壊的な操作は、必ず利用者の判断を仰ぐ」、デプロイの承認（C-41）、AIの設定の`ask`・`prompt`に従う。操作の実行前に何を・なぜ・範囲・取り消し方をすぐ統括に報告し、指示を待つ。拒否された操作を別の手段で回避しない。作業用フォルダを割り当てられた場合は、削除せず場所を報告する。利用上限を確認した場合は統括に報告する。
+
 # check.yml の .env.test 作成後に差し込むステップ。2行目はワークフローの字下げを含む。
 # Spring Boot では、Docker の開発・検証環境（Compose）を出さないので、起動のステップも出さない（Testcontainers が DB を起動する）
 workflow_test_db_step:

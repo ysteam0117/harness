@@ -99,6 +99,7 @@ export function fakeValues(): Record<string, string> {
     "data_access_skill",
     "data_access_library",
     "check_command",
+    "delegated_worker_rule",
     "batch_notes",
     "backup_notes",
     "auth_method",

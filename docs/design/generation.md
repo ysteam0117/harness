@@ -236,6 +236,10 @@ F-18 により、知見は選んだ技術に**関係するものだけ**を写�
 
 プロジェクトのものは、利用者が育てる前提のため、指紋を取らない。#56 で PR のテンプレートなどを足すときは、管理するファイルの側に加える。
 
+委譲時の作業場所・状態・承認の手順（[C-66](../requirements/common/workflow.md#c-66)）は、create と adopt で共通の実装の進め方 Skill に置く。担当向けの指示は `data/template-values.yaml` の `delegated_worker_rule` から各エージェントに入れる。管理対象は `harness update` で更新する。adopt 時に同名の既存ファイルを管理外に残した場合は手動で取り込む。
+
+Orca の生存状態（[F-30](../requirements/functional.md#f-30)）では、`live` は生存の証拠であり、承認待ちなどと両立する。`unverifiable` は担当の状態が未確認で、`exited` は終了の確認を表す。正常完了には成果報告を受理する必要がある。共通 Skill の手順はこれらの識別子を前提にせず、Orca からの状態取得を実装しない。
+
 ## 承知した警告の ADR
 
 承知した警告があるときだけ、`docs/adr/0001-accepted-warnings.md` を出す（C-35 の書き方）。警告がなければ出さない。項目は次のとおり。
