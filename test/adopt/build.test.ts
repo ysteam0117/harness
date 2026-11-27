@@ -199,6 +199,18 @@ describe("#15 AC-3: 生成したアプリ専用のものを、導入先の文書
   });
 });
 
+it("C-25 #87 AC-4: 技術プロファイルのない導入先にも重い検証の手順が届く", async () => {
+  const files = buildAdoptFiles({ answers: await completeAnswers(BOTH) });
+  const byPath = new Map(files.map((file) => [file.path, file]));
+  expect(byPath.has("docs/testing/mutation.md")).toBe(false);
+  for (const root of [".claude/skills", ".agents/skills"]) {
+    const testing = byPath.get(`${root}/testing/SKILL.md`);
+    expect(testing?.kind).toBe("file");
+    expect(testing?.content).toContain("## 重い検証");
+    expect(testing?.content).not.toMatch(/stryker|docs\/testing\/mutation\.md/i);
+  }
+});
+
 describe("#15 AC-3: create の出力は変わらない（R6）", () => {
   it("#15 AC-3: create の AGENTS.md はCSS作業でもフロントエンドSkillを読む案内をする", async () => {
     const files = buildProject(await projectInput(BOTH)).files;
