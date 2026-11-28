@@ -70,14 +70,25 @@ test_isolation_notes: |-
 
 test_docs_paren: （このプロジェクトの既存の手順）
 
-quality_checker_command_step: 品質チェック・テストのコマンドは未設定（ハーネスは決めていない）。実行する前に、既存のプロジェクトのコマンド（`package.json`の`scripts`・README）と、テストが本番や共有のDBに接続しないことを確かめ、不明なら利用者に聞く。確かめたコマンドで、**プロジェクト全体**に対して品質チェックとテストを実行する。一部のフォルダだけに限定しない
+quality_checker_command_step: 品質チェック・テストのコマンドは未設定（ハーネスは決めていない）。既存のコマンド（`package.json`の`scripts`・README）と、本番や共有のDBに接続しないことを確かめ、不明なら利用者に聞く。Skill「テスト」の「品質チェック」に従って手元の検証を実行し、候補の対象コミットと未コミット差分の有無、結果を統括に渡す
+
+quality_check_scope: 既存のCIが実行する項目と対象コミットを確認する。補助CI（harness-check.yml）だけでは全体確認にならない。確認できた項目だけCIの結果を使い、残る必須項目は手元で確認する。「ローカルのみ」「両方」の設定や、導入先で必須としている手元の全体確認は維持する。実行場所や接続先が不明なら未確認として利用者に聞く
+
+targeted_check_entry: 対象を絞るときもプロジェクトの既存のコマンドと安全前処理を使う。検証用DBの分離と接続先を確かめ、分からない場合は実行せず利用者に聞く
+
+pre_commit_secret_check: commit・push前に、手元でこのプロジェクトの同等の手順を使って秘密情報を全範囲で確認する。手順が無いか不明なら利用者に確認して手順を決め、記録する。ファイルを絞らず、CIの結果で代替しない。成功を確認できるまでcommit・pushしない
+
+final_verification_record_place:
+  - when: { answer: repository, equals: local }
+    value: 既存のIssueの記録
+  - value: 既存のPR本文またはIssueの記録
 
 # ---- ハーネスの改善の提案（生成したアプリの設定・テンプレートを前提にしないため、GitHub・手元の Git どちらも入れ替える）----
 feedback_instruction: 改善の提案の内容を記録し、利用者に伝える。出す場所と書き方は、利用者と決める。ハーネスのリポジトリへの伝達は、利用者の承認を得て行う
 
 # ---- 手元の Git だけで管理する場合（repository: local）----
 # 生成したアプリにある docs/issues/・docs/harness-feedback/・.githooks/・npm run merge:check を前提にしないようにする。
-# GitHub の場合は、template-values.yaml の値（PR・Issue の手順）をそのまま使う。
+# GitHub の場合も、既存の様式を使うため、取り込みと記録の手順を入れ替える。
 workflow_issue_step:
   - when: { answer: repository, equals: local }
     value: "1. **Issueを作る**：Issueなしで作業を始めない。Issueの記録の置き場所と書き方は、このプロジェクトで決めたものに従う（決まっていなければ、利用者に確認する）。機能は親Issue、作業領域（DB・バックエンド・フロントエンド・その他）ごとに子Issueに分ける"
@@ -86,8 +97,12 @@ workflow_review_steps:
   - when: { answer: repository, equals: local }
     value: |-
       5. **記録を書く**：レビューの結果（レビューしたAI・指摘・採用したか・採用しなかった理由）と、受け入れ条件ごとの確認の結果を、Issueの記録に追記する。「知見」の欄は必ず埋める
-      6. **取り込む**：作業のブランチでコミットしたあと、品質チェックとテストが通ったことを確かめ、このプロジェクトで決めた手順で`main`に取り込む（決まっていなければ、利用者に確認する）
+      6. **取り込む**：統括は手元の必須確認と対象コミットを照合し、既存のIssueの記録に残す。全体確認が通ったことを確かめ、このプロジェクトの手順で`main`に取り込む（決まっていなければ利用者に確認する）
       7. **Issueの状態を確かめる**：取り込んだ後、Issueの記録の状態が完了になっているかを確かめる
+  - value: |-
+      5. **PRを作る**：統括はpush前に手元の秘密情報確認の成功を確かめる。本文に `Closes #<子Issue番号>`、親Issueは `Refs #<親Issue番号>` を書く。既存の様式を使い、PR本文に「知見」を必ず記録する
+      6. **マージする**：統括は最終候補の必須確認と、必要なCIの成功を対象コミットで照合し、既存のPR本文またはIssueの記録に残す。必須のCIが失敗・未実行・古い結果ならマージを止める。成功を確認して**Squash**でマージする
+      7. **Issueのクローズを確かめる**：`Closes`で指定したIssueがクローズされていなければ、PRの番号を書いたコメントを付けて手動でクローズする
 
 workflow_main_rules:
   - when: { answer: repository, equals: local }
@@ -97,7 +112,8 @@ workflow_main_rules:
 
 commit_merge_step:
   - when: { answer: repository, equals: local }
-    value: "**コミット・取り込み**：`AGENTS.md`の「作業の流れ」に従う。取り込みの後、Issueの記録の状態が完了になったかを確かめる"
+    value: "**コミット・取り込み**：`AGENTS.md`の「作業の流れ」に従い、統括が手元の必須確認を照合する。取り込みの成否と対象コミットを既存のIssueの記録に残し、状態が完了になったかを確かめる"
+  - value: "**コミット・PR・マージ**：`AGENTS.md`の「作業の流れ」に従い、統括がpush前の秘密情報確認とマージ前の必須CIを含む確認を照合し、既存のPR本文またはIssueの記録に残す。取り込んだ後は、`Closes`で指定したIssueがクローズされたことを確かめる"
 
 prev_merged_check:
   - when: { answer: repository, equals: local }
@@ -184,7 +200,7 @@ axios_client_rule: "APIは、このプロジェクトの既存のAPI呼び出し
 logger_examples_intro: "例は、ハーネスが生成するアプリのテストから写したもの（このプロジェクトには、同じファイルはない）。悪い例は、問題が起きる書き方の見本。コードを書く前に読み、良い例の書き方に合わせる。"
 quality_generated_rule: "生成されたファイル・組み立ての結果は、品質チェックの対象から外す（既存の設定を確かめる）"
 quality_run_section: |-
-  - 品質チェックとテストは、このプロジェクトの既存のコマンドで、プロジェクト全体に対して実行する（コマンドは、`package.json`の`scripts`・READMEで確かめる）
+  - 手元と既存のCIの分担、commit・push前の確認、実行結果の扱いは、Skill「テスト」の「品質チェック」に従う。既存の全体確認のコマンドは`package.json`の`scripts`・READMEで確かめる
   - セキュリティのテストの手順・合否・誤検知の抑え方は、このプロジェクトの既存の手順に従う（無ければ、利用者に聞く）
   - ミューテーションテストは、影響の大きい処理（認証・認可・個人情報・重要な業務ルール）を対象に行う。実行のコマンドは、このプロジェクトの既存のものを確かめる
 

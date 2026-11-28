@@ -53,6 +53,8 @@ AGENTS.md・CLAUDE.md・Skill・agents・README の、GitHub の手順（PR・`C
 
 ## 取り込みのコマンド（`scripts/merge-check.mjs`）
 
+ローカル Git では、統括が手元の必須確認と対象コミットを Issue の「検証の記録」に残す。取り込み時の全体確認は、既存の `npm run merge:check` が統合後の内容で実行する。結果を記録し、失敗時は取り込まない。
+
 `npm run merge:check`（今のブランチ）または `npm run merge:check -- <ブランチ名>`。
 
 1. 事前の確かめ（何も変えない）：ブランチ名が `<種類>/<番号>-<内容>`（`feature`・`fix`・`docs`・`refactor`・`chore`）・`main` でない・存在する・作業ツリーがきれい・`main` が別の作業ツリーで使われていない（使われていれば、その作業ツリーで実行する案内を表示して止まる）

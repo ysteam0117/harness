@@ -255,7 +255,7 @@ describe("#15 AC-3: create の出力は変わらない（R6）", () => {
       "`npm run env:check`と起動のときに",
     );
     expect(text(".claude/agents/quality-checker.md")).toContain(
-      "3. 手元とCIで共通の1つのコマンド（例：`npm run check`）で、**プロジェクト全体**に対して",
+      "3. Skill「テスト」の「品質チェック」に従い、計画に沿って手元の対象検証と、手元で行う必須の確認を実行する",
     );
   });
 

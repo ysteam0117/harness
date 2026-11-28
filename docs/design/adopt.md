@@ -191,6 +191,8 @@ F-29 の手順5・6。`harness adopt` は、共通仕様（C-xx）との差の�
 
 導入先には、`harness create` が生成するアプリだけにあるもの（`npm run env:check`・`check:app`・`security` などのコマンド、`docs/project-rules.md`・`docs/secrets.md`・`docs/testing/` などの文書、テストが開発・本番の DB と分かれていることの保証、技術プロファイルのコード）が無い。ひな形には分岐を入れず（F-28）、`data/template-values.yaml` の値を、導入のときだけ `data/adopt-values.yaml` で入れ替える。
 
+- 導入先では、既存の全体確認・対象検証・commit と push 前の秘密情報確認の手順を使う。CI の内容を確かめ、`harness-check.yml` の補助チェックだけで全体確認の成功を判断しない。統括は導入先の PR 本文または Issue の既存の様式で最終候補の結果を記録する（[C-61](../requirements/common/quality-test.md#c-61)、[C-35](../requirements/common/workflow.md#c-35)）。
+
 - `harness create` の値は、これまでの文言のまま（1文字も変えない）
 - 品質チェック・テストのコマンドは「未設定」とする。実行する前に、既存のコマンド（`package.json` の `scripts`・README）と、テストが本番や共有の DB に接続しないことを確かめさせ、不明なら利用者に聞かせる
 - `AGENTS.md` の「ルールを読んで従う」の表は、出さない Skill を書かない（技術プロファイルの Skill の欄は、当てたプロファイルがなければ「該当する技術の Skill はない」とし、当てたものがあれば、その Skill を書く）
