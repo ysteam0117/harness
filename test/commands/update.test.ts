@@ -15,6 +15,7 @@ import {
 import { rename as realRename, readFile as realReadFile, rm as realRm } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { runStatus } from "../../src/commands/status.js";
 import { runUpdate } from "../../src/commands/update.js";
 import { fingerprint } from "../../src/generate/config.js";
 import { FakePrompter } from "../questions/helpers.js";
@@ -89,6 +90,78 @@ it("F-24 F-27 #101 AC-2: create の更新で管理する例のテストと Skill
   expect(read(dir, tool)).toContain("await screen.findByRole");
   expect(exists(dir, example)).toBe(true);
   expect(readConfig(dir).managed_files[example]).toBe(fingerprint(read(dir, example)));
+});
+
+it("F-27 F-28 #103 AC-2: 過去の採用版と依存ファイルを保持して更新を案内する", async () => {
+  const dir = await freshProject({
+    backend: "hono",
+    database: "none",
+    auth: "none",
+    idp: undefined,
+  });
+  const oldPins = { hono: "4.13.12", zod: "4.6.5" };
+  const manifest = JSON.parse(read(dir, "package.json")) as {
+    dependencies: Record<string, string>;
+  };
+  Object.assign(manifest.dependencies, oldPins);
+  write(dir, "package.json", JSON.stringify(manifest, null, 2) + "\n");
+  write(
+    dir,
+    "package-lock.json",
+    JSON.stringify({
+      name: "sample-app",
+      lockfileVersion: 3,
+      packages: {
+        "": { dependencies: manifest.dependencies },
+        "node_modules/hono": { version: oldPins.hono },
+        "node_modules/zod": { version: oldPins.zod },
+      },
+    }),
+  );
+  editConfig(dir, (config) => {
+    config["harness_version"] = "0.7.0";
+    for (const record of config.versions) {
+      if (record.name === "hono" || record.name === "zod") {
+        record.version = oldPins[record.name];
+        Object.assign(record, { verified: record.version });
+      }
+    }
+  });
+  const before = snapshot(dir, (file) => file === "package.json" || file === "package-lock.json");
+  const oldVersions = readConfig(dir).versions.filter(
+    ({ name }) => name === "hono" || name === "zod",
+  );
+  expect(oldVersions).toMatchObject([
+    { name: "hono", version: oldPins.hono },
+    { name: "zod", version: oldPins.zod },
+  ]);
+
+  const stdout: string[] = [];
+  const status = await runStatus(
+    {},
+    {
+      cwd: dir,
+      homeDirectory: () => dir,
+      stdout: (line) => stdout.push(line),
+      stderr: () => undefined,
+      repository: () => undefined,
+      runGh: async () => ({ code: 1, stdout: "", stderr: "" }),
+    },
+  );
+  expect(status.exitCode).toBe(0);
+  const update = updateSetup(dir);
+  expect((await runUpdate({ yes: true }, update.deps)).exitCode, update.err()).toBe(0);
+  expect(snapshot(dir, (file) => before.has(file))).toEqual(before);
+  expect(readConfig(dir).versions.filter(({ name }) => name === "hono" || name === "zod")).toEqual(
+    oldVersions,
+  );
+
+  for (const output of [stdout.join(""), update.out()]) {
+    expect(output).toContain("0.7.1");
+    expect(output).toContain("Hono 4.13.23");
+    expect(output).toContain("Zod 4.6.7");
+    expect(output).toContain("プロジェクト側で依存を更新する");
+  }
 });
 
 /** 出力の Markdown から、「### 見出し」の節の本文を取り出す（なければ ""） */

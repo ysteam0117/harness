@@ -10,7 +10,7 @@ verified_versions:
   "@tanstack/react-query": "5.104.0"
   react-hook-form: "7.89.0"
   "@hookform/resolvers": "5.9.1"
-  zod: "4.6.5"
+  zod: "4.6.7" # 2026-11-28、Issue #103 で確認
 compatibility_notes:
   - "@hookform/resolvers は任意の部品を通して Zod 3系を求め、Zod 4系とぶつかる。package.json の overrides で @typeschema/zod の zod に $zod を使わせる"
 package_json:

@@ -43,7 +43,7 @@ exports[`#40: Spring Boot の生成物（database=none） > ファイルの一�
   "P .github/workflows/check.yml 352ff9b419651fa29da92d7f78ce0bac508c725eb496951287716d1ce7f52c7a",
   "P .gitignore fd45c599ad5952284a536c250e9358f42a7337aa03b6b61b2f117cd3826570c0",
   "M .gitleaks.toml 11a80a42c0b98c362b38ba7322dc12949919893c20e41d2fe44e1c8da107e72e",
-  "P .harness/config.yaml 287609f6d8fe4904ba6476e9b9186ac4e68e4f5acec93a696c414b42f7af859d",
+  "P .harness/config.yaml 3ad60c148d03465cc228f00a015ce84c16e2016c741cc0c8926ae7bdd8c0de31",
   "P .jscpd.json 28d095fed27f81cb731db884fed7552997a5f3f88ff23e07ba4dd1a15d66923c",
   "P .node-version d9f318747a126ce2247661af67852b185def7789492eabfad7bba322be087c33",
   "P .prettierignore 71e7ff2cbd7564fccd277f4f3ac3d202d7d03df5ab0826c54e7c86388f82b6b4",
@@ -77,7 +77,7 @@ exports[`#40: Spring Boot の生成物（database=none） > ファイルの一�
   "P docs/project-rules.md 8799210035a342e13ddc01d1363a2f7434b6f79ad4072b1f4bca3b885f40744c",
   "P docs/requirements.md c7e03a4999a43d3983edf98e2a5f196e3236e1d1ad65893fc53bdd6c2f908495",
   "M docs/secrets.md 6e6ca6c3d833cee472130129acedfec1016acda3a3aee7b4e44cae365e70a90f",
-  "P docs/tech-stack.md 53f3cc08720b9c7f70e99d20a35f105d5e3f36628c90a3512eddff8a89a57b91",
+  "P docs/tech-stack.md 37fa9a6bfa7a219f2d36fe48c8e6e0f91f770593283895ce636fa41252b1a9e2",
   "P docs/testing/README.md b1c3d4baaa29e8e15629b984feb0d7794ee3320bd5ca68e3e9d3d60f51eb93fb",
   "P docs/testing/e2e.md 115c826e20b91cea41bbfbb9be84143e061f3e5bca60f212847043629a485a58",
   "P docs/testing/integration.md e7fd6f3441d7ff325a6f2e4191175472c96dff994692c7a0c358c527ccdc3220",
@@ -103,7 +103,7 @@ exports[`#40: Spring Boot の生成物（database=none） > ファイルの一�
   "P frontend/src/test/server.ts 3171d11870fdd32ba50d3bd9dc4b90702f899859480346adf60ac49a949d8b51",
   "P frontend/src/test/setup.ts 292bce170740fd6a2adabf0ffa906c80698fc85f52138ba761e9f88c96d7d84d",
   "P index.html 48a9f300466757859b06a6279d00dd4b0fac8be70159b3942780b910e5e588d0",
-  "P package.json 7f3d7b83fed35e92db50c9347a449beea33fdc9ca5403f1f69aeec68a5618f06",
+  "P package.json 2755cd39fc7a4eae096871b67a5c244cf0f973906373f62dfa73c0cf5a355b0f",
   "P prototype/README.md 111bf64f13269b1a8a56c7db10957d0c6d89c920e77293dd87406ad1467db31d",
   "P prototype/app.js ce5a0677a8afc970d33d47e8e665086dca1c9d1d7cd9406293a31bcd5d0440ed",
   "P prototype/index.html 3e9000f791f9adc3e84524f3c2451c6448a44a8cda66581e78937c42167259f2",
@@ -375,7 +375,7 @@ class HealthControllerTest {
     "react-dom": "19.3.0",
     "react-hook-form": "7.89.0",
     "react-router": "8.4.0",
-    "zod": "4.6.5"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
@@ -538,7 +538,7 @@ exports[`#40: Spring Boot の生成物（database=postgresql） > ファイル�
   "P .github/workflows/check.yml 352ff9b419651fa29da92d7f78ce0bac508c725eb496951287716d1ce7f52c7a",
   "P .gitignore fd45c599ad5952284a536c250e9358f42a7337aa03b6b61b2f117cd3826570c0",
   "M .gitleaks.toml 11a80a42c0b98c362b38ba7322dc12949919893c20e41d2fe44e1c8da107e72e",
-  "P .harness/config.yaml 4180f30b0ec7998f472963c1aff28487931e0df225f0bd8e584e58a1c7ea62a4",
+  "P .harness/config.yaml e0d1d5592af73489a734ae3237dea02d9b68a1e263ac1b529805a9bacbe38539",
   "P .jscpd.json 28d095fed27f81cb731db884fed7552997a5f3f88ff23e07ba4dd1a15d66923c",
   "P .node-version d9f318747a126ce2247661af67852b185def7789492eabfad7bba322be087c33",
   "P .prettierignore 71e7ff2cbd7564fccd277f4f3ac3d202d7d03df5ab0826c54e7c86388f82b6b4",
@@ -572,7 +572,7 @@ exports[`#40: Spring Boot の生成物（database=postgresql） > ファイル�
   "P docs/project-rules.md 8799210035a342e13ddc01d1363a2f7434b6f79ad4072b1f4bca3b885f40744c",
   "P docs/requirements.md c7e03a4999a43d3983edf98e2a5f196e3236e1d1ad65893fc53bdd6c2f908495",
   "M docs/secrets.md 4d09ac900bbd6a089238d9d852211d65821450f9a1706ea512e916b5a0b4d546",
-  "P docs/tech-stack.md 53f3cc08720b9c7f70e99d20a35f105d5e3f36628c90a3512eddff8a89a57b91",
+  "P docs/tech-stack.md 37fa9a6bfa7a219f2d36fe48c8e6e0f91f770593283895ce636fa41252b1a9e2",
   "P docs/testing/README.md b1c3d4baaa29e8e15629b984feb0d7794ee3320bd5ca68e3e9d3d60f51eb93fb",
   "P docs/testing/e2e.md 115c826e20b91cea41bbfbb9be84143e061f3e5bca60f212847043629a485a58",
   "P docs/testing/integration.md 9ff65432f1c427493a13f7705e019f953f40c8f9348a56b9e54992453f62d9b4",
@@ -598,7 +598,7 @@ exports[`#40: Spring Boot の生成物（database=postgresql） > ファイル�
   "P frontend/src/test/server.ts 3171d11870fdd32ba50d3bd9dc4b90702f899859480346adf60ac49a949d8b51",
   "P frontend/src/test/setup.ts 292bce170740fd6a2adabf0ffa906c80698fc85f52138ba761e9f88c96d7d84d",
   "P index.html 48a9f300466757859b06a6279d00dd4b0fac8be70159b3942780b910e5e588d0",
-  "P package.json 7f3d7b83fed35e92db50c9347a449beea33fdc9ca5403f1f69aeec68a5618f06",
+  "P package.json 2755cd39fc7a4eae096871b67a5c244cf0f973906373f62dfa73c0cf5a355b0f",
   "P prototype/README.md 111bf64f13269b1a8a56c7db10957d0c6d89c920e77293dd87406ad1467db31d",
   "P prototype/app.js ce5a0677a8afc970d33d47e8e665086dca1c9d1d7cd9406293a31bcd5d0440ed",
   "P prototype/index.html 3e9000f791f9adc3e84524f3c2451c6448a44a8cda66581e78937c42167259f2",
@@ -870,7 +870,7 @@ class HealthControllerTest {
     "react-dom": "19.3.0",
     "react-hook-form": "7.89.0",
     "react-router": "8.4.0",
-    "zod": "4.6.5"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

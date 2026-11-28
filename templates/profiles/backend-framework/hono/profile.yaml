@@ -13,9 +13,9 @@ packages_when:
 dev_packages: [wrangler, "@types/pg"]
 # ひな形で動作を確かめたバージョン（2026-09-30、Issue #19 の試作で確認）
 verified_versions:
-  hono: "4.13.12"
+  hono: "4.13.23" # 2026-11-28、Issue #103 で確認
   "@hono/zod-validator": "0.9.1"
-  zod: "4.6.5"
+  zod: "4.6.7" # 2026-11-28、Issue #103 で確認
   wrangler: "4.144.0"
   "@types/pg": "8.23.1"   # 2026-10-03、Issue #56 で pg 8.23.0 との組み合わせを確認
 compatibility_notes:
