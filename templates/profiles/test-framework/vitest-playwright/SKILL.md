@@ -3,7 +3,7 @@ name: test-tools
 description: テストの道具の使い方。Vitest（バックエンドはWorkersの実行エンジン、フロントエンドはjsdom）、Testing Library、MSW、fast-check、Playwright、k6、OWASP ZAPを使うときに読む。
 ---
 
-<!-- もとになった共通仕様：C-24・C-25・C-37・C-69・C-70・C-79 -->
+<!-- もとになった共通仕様：C-24・C-25・C-37・C-69・C-70・C-79・C-52 -->
 
 # テストの道具
 
@@ -18,6 +18,22 @@ description: テストの道具の使い方。Vitest（バックエンドはWork
 | E2E | Playwright（`e2e/console-guard.ts`の`test`を使う） | `e2e/` |
 | 負荷・限界のテスト | k6（検証環境だけ、承認を得て） | `tests/load/` |
 | セキュリティのテスト（DAST） | OWASP ZAP（検証環境だけ、承認を得て） | 手順書（{{testing_docs_dir}}） |
+
+## Testing Library で DOM を検索する場合
+
+{{test_tools_examples_intro}} 例では、通信を発生させず Promise の完了時点を制御する。
+
+### 応答後にリンクが見つかる場合
+
+標準の `a` 要素は `href` が付くとリンクとして見つかる。応答後に `href` が付くときは、役割と名前で見つかるまで `findByRole` で待つ。
+
+{{example:frontend/src/rules-examples/async-query.test.tsx#async-link-query}}
+
+### 初めから見つかるリンクの行き先が変わる場合
+
+`waitFor` の callback で探し直し、現在の要素に期待する `href` が付くまで待つ。
+
+{{example:frontend/src/rules-examples/async-query.test.tsx#async-link-attribute}}
 
 ## 守ること
 
