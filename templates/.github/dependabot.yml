@@ -9,12 +9,17 @@ updates:
     schedule:
       interval: weekly
     groups:
-      # 本番の依存は、1つの PR にまとめる。開発用の依存は、別にまとめる
+      # Vitest に関係する依存の定期更新をまとめる。残りは本番用と開発用に分ける。
+      vitest-packages:
+        applies-to: version-updates
+        patterns:
+          - vitest
+          - "@cloudflare/vitest-pool-workers"
       production-dependencies:
         dependency-type: production
       development-dependencies:
         dependency-type: development
-  - package-ecosystem: github-actions
+{{dependabot_vitest_ignore}}  - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly

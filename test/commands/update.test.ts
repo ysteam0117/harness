@@ -164,6 +164,62 @@ it("F-27 F-28 #103 AC-2: 過去の採用版と依存ファイルを保持して�
   }
 });
 
+it("F-27 #105 AC-2: create の Dependabot を更新し、競合時は利用者の変更を保持する", async () => {
+  const file = ".github/dependabot.yml";
+  const guide = "docs/testing/security.md";
+  const oldSettings = [
+    "version: 2",
+    "updates:",
+    "  - package-ecosystem: npm",
+    "    directory: /",
+    "    schedule:",
+    "      interval: weekly",
+    "    groups:",
+    "      production-dependencies:",
+    "        dependency-type: production",
+    "      development-dependencies:",
+    "        dependency-type: development",
+    "",
+  ].join("\n");
+  const customSettings = oldSettings.replace("interval: weekly", "interval: monthly");
+  const customGuide = "# 利用者の依存更新手順\n";
+  const expectedGroup = "vitest-packages:";
+  const expectedIgnore = "version-update:semver-major";
+  const project = await freshProject();
+
+  simulateOldVersion(project, file, oldSettings);
+  write(project, guide, customGuide);
+
+  const s = updateSetup(project);
+  expect((await runUpdate({ yes: true }, s.deps)).exitCode, s.err()).toBe(0);
+  expect(read(project, file)).toContain(expectedGroup);
+  expect(read(project, file)).toContain(expectedIgnore);
+  expect(readConfig(project).managed_files[file]).toBe(fingerprint(read(project, file)));
+  expect(read(project, guide)).toBe(customGuide);
+
+  simulateOldVersion(project, file, oldSettings);
+  write(project, file, customSettings);
+  const interactive = updateSetup(
+    project,
+    { "update_conflict:.github/dependabot.yml": ["keep"] },
+    { interactive: true },
+  );
+  expect((await runUpdate({}, interactive.deps)).exitCode, interactive.err()).toBe(0);
+  const diff = interactive.prompter.notes.find((note) => note.startsWith(`差分：${file}`));
+  expect(diff).toContain("interval: monthly");
+  expect(diff).toContain(expectedGroup);
+  expect(read(project, file)).toBe(customSettings);
+  expect(exists(project, `${file}.harness-new`)).toBe(false);
+
+  const automatic = updateSetup(project);
+  expect((await runUpdate({ yes: true }, automatic.deps)).exitCode, automatic.err()).toBe(0);
+  expect(read(project, file)).toBe(customSettings);
+  expect(readConfig(project).managed_files[file]).toBe(fingerprint(oldSettings));
+  expect(read(project, `${file}.harness-new`)).toContain(expectedGroup);
+  expect(read(project, `${file}.harness-new`)).toContain(expectedIgnore);
+  expect(read(project, guide)).toBe(customGuide);
+});
+
 /** 出力の Markdown から、「### 見出し」の節の本文を取り出す（なければ ""） */
 function section(out: string, title: string): string {
   const lines = out.split("\n");
