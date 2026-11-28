@@ -168,6 +168,11 @@ export function fakeValues(): Record<string, string> {
     "test_isolation_notes",
     "test_docs_paren",
     "quality_checker_command_step",
+    "quality_check_scope",
+    "targeted_check_entry",
+    "pre_commit_secret_check",
+    "final_verification_record_place",
+    "verification_candidate_record",
     // 技術プロファイルの Skill の、生成したアプリ専用の箇所（#18）
     "profile_skill_note",
     "hono_parts_section",

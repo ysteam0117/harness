@@ -28,6 +28,7 @@
 | `public/favicon.ico`・`favicon.svg`・`apple-touch-icon.png`・`icons/icon-192.png`・`icons/icon-512.png`・`manifest.webmanifest` | `src/generate/icons.ts` | 常に | プロジェクトのもの |
 
 - ワークフローは、プロジェクトが CI を足したり変えたりするため、プロジェクトのものにする
+- 手元の対象検証と全体確認（[C-61](../requirements/common/quality-test.md#c-61)）の分担は、testing Skill と実装の進め方 Skill を参照する。統括は最終候補の結果を PR または Issue の記録に残す。`check.yml` は全体確認の前に実際の checkout の SHA を出す。既存プロジェクトのワークフローと手順書は、必要に応じて手動で取り込む。記録ステップがなければ実行情報とログを照合し、取得できない SHA は未記録とする。
 - 重い検証の事前確認・停止条件（[C-25](../requirements/common/quality-test.md#c-25)）は、共通の testing Skill を参照する。品質チェック担当と技術プロファイルの品質 Skill からも同じ箇所へ案内する。管理対象の Skill・エージェントには `harness update` で手順が届く。adopt 時に既存の同名ファイルを残した場合と `docs/testing/mutation.md` の適用例は、必要に応じて手動で取り込む（[導入](adopt.md#導入したアプリの更新harness-updateissue-16)、[管理の区分](generation.md#管理するファイルとプロジェクトのものの分け方f-27)）
 - 結合テストの手順書は、DB の回答で内容が変わる。変わる部分は値（`integration_tools`・`integration_setup`・`integration_verify`・`integration_cleanup`。`data/template-values.yaml`）にし、ひな形に条件の分岐を入れない（F-28）
 - CI の検証用の環境変数は、リポジトリの Secrets の `ENV_TEST` に `.env.test` の中身を登録して渡す。ワークフローに値は書かない

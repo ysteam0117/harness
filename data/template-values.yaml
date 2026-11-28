@@ -286,11 +286,11 @@ workflow_review_steps:
   - when: { answer: repository, equals: local }
     value: |-
       5. **記録を書く**：レビューの結果（レビューしたAI・指摘・採用したか・採用しなかった理由）と、受け入れ条件ごとの確認の結果を、Issueのファイルに追記する。着手したら状態を「作業中」にする。「知見」の欄は必ず埋める
-      6. **取り込む**：作業のブランチでコミットしたあと、`npm run merge:check`を実行する。品質チェックとテストのすべて（`npm run check`）が通った場合だけ、`main`にSquashで取り込まれる。失敗したときは`main`に何も残らないので、直してもう一度実行する
+      6. **取り込む**：統括は手元の必須確認と対象コミットを照合し、Issueのファイルに記録する。`npm run merge:check`で統合後の全体確認が通った場合だけ、`main`にSquashで取り込まれる。結果も記録し、失敗したときは修正と再確認を行う
       7. **Issueの状態を確かめる**：取り込みのコマンドが、Issueのファイルの状態を「完了」にしたことを確かめる
   - value: |-
-      5. **PRを作る**：本文に `Closes #<子Issue番号>`、親Issueは `Refs #<親Issue番号>` を書く。PRテンプレートの「知見」の欄は必ず埋める
-      6. **マージする**：テストと品質チェックが通っていることを確かめ、**Squash**でマージする
+      5. **PRを作る**：統括はpush前に手元の秘密情報確認の成功を確かめる。本文に `Closes #<子Issue番号>`、親Issueは `Refs #<親Issue番号>` を書く。PRテンプレートの「知見」の欄は必ず埋める
+      6. **マージする**：統括は最終候補の必須確認と、必要なCIの成功を対象コミットで照合し、PR本文に記録する。必須のCIが失敗・未実行・古い結果ならマージを止める。成功を確認して**Squash**でマージする
       7. **Issueのクローズを確かめる**：`Closes`で指定したIssueが自動でクローズされたかを確かめる。されていなければ、PRの番号を書いたコメントを付けて手動でクローズする
 
 workflow_main_rules:
@@ -305,8 +305,8 @@ workflow_main_rules:
 # Skill「実装の進め方」
 commit_merge_step:
   - when: { answer: repository, equals: local }
-    value: "**コミット・取り込み**：`AGENTS.md`の「作業の流れ」に従う。取り込みの後、Issueのファイルの状態が「完了」になったかを確かめる"
-  - value: "**コミット・PR・マージ**：`AGENTS.md`の「作業の流れ」に従う。マージの後、`Closes`で指定したIssueがクローズされたかを確かめ、されていなければPRの番号を書いたコメントを付けて手動でクローズする"
+    value: "**コミット・取り込み**：`AGENTS.md`の「作業の流れ」に従い、統括が手元の必須確認を照合する。取り込みの成否と対象コミットをIssueのファイルに記録し、状態が「完了」になったかを確かめる"
+  - value: "**コミット・PR・マージ**：`AGENTS.md`の「作業の流れ」に従い、統括がpush前の秘密情報確認とマージ前の必須CIを含む確認を照合し、PR本文に記録する。マージの後、`Closes`で指定したIssueがクローズされたかを確かめ、されていなければPRの番号を書いたコメントを付けて手動でクローズする"
 
 prev_merged_check:
   - when: { answer: repository, equals: local }
@@ -509,7 +509,30 @@ test_isolation_notes: |-
   - `npm run env:check`と起動のときに、今の環境の名前を表示する（値は表示しない）
   - テストのスクリプトでは、wranglerの`--remote`を使わない
 test_docs_paren: "（`docs/testing/`）"
-quality_checker_command_step: "手元とCIで共通の1つのコマンド（例：`npm run check`）で、**プロジェクト全体**に対して品質チェックとテストを実行する。一部のフォルダだけに限定しない"
+quality_checker_command_step: Skill「テスト」の「品質チェック」に従い、計画に沿って手元の対象検証と、手元で行う必須の確認を実行する。候補の対象コミットと未コミット差分の有無を記録し、結果を統括に渡す
+
+quality_check_scope:
+  - when: { answer: repository, equals: local }
+    value: ローカルのみを選んだ場合は、手元で全体確認を行う。ローカルGitでは`npm run merge:check`で取り込むときにも統合後の内容を確認する
+  - when: { answer: check_location, equals: github_actions }
+    value: GitHub Actionsのみを選んだ場合は、必須の全体確認をCIで行う。手元では影響範囲とCIに含まれない必須項目を確認する。CIが使えない場合は必要な全体確認を手元で行う。手元の結果で必須のCIを成功扱いしない
+  - when: { answer: check_location, equals: both }
+    value: 両方を選んだ場合は、手元とCIの両方で全体確認を行う。同じ候補の対象検証を手元の全体確認で済ませた場合は、手元でその検証を繰り返さない
+  - value: ローカルのみを選んだ場合は、手元で全体確認を行う
+
+targeted_check_entry: TypeScriptのテストの対象を指定できる構成では、`npm test -- <対象>`のように既存のnpm scriptsを通す。pretestなどの安全前処理と検証用DBの分離を守る。別の技術では既存の手順を使う
+
+pre_commit_secret_check: commit・push前に、手元の`npm run security:secrets`で秘密情報を全範囲で確認する。ファイルを絞らず、CIの結果で代替しない。成功を確認できるまでcommit・pushしない
+
+final_verification_record_place:
+  - when: { answer: repository, equals: local }
+    value: Issueのファイルの「検証の記録」
+  - value: PR本文の「検証の記録」
+
+verification_candidate_record:
+  - when: { answer: repository, equals: local }
+    value: ローカルの取り込みでは、対象コミットと取り込み先の基点を区別して記録する。統合後の全体確認と取り込みの成否を照合する。
+  - value: CIの結果は、PR先端のSHA、取り込み先の基点、実際のcheckoutのSHA（仮マージコミットを含む）、実行へのリンクを区別して記録する。古いワークフローでcheckoutのSHAが記録されていないときは実行情報とログを調べ、確認できなければ「未記録」と書く。PR先端のSHAを代わりに書かない。結果が最終候補に対応するか分からなければ未確認とする。
 
 # 生成したアプリの文書・フォルダ構成を前提にした箇所（導入では data/adopt-values.yaml で入れ替える）
 requirements_doc: "`docs/requirements.md`"
@@ -559,7 +582,7 @@ axios_client_rule: "APIは`frontend/src/services/api-client.ts`の`apiClient`だ
 logger_examples_intro: "例は、テスト（`backend/src/rules-examples/logger.test.ts`）で動作を確かめてある。悪い例は、問題が起きることもテストで確かめてある。コードを書く前に読み、良い例の書き方に合わせる。"
 quality_generated_rule: "生成されたファイル（`worker-configuration.d.ts`等）・組み立ての結果・`prototype/`は、対象から外す（設定済み）"
 quality_run_section: |-
-  - 品質チェックとテストは、手元とCIで共通の`npm run check`で、プロジェクト全体に対して実行する。`npm run check`は、Dockerを使わない`npm run check:app`と、Dockerで動くセキュリティのテスト`npm run security`をつないだもの。**`npm run check`はホストで実行する**（Dockerが要る）。Docker（開発用のコンテナ）の中では、`npm run check:app`を実行する
+  - 手元とCIの分担、commit・push前の確認、実行結果の扱いは、Skill「テスト」の「品質チェック」に従う。全体確認は`npm run check`で行う。`npm run check`は、Dockerを使わない`npm run check:app`と、Dockerで動くセキュリティのテスト`npm run security`をつないだもの。**`npm run check`はホストで実行する**（Dockerが要る）。Docker（開発用のコンテナ）の中では、`npm run check:app`を実行する
   - セキュリティのテストは、1つだけ実行もできる：`npm run security:semgrep`・`npm run security:secrets`・`npm run security:osv`。手順・合否・誤検知の抑え方は`docs/testing/security.md`
   - ミューテーションテストは、影響の大きい処理（認証・認可・個人情報・重要な業務ルール）を対象に`npm run mutation`で行う
 
