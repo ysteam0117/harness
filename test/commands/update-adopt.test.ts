@@ -63,9 +63,9 @@ function withBody(text: string, body: string): string {
   return `${text.slice(0, start)}${eol}${body.replace(/\n/g, eol)}${eol}${text.slice(end)}`;
 }
 
-const answersFile = (): string => {
+const answersFile = (over: Record<string, unknown> = {}): string => {
   const file = path.join(newRoot(), "answers.yaml");
-  const answers: Record<string, unknown> = baseAnswers();
+  const answers: Record<string, unknown> = baseAnswers(over);
   delete answers["app_name"];
   writeFileSync(file, stringify(answers));
   return file;
@@ -78,6 +78,7 @@ const answersFile = (): string => {
 async function adoptedApp(
   prepare: (dir: string) => void = () => undefined,
   old = true,
+  answers: Record<string, unknown> = {},
 ): Promise<string> {
   const dir = path.join(newRoot(), "sample-app");
   cpSync(FIXTURE, dir, { recursive: true });
@@ -91,11 +92,46 @@ async function adoptedApp(
     now: () => FIXED_NOW,
     secretScan: cleanScan,
   };
-  const out = await runAdopt({ answers: answersFile(), yes: true }, deps);
+  const out = await runAdopt({ answers: answersFile(answers), yes: true }, deps);
   if (out.exitCode !== 0) throw new Error("導入に失敗しました");
   if (old) makeOld(dir);
   return dir;
 }
+
+it.each(["github", "local"])(
+  "F-27 #103 AC-2: %s の adopt と update が利用者の依存を保持する",
+  async (repository) => {
+    const oldPins = { hono: "4.13.12", zod: "4.6.5" };
+    const contents = {
+      "package.json": JSON.stringify({ name: "sample-app", dependencies: oldPins }) + "\n",
+      "package-lock.json": JSON.stringify({
+        name: "sample-app",
+        lockfileVersion: 3,
+        packages: {
+          "": { dependencies: oldPins },
+          "node_modules/hono": { version: oldPins.hono },
+          "node_modules/zod": { version: oldPins.zod },
+        },
+      }),
+    };
+    const dir = await adoptedApp(
+      (root) => {
+        for (const [file, content] of Object.entries(contents)) write(root, file, content);
+      },
+      false,
+      {
+        repository,
+        ...(repository === "local" ? { visibility: "private", check_location: "local" } : {}),
+      },
+    );
+    expect(readConfig(dir).answers["repository"]).toBe(repository);
+    for (const [file, content] of Object.entries(contents)) expect(read(dir, file)).toBe(content);
+    const update = updateSetup(dir);
+    expect((await runUpdate({ yes: true }, update.deps)).exitCode, update.err()).toBe(0);
+    for (const [file, content] of Object.entries(contents)) expect(read(dir, file)).toBe(content);
+    expect(readConfig(dir).versions).toEqual([]);
+  },
+);
 
 function makeOld(dir: string): void {
   for (const p of ["AGENTS.md", "CLAUDE.md"]) {

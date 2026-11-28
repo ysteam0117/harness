@@ -75,7 +75,13 @@ export async function historicalBaselineInput(
   over: Record<string, unknown> = {},
 ): Promise<ProjectInput> {
   const input = await projectInput(over);
-  const historical: Record<string, string> = { node: "24.19.0", vite: "8.3.1", vitest: "4.1.11" };
+  const historical: Record<string, string> = {
+    node: "24.19.0",
+    vite: "8.3.1",
+    vitest: "4.1.11",
+    hono: "4.13.12",
+    zod: "4.6.5",
+  };
   input.versions.entries = input.versions.entries.map((entry) => {
     const version = historical[entry.name];
     return version ? { ...entry, version, verified: version } : entry;
