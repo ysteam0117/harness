@@ -148,6 +148,9 @@ issue_record_place:
   - when: { answer: repository, equals: local }
     value: Issueの記録
 
+review_record_place: 既存のIssueの記録
+review_follow_up_place: 既存の記録方法で管理する関連Issue
+
 knowledge_record_place:
   - when: { answer: repository, equals: local }
     value: Issueの記録の「知見」の欄
