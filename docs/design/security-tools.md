@@ -30,6 +30,12 @@ C-82 で採用を決めた道具（Semgrep・gitleaks・OSV-Scanner・Dependabot
 | `backend/src/openapi.test.ts` | `templates/project/backend/openapi.test.ts` | 常に | プロジェクトのもの |
 | `docs/testing/security.md`・`docs/testing/schemathesis.md` | `templates/docs/testing/` | 常に | プロジェクトのもの |
 
+## Dependabot の定期更新
+
+- npm の `vitest-packages` は Vitest と `@cloudflare/vitest-pool-workers` の定期更新をまとめる。最初に一致したグループが選ばれるため、本番用と残りの開発用の前に置く。Spring Boot の生成先で該当する直接依存は Vitest。
+- Hono でだけ、npm の `ignore` に `vitest` の `version-update:semver-major` を置く。4系のマイナー・パッチは定期更新に残り、この指定はセキュリティ更新に適用しない。
+- ハーネスの保守者は `harness status` などの範囲の見直し（`src/versions/range-review.ts`）で Vitest 5 対応の候補を見つけたら、`vitest-playwright/profile.yaml` の `version_ranges` と `range_causes` を参照する。対応する組み合わせでインストール・型検査・テスト・品質チェックが通ったら、プロファイルの範囲とひな形の `ignore` を同じ変更で直す。生成先には管理ファイルの変更を `harness update` で届ける。
+
 ## 実行のスクリプト（`scripts/security-check.mjs`）
 
 - 順序：Git に追加された秘密のファイルの確認（Docker を使わない）→ `docker info` → gitleaks → Semgrep → OSV-Scanner → 要約（道具ごとの OK・NG と所要時間）。1つでも失敗なら終了コード1。引数（`semgrep`・`secrets`・`osv`）で1つだけ実行できる

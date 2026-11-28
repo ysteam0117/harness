@@ -133,6 +133,36 @@ it.each(["github", "local"])(
   },
 );
 
+describe.each(["github", "local"])("F-27 #105 AC-2 %s", (repository) => {
+  it.each([true, false])(
+    "F-27 #105 AC-2: adopt と update は利用者の Dependabot 設定をそのまま保つ（既存: %s）",
+    async (existsBeforeAdopt) => {
+      const file = ".github/dependabot.yml";
+      const customSettings = "version: 2\nupdates: []\n";
+      const project = await adoptedApp(
+        (dir) => {
+          if (existsBeforeAdopt) write(dir, file, customSettings);
+        },
+        false,
+        {
+          repository,
+          ...(repository === "local" ? { visibility: "private", check_location: "local" } : {}),
+        },
+      );
+      expect(readConfig(project).answers["repository"]).toBe(repository);
+      expect(exists(project, file)).toBe(existsBeforeAdopt);
+      if (existsBeforeAdopt) expect(read(project, file)).toBe(customSettings);
+
+      const s = updateSetup(project);
+      expect((await runUpdate({ yes: true }, s.deps)).exitCode, s.err()).toBe(0);
+      expect(exists(project, file)).toBe(existsBeforeAdopt);
+      if (existsBeforeAdopt) expect(read(project, file)).toBe(customSettings);
+      expect(exists(project, `${file}.harness-new`)).toBe(false);
+      expect(readConfig(project).managed_files).not.toHaveProperty([file]);
+    },
+  );
+});
+
 function makeOld(dir: string): void {
   for (const p of ["AGENTS.md", "CLAUDE.md"]) {
     write(dir, p, withBody(read(dir, p), OLD_BODY));

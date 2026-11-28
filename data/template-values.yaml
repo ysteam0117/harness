@@ -371,11 +371,29 @@ dependency_update_row:
     value: "| 依存関係の更新の確認 | `npm outdated` | 定期的に | 更新は、バージョンを確かめてから、Issueにして取り込む |"
   - value: "| 依存関係の更新の通知 | Dependabot | 常時 | 更新のPRは、バージョンを確かめてから取り込む |"
 
-# docs/testing/security.md の、依存ライブラリの更新の通知の節の本文（#42）
+# npm の Dependabot 設定に入れる Hono 向けの制限（#105）。差し込み先に合わせ、行頭の空白と最後の改行を残す。
+dependabot_vitest_ignore:
+  - when: { answer: backend, equals: hono }
+    value: |2
+          # Workers 用パッケージの Vitest 5 対応をハーネスが検証したら、harness update で制限が外れる。根拠は docs/tech-stack.md の「組み合わせの条件」を参照する。
+          ignore:
+            - dependency-name: vitest
+              update-types: ["version-update:semver-major"]
+  - value: ""
+
+# docs/testing/security.md の、依存ライブラリの更新の通知の節の本文（#42・#105）
 security_dependabot_section:
   - when: { answer: repository, equals: local }
     value: GitHub を使わない（手元の Git だけの）ため、Dependabot は使わない。依存の更新は、定期的に `npm outdated` で確かめ、Issue にして、固定したまま動作を確かめてから取り込む（C-62）。
-  - value: "`.github/dependabot.yml` が、npm・GitHub Actions・Docker Compose の依存を、毎週確かめて、更新の PR を作る。npm の本番の依存は、1つの PR にまとめる。更新の PR は、品質チェックを通したうえで、固定したまま動作を確かめてから取り込む（C-62）。"
+  - when: { answer: backend, equals: hono }
+    value: |-
+      `.github/dependabot.yml` が npm・GitHub Actions・Docker Compose の依存を毎週確かめ、更新の PR を作る。Vitest と Workers 用の `@cloudflare/vitest-pool-workers` の定期更新は `vitest-packages` にまとめる。残りの npm の依存は本番用と開発用に分ける。更新の PR は、品質チェックを通したうえで、固定したまま動作を確かめてから取り込む（C-62）。
+
+      Workers 用パッケージが Vitest 5 に対応するまで、Vitest のメジャー版の定期更新を止める。4系のマイナー・パッチとセキュリティ更新は対象に残る。現在の根拠は `docs/tech-stack.md` の「組み合わせの条件」で確かめる。ハーネスが Vitest 5 に対応した組み合わせを検証した後、`harness update` で解除を反映する。先に手で外すと、管理ファイルの編集として更新時に差分が出る。
+
+      依存を解決できない更新 PR では、Workers 用パッケージの peer 依存を確かめる。セキュリティ更新の PR なら、閉じる前に4系に修正版があるかを確かめる。修正版が無ければ、影響範囲、開発用の依存であること、追跡先を Issue に記録する。互換性のない更新 PR を閉じる場合は、互換性を確かめた組み合わせで別の更新を行う（C-62）。
+  - value: |-
+      `.github/dependabot.yml` が npm と GitHub Actions の依存を毎週確かめ、更新の PR を作る。Vitest の定期更新は専用の `vitest-packages` グループで扱う。残りの npm の依存は本番用と開発用に分ける。更新の PR は、品質チェックを通したうえで、固定したまま動作を確かめてから取り込む（C-62）。
 
 # GitHub に作るリポジトリの公開範囲（gh repo create の引数）
 repo_visibility_flag:
