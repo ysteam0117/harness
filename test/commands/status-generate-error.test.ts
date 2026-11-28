@@ -33,6 +33,7 @@ describe("#6 AC-5: status は、GenerateError の本文を出さない", () => {
       {},
       {
         cwd: dir,
+        homeDirectory: () => dir,
         stdout: (s) => outs.push(s),
         stderr: (s) => errs.push(s),
         runGh: async () => ({ code: 1, stdout: "", stderr: "" }),

@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import path from "node:path";
 import { Command } from "commander";
 import semver from "semver";
@@ -25,6 +26,8 @@ import {
   type StatusRangeTargets,
 } from "../versions/status-review.js";
 
+import { approvalSettingLines } from "./status-approval.js";
+
 export interface StatusDeps {
   cwd: string;
   stdout: (text: string) => void;
@@ -37,6 +40,8 @@ export interface StatusDeps {
   changelog?: () => string | undefined;
   /** 実行中の CLI のバージョンの差し替え */
   harnessVersion?: () => string;
+  /** 標準の利用者設定を調べるホームの差し替え。既定は os.homedir */
+  homeDirectory?: () => string;
   /** ファイル操作の差し替え */
   fs?: Partial<UpdateFs>;
   /** npm・Node.js の登録情報の取得の差し替え。既定は globalThis.fetch（.harness/config.yaml が無いフォルダでは使わない） */
@@ -116,7 +121,7 @@ function listLines(paths: string[]): string[] {
   return paths.map((p) => `  - ${p}`);
 }
 
-/** harness status（F-27）：プロジェクトのバージョン・インストール済みのバージョン・最新のバージョン・主な変更点 */
+/** harness status（F-27）：ハーネスのバージョン・変更点・プロジェクトの状態・Claude Code の承認設定を表示する */
 export async function runStatus(
   options: StatusOptions,
   deps: StatusDeps,
@@ -124,7 +129,7 @@ export async function runStatus(
   const fs: UpdateFs = { ...realUpdateFs, ...deps.fs };
   const installed = (deps.harnessVersion ?? harnessVersion)();
 
-  // プロジェクトの記録（なければ、CLI の情報だけ）
+  // 管理記録がなくても、CLI の情報と承認設定の診断を表示する。
   let recorded: RecordedConfig | undefined;
   let root: string | undefined;
   try {
@@ -144,13 +149,14 @@ export async function runStatus(
     throw e;
   }
 
-  // 最新の版と、登録情報（取れなくても、終了コードは0）。待ち時間を減らすため、並行して調べる
+  // 最新の版・登録情報と承認設定を並行して調べる。各情報を取得できなくても、終了コードは0。
   if (recorded !== undefined) deps.stderr("登録情報（npm・Node.js）を確かめています…\n");
-  const [latest, survey] = await Promise.all([
+  const [latest, survey, approvalLines] = await Promise.all([
     fetchLatestVersion((deps.repository ?? readOwnRepository)(), deps.runGh ?? defaultRunGh),
     recorded === undefined
       ? Promise.resolve(undefined)
       : surveyRegistry(recorded, deps.fetch ?? globalThis.fetch),
+    approvalSettingLines(fs, root, deps.homeDirectory ?? homedir),
   ]);
 
   const lines: string[] = [];
@@ -167,7 +173,7 @@ export async function runStatus(
   lines.push("");
   if (recorded === undefined) {
     lines.push(
-      "このフォルダには .harness/config.yaml がありません（harness create で作ったプロジェクトのフォルダで実行すると、プロジェクトの状態も表示します）。",
+      "このフォルダには .harness/config.yaml がありません（生成・導入したプロジェクトでは、管理ファイルや採用した技術の状態も表示します）。",
     );
     if (entries === undefined) lines.push("主な変更点：変更履歴がありません");
     else {
@@ -230,13 +236,14 @@ export async function runStatus(
         : "インストール済みのハーネスより新しいバージョンがあります。",
     );
   }
+  lines.push("", ...approvalLines);
   deps.stdout(`${lines.join("\n")}\n`);
   return { exitCode: 0 };
 }
 
 export function statusCommand(deps: Partial<StatusDeps> = {}): Command {
   return new Command("status")
-    .description("今のハーネスのバージョン・最新のバージョン・主な変更点を表示する")
+    .description("ハーネスのバージョン・主な変更点・Claude Code の承認設定を表示する")
     .option("--dir <フォルダ>", "プロジェクトのフォルダ（既定は作業中のフォルダ）")
     .action(async (options: StatusOptions) => {
       const outcome = await runStatus(options, {
@@ -247,6 +254,7 @@ export function statusCommand(deps: Partial<StatusDeps> = {}): Command {
         ...(deps.repository ? { repository: deps.repository } : {}),
         ...(deps.changelog ? { changelog: deps.changelog } : {}),
         ...(deps.harnessVersion ? { harnessVersion: deps.harnessVersion } : {}),
+        ...(deps.homeDirectory ? { homeDirectory: deps.homeDirectory } : {}),
         ...(deps.fs ? { fs: deps.fs } : {}),
         ...(deps.fetch ? { fetch: deps.fetch } : {}),
       });

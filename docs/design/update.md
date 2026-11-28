@@ -2,7 +2,7 @@
 
 ## 目的と範囲
 
-`harness update` で、生成済みのプロジェクトに、新しいハーネスの内容を反映する（F-27）。`harness status` で、今のバージョン・最新のバージョン・主な変更点を表示する（F-27・F-28）。
+`harness update` で、生成済みのプロジェクトに、新しいハーネスの内容を反映する（F-27）。`harness status` で、バージョン・変更点・管理ファイルの状態と Claude Code の承認設定を表示する（F-27・F-28、#99）。
 
 最優先の約束は、**利用者のファイルを失わないこと**である。管理するファイルでも、利用者が書き換えたものは、確認なしに上書きしない。
 
@@ -14,7 +14,7 @@
 | AC-2 | 書き換えたファイルは置き換えず、差分を示して利用者に選ばせる |
 | AC-3 | 新しいバージョンで追加されたファイルは追加し、不要になったファイルは削除せずに知らせる |
 | AC-4 | プロジェクトのもの（`docs/requirements.md`・`docs/project-rules.md` 等）は変更しない |
-| AC-5 | `harness status` で、今のバージョン・最新のバージョン・主な変更点が表示される |
+| AC-5 | `harness status` で、今のバージョン・最新のバージョン・主な変更点と Claude Code の承認設定が表示される |
 
 実装を正とする。この設計書とコードが食い違ったときは、コードの動きを正として設計書を直す。
 
@@ -23,7 +23,8 @@
 | ファイル | 役割 |
 | --- | --- |
 | `src/commands/update.ts` | `harness update`。質問・整合性チェック・判定・確認・書き込みの順に進める。差し込み口は `UpdateDeps`（prompter・cwd・stderr・stdout・checkTools・now・runGit・fs・harnessVersion・changelog） |
-| `src/commands/status.ts` | `harness status`。差し込み口は `StatusDeps`（runGh・repository・changelog・harnessVersion・fs・fetch） |
+| `src/commands/status.ts` | `harness status`。差し込み口は `StatusDeps`（runGh・repository・changelog・harnessVersion・homeDirectory・fs・fetch） |
+| `src/commands/status-approval.ts` | Claude Code の `permissions.defaultMode` を読み取り、設定ファイルごとに診断する |
 | `src/update/read-config.ts` | `.harness/config.yaml` の読み込みと検証。パスの形・指紋の形・回答の検証。管理の対象でないパスの記録は無視する |
 | `src/update/plan.ts` | 判定（純粋な関数）。ディスクを見ない |
 | `src/update/state.ts` | ファイルの今の状態の読み取り。リンク（シンボリックリンク・ジャンクション）をたどらない。改行をそろえない生の sha256 |
@@ -98,7 +99,10 @@ SIGINT（Ctrl+C）を受けたときは、書いた分を戻して止める（�
 ## `harness status`
 
 - プロジェクトのバージョン（`config.yaml`）・インストール済みのバージョン・最新のバージョン・主な変更点（同梱の `CHANGELOG.md` の、プロジェクトのバージョンより新しい項目）・書き換え済みの管理ファイルの件数（指紋の比較）。消えている管理ファイルは別に数える。何も書かない
-- `config.yaml` がないフォルダでは、ハーネス（CLI）の情報だけを表示する
+- `config.yaml` がないフォルダでも、ハーネス（CLI）の情報と Claude Code の承認設定を表示する。壊れた管理記録を読んだ場合は、設定を読む前に管理記録のエラーを標準エラーに出し、終了コードは1
+- 承認設定の節は、管理記録の確認後に `src/commands/status-approval.ts` で組み立てる。`--dir` の対象にある `.claude/settings.local.json` と `.claude/settings.json`、標準の利用者設定 `~/.claude/settings.json` の `permissions.defaultMode` を確認する。対象がホームと同じときは `settings.json` を利用者設定として1回だけ確認する
+  - `readState` でファイルと途中のフォルダのリンクをたどらずに読む。有効なUTF-8の先頭のBOMは一つ取り除き、JSONとして解析する。ファイルが無いときは個別の診断を出さない。ホームが開けない、設定が読めない、形式が誤っている場合は標準表記と固定文だけを出す。ファイルの本文や例外の本文・絶対パスは出さず、終了コードは0
+  - `auto`・`acceptEdits`・`bypassPermissions` は、保存場所と方式に応じた注意を表示する。調べた範囲、未設定でも版や条件によっては auto になること、VS Code の初期モード設定や前回の選択は対象外であることを共通表示する。現在のモードは利用者がセッションの画面で確認する
 - 最新のバージョンは、`gh release view --repo <持ち主>/<名前> --json tagName`（時間切れ5秒）で取る。持ち主・名前は、既定で `ysteam0117/harness`（組織の公開のリポジトリ。個人のアカウント名を含まない）。環境変数 `HARNESS_REPOSITORY` で変えられる。`gh` がない・ログインしていない・つながらない・Release がない・`HARNESS_REPOSITORY` の形が違う場合は、「取得できません」と理由を表示し、終了コードは0
 - `CHANGELOG.md` がなければ「変更履歴がありません」。`package.json` の `files` に `CHANGELOG.md` を含める（ファイル自体は #36 で作る）
 - 登録情報の節（Issue #6 PR-C。`config.yaml` があるときだけ。`src/versions/status-review.ts`）。管理ファイルの節の後、「新しいバージョンがあります」の案内の前に表示する。`gh` の問い合わせと並行して取り、待ち時間の案内を stderr に1行出す（stdout は変えない）。`--offline` は設けない

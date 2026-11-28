@@ -2,6 +2,11 @@
 
 ハーネスのバージョンごとの主な変更点。`harness status` は、このファイルから、プロジェクトのバージョンより新しい項目を表示する。バージョンはセマンティックバージョニング（C-08）で付ける。
 
+## 0.6.0
+
+- `harness status` で Claude Code の承認設定を調べる（F-27・F-28、Issue #99）。対象の `.claude/settings.local.json` と `.claude/settings.json`、標準の `~/.claude/settings.json` の `permissions.defaultMode` を確認し、版や条件によっては未設定でも auto で始まることを知らせる。
+- 利用者による承認を手元の設定や起動方法で省かないことを、統括・各担当の定義・共通の依頼に明記した（C-66・C-75）。管理ファイルには `harness update` で反映する。変更済みなら対話で差分を確認し、`--yes` では新しい内容を `.harness-new` に置く。adopt で管理外に残した文書・定義・Skill は手動で取り込む。個人設定の `.claude/settings.local.json`・`~/.claude/settings.json` は更新対象外。
+
 ## 0.5.0
 
 - 工程の記録の書式を追加した（C-35・C-66・C-83、Issue #97）。担当は開始・終了、待機理由、再実行、使用量の範囲・取得元と未取得の理由を統括へ報告する。統括が既存の記録先に要約を手で残す。

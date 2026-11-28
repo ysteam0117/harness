@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -97,6 +97,7 @@ describe("#35: update・status の入口", () => {
     const outs: string[] = [];
     await run(["status"], {
       cwd: tmp.cwd,
+      homeDirectory: () => tmp.cwd,
       stdout: (s) => outs.push(s),
       runGh: async () => ({ code: null, stdout: "", stderr: "gh がありません（テスト）" }),
       repository: () => "testowner/harness",
@@ -105,6 +106,31 @@ describe("#35: update・status の入口", () => {
     expect(outs.join("")).not.toContain("未実装");
     expect(process.exitCode ?? 0).toBe(0);
   });
+});
+
+it("F-27 #99 AC-1: CLI の入口は差し替えたホームを使い、ヘルプは設定を読まない", async () => {
+  const project = makeTmp();
+  const home = makeTmp();
+  mkdirSync(path.join(home.cwd, ".claude"));
+  writeFileSync(
+    path.join(home.cwd, ".claude", "settings.json"),
+    '{"permissions":{"defaultMode":"auto"}}',
+  );
+  const homeDirectory = vi.fn(() => home.cwd);
+  const outs: string[] = [];
+  const deps = {
+    cwd: project.cwd,
+    homeDirectory,
+    stdout: (s: string) => outs.push(s),
+    repository: () => undefined,
+  };
+  const { out } = await run(["status", "--help"], deps);
+  expect(out).toContain("Claude Code の承認設定");
+  expect(out).not.toContain("今のハーネスのバージョン・最新のバージョン・主な変更点を表示する");
+  expect(homeDirectory).not.toHaveBeenCalled();
+  await run(["status"], deps);
+  expect(outs.join("")).toContain("~/.claude/settings.json：auto");
+  expect(homeDirectory).toHaveBeenCalledOnce();
 });
 
 describe("#30 AC-1: 知らないコマンド", () => {
@@ -182,7 +208,7 @@ describe("#30 AC-1: コマンドの説明の文と使い方の行（F-28）", ()
   const descriptions: Record<string, string> = {
     create: "質問に答えて、プロジェクトを生成する",
     update: "生成済みのプロジェクトに、新しいハーネスを反映する",
-    status: "今のハーネスのバージョン・最新のバージョン・主な変更点を表示する",
+    status: "ハーネスのバージョン・主な変更点・Claude Code の承認設定を表示する",
   };
 
   for (const [name, text] of Object.entries(descriptions)) {

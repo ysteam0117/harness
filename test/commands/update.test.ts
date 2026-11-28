@@ -39,6 +39,38 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it("C-75 #99 AC-2: create の管理文を更新し、競合は差分と .harness-new で扱う", async () => {
+  const dir = await freshProject();
+  const old = "# 古い作業ルール\n";
+  const edited = "# 利用者が編集した作業ルール\n";
+  const personal = '{"permissions":{"defaultMode":"auto"}}\n';
+  const local = ".claude/settings.local.json";
+  const newRule = "モードの確認や切り替えのために手元や利用者の設定ファイルを読み書きしない";
+  simulateOldVersion(dir, "CLAUDE.md", old);
+  write(dir, "CLAUDE.md", edited);
+  simulateOldVersion(dir, "AGENTS.md", old);
+  write(dir, local, personal);
+
+  const interactive = updateSetup(
+    dir,
+    { "update_conflict:CLAUDE.md": ["keep"] },
+    { interactive: true },
+  );
+  expect((await runUpdate({}, interactive.deps)).exitCode, interactive.err()).toBe(0);
+  expect(interactive.prompter.askedIds).toContain("update_conflict:CLAUDE.md");
+  const diff = interactive.prompter.notes.find((note) => note.startsWith("差分：CLAUDE.md"));
+  expect(diff).toContain(edited.trim());
+  expect(diff).toContain(newRule);
+  expect(read(dir, "AGENTS.md")).toContain(newRule);
+  expect(read(dir, "AGENTS.md")).not.toContain(old);
+
+  const automatic = updateSetup(dir);
+  expect((await runUpdate({ yes: true }, automatic.deps)).exitCode, automatic.err()).toBe(0);
+  expect(read(dir, "CLAUDE.md")).toBe(edited);
+  expect(read(dir, "CLAUDE.md.harness-new")).toContain(newRule);
+  expect(read(dir, local)).toBe(personal);
+});
+
 /** 出力の Markdown から、「### 見出し」の節の本文を取り出す（なければ ""） */
 function section(out: string, title: string): string {
   const lines = out.split("\n");

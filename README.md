@@ -58,9 +58,9 @@ harness --help
 | `harness create`  | 質問に答えて、プロジェクトを生成する| 質問・バージョンの調査・整合性チェック・生成（手元のフォルダまで。動くアプリの土台を含む） |
 | `harness update`  | 生成済みのプロジェクトに、新しいハーネスを反映する | 実装済み（書き換えたファイルは置き換えず、差分を示して選ぶ） |
 | `harness adopt`   | 既存のプロジェクトに、AI 向けのルール（`AGENTS.md`・Skill など）を足す | 最小限＋技術の判定・プロファイルの Skill・CI の確認を実装済み（既存の調査の続きなどは未実装） |
-| `harness status`  | 今のハーネスのバージョン・最新のバージョン・主な変更点・新しい大きな版・範囲を緩められる候補を表示する | 実装済み |
+| `harness status`  | ハーネスのバージョン・主な変更点・採用技術の版の情報・Claude Code の承認設定を表示する | 実装済み |
 
-`harness update`・`harness status` の使い方は、[`harness update` の使い方](#harness-update-の使い方)を参照してください。構成の詳細は[CLI全体の構成](docs/design/overview.md)を参照してください。
+各コマンドの説明は [`harness update` の使い方](#harness-update-の使い方)と [`harness status` の使い方](#harness-status-の使い方)にあります。構成の詳細は[CLI全体の構成](docs/design/overview.md)を参照してください。
 
 ## `harness create` の使い方
 
@@ -336,7 +336,9 @@ harness adopt --answers answers.yaml --skip-secret-scan   # 秘密情報の確�
 harness status
 ```
 
-プロジェクトのバージョン・インストール済みのバージョン・最新のバージョン・主な変更点（プロジェクトのバージョンより新しいもの）・書き換え済みの管理ファイルの件数を表示します。何も書きません。プロジェクトでないフォルダでは、ハーネスの情報だけを表示します。
+管理記録がある場合は、プロジェクトのバージョン、プロジェクトのバージョンより新しい変更点、書き換え済みの管理ファイルの件数を表示します。どのフォルダでも、インストール済み・最新のバージョンと Claude Code の承認設定を表示します。ファイルには書き込みません。対象のフォルダを指定するには `harness status --dir <フォルダ>` を使います。
+
+承認設定の診断では、対象フォルダの `.claude/settings.local.json` と `.claude/settings.json`、標準の利用者設定 `~/.claude/settings.json` の `permissions.defaultMode` を確かめます。`auto`・`acceptEdits`・`bypassPermissions` の記載と、読めない設定を知らせます。版や条件によっては、端末・VS Code で未設定でも auto で始まります。VS Code の初期モード設定や前回の選択、管理設定、起動時引数、独自の設定ディレクトリは診断の対象外です。利用者は起動時の画面で実際のモードを確かめてください。
 
 プロジェクトのフォルダでは、npm と Node.js の登録情報を読んで、次の2つも表示します（数秒かかることがあります）。
 

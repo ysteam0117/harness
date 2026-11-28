@@ -318,6 +318,31 @@ describe("#16 AC-1: adopt したアプリの update は、印の中だけを更�
     expect(exists(dir, ".harness/.update-lock")).toBe(false);
   });
 
+  it("C-75 #99 AC-2: adopt の管理文を更新し、個人設定と管理外の定義を保つ", async () => {
+    const role = ".claude/agents/planner.md";
+    const local = ".claude/settings.local.json";
+    const personal = '{"permissions":{"defaultMode":"auto"}}\n';
+    const existingAgent = "# 導入先の既存の担当\n";
+    const dir = await adoptedApp((root) => {
+      write(root, role, existingAgent);
+      write(root, local, personal);
+    });
+    // update の対象はプロジェクト配下。ホームにある利用者設定は status のテストで扱う。
+    const s = updateSetup(dir);
+
+    expect((await runUpdate({ yes: true }, s.deps)).exitCode, s.err()).toBe(0);
+    for (const file of ["AGENTS.md", "CLAUDE.md"]) {
+      const body = blockBody(read(dir, file));
+      expect(body).toContain(
+        "モードの確認や切り替えのために手元や利用者の設定ファイルを読み書きしない",
+      );
+      expect(body).not.toContain(OLD_BODY);
+    }
+    expect(read(dir, role)).toBe(existingAgent);
+    expect(read(dir, local)).toBe(personal);
+    expect(readConfig(dir).managed_files).not.toHaveProperty(local);
+  });
+
   it("#16 status：update の後、書き換え済みは0件", async () => {
     const dir = await adoptedApp();
     const s = updateSetup(dir);
@@ -327,6 +352,7 @@ describe("#16 AC-1: adopt したアプリの update は、印の中だけを更�
       {},
       {
         cwd: dir,
+        homeDirectory: () => dir,
         stdout: (t) => outs.push(t),
         stderr: () => undefined,
         runGh: async () => ({ code: 1, stdout: "", stderr: "なし" }),
@@ -384,6 +410,7 @@ describe("#16 AC-1: adopt したアプリの update は、印の中だけを更�
       {},
       {
         cwd: dir,
+        homeDirectory: () => dir,
         stdout: (t) => outs.push(t),
         stderr: () => undefined,
         runGh: async () => ({ code: 1, stdout: "", stderr: "なし" }),
