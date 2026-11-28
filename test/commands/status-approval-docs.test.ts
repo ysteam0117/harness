@@ -92,12 +92,15 @@ describe("F-27 F-28 C-75 C-66 #99 AC-4: 利用と更新の説明", () => {
   });
 
   it("版と変更履歴に診断・管理ファイル・手元の設定の扱いがある", () => {
-    expect(JSON.parse(read("package.json"))).toMatchObject({ version: "0.6.0" });
+    const changelog = read("CHANGELOG.md");
+    const current = changelog.match(/^## (\d+\.\d+\.\d+)$/m)?.[1];
+    expect(current).toBeDefined();
+    expect(JSON.parse(read("package.json"))).toMatchObject({ version: current });
     expect(JSON.parse(read("package-lock.json"))).toMatchObject({
-      version: "0.6.0",
-      packages: { "": { version: "0.6.0" } },
+      version: current,
+      packages: { "": { version: current } },
     });
-    const release = read("CHANGELOG.md").match(/^## 0\.6\.0\n([\s\S]*?)^## /m)?.[1] ?? "";
+    const release = changelog.match(/^## 0\.6\.0\n([\s\S]*?)^## /m)?.[1] ?? "";
     for (const phrase of [
       "Claude Code の承認設定",
       "permissions.defaultMode",

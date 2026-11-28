@@ -71,6 +71,26 @@ it("C-75 #99 AC-2: create の管理文を更新し、競合は差分と .harness
   expect(read(dir, local)).toBe(personal);
 });
 
+it("F-24 F-27 #101 AC-2: create の更新で管理する例のテストと Skill がそろう", async () => {
+  const dir = await freshProject();
+  const example = "frontend/src/rules-examples/async-query.test.tsx";
+  const common = ".claude/skills/testing/SKILL.md";
+  const tool = ".claude/skills/test-tools/SKILL.md";
+  simulateOldVersion(dir, common, "# 更新前のテスト Skill\n");
+  simulateOldVersion(dir, tool, "# 更新前の test-tools Skill\n");
+  rmSync(path.join(dir, example), { force: true });
+  editConfig(dir, (doc) => {
+    delete doc.managed_files[example];
+  });
+  const s = updateSetup(dir);
+
+  expect((await runUpdate({ yes: true }, s.deps)).exitCode, s.err()).toBe(0);
+  expect(read(dir, common)).toContain("Testing Library で DOM を検索する場合");
+  expect(read(dir, tool)).toContain("await screen.findByRole");
+  expect(exists(dir, example)).toBe(true);
+  expect(readConfig(dir).managed_files[example]).toBe(fingerprint(read(dir, example)));
+});
+
 /** 出力の Markdown から、「### 見出し」の節の本文を取り出す（なければ ""） */
 function section(out: string, title: string): string {
   const lines = out.split("\n");

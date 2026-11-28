@@ -343,6 +343,31 @@ describe("#16 AC-1: adopt したアプリの update は、印の中だけを更�
     expect(readConfig(dir).managed_files).not.toHaveProperty(local);
   });
 
+  it("F-24 F-27 #101 AC-2: adopt の更新で例を Skill に展開し、アプリのテストは保つ", async () => {
+    const tool = ".claude/skills/test-tools/SKILL.md";
+    const example = "frontend/src/rules-examples/async-query.test.tsx";
+    const dir = await adoptedApp((root) => {
+      const manifest = JSON.parse(read(root, "package.json")) as Record<string, unknown>;
+      manifest["devDependencies"] = { vitest: "4.1.12" };
+      write(root, "package.json", JSON.stringify(manifest));
+      write(root, "frontend/src/existing.test.ts", "// 導入先の既存テスト\n");
+    });
+    const previous = "# 更新前の test-tools Skill\n";
+    write(dir, tool, previous);
+    editConfig(dir, (doc) => {
+      doc.managed_files[tool] = fingerprint(previous);
+    });
+    const s = updateSetup(dir);
+
+    expect((await runUpdate({ yes: true }, s.deps)).exitCode, s.err()).toBe(0);
+    expect(read(dir, SKILL)).toContain("Testing Library で DOM を検索する場合");
+    expect(read(dir, tool)).toContain("await screen.findByRole");
+    expect(read(dir, tool)).not.toContain(example);
+    expect(exists(dir, example)).toBe(false);
+    expect(read(dir, "frontend/src/existing.test.ts")).toBe("// 導入先の既存テスト\n");
+    expect(Object.keys(readConfig(dir).managed_files)).not.toContain(example);
+  });
+
   it("#16 status：update の後、書き換え済みは0件", async () => {
     const dir = await adoptedApp();
     const s = updateSetup(dir);

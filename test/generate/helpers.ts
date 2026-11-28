@@ -191,6 +191,7 @@ export function fakeValues(): Record<string, string> {
     "drizzle_env_notes",
     "drizzle_examples_intro",
     "drizzle_example_tests",
+    "test_tools_examples_intro",
     "frontend_state_examples_intro",
     "axios_client_rule",
     "axios_examples_intro",

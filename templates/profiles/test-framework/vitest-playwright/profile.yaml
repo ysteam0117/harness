@@ -40,6 +40,7 @@ skill_name: test-tools
 files:
   files/test-setup.ts: frontend/src/test/setup.ts
   files/test-server.ts: frontend/src/test/server.ts
+  files/examples/async-query.test.tsx: frontend/src/rules-examples/async-query.test.tsx
 # 以下の vitest・Playwright の設定と E2E は、Workers（Hono）の構成のもの（Spring Boot の構成のものは別に足す）。
 # vitest.config.ts は DB の回答で変わる。D1 だけ、マイグレーションを読み込んでテスト用の D1 に適用する
 files_when:

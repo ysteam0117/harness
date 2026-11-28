@@ -2,6 +2,11 @@
 
 ハーネスのバージョンごとの主な変更点。`harness status` は、このファイルから、プロジェクトのバージョンより新しい項目を表示する。バージョンはセマンティックバージョニング（C-08）で付ける。
 
+## 0.7.0
+
+- 非同期で整う状態は、必要な条件が成立するまで待って確かめる（C-25・C-52、Issue #101）。Testing Library で DOM を検索する場合の `getBy*`・`findBy*`・`waitFor` の使い分けをテスト Skill に追加した。
+- test-tools に、`frontend/src/rules-examples/async-query.test.tsx` で動作を確かめた2つの例を追加した。管理している Skill と担当の定義は `harness update` で更新する。create のプロジェクトには例のテストを追加し、adopt ではプロファイルを導入している場合に Skill に例を展開する。導入時に管理外に残した同名ファイルには必要に応じて手動で取り込む。
+
 ## 0.6.0
 
 - `harness status` で Claude Code の承認設定を調べる（F-27・F-28、Issue #99）。対象の `.claude/settings.local.json` と `.claude/settings.json`、標準の `~/.claude/settings.json` の `permissions.defaultMode` を確認し、版や条件によっては未設定でも auto で始まることを知らせる。

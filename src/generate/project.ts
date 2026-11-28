@@ -278,7 +278,7 @@ export function isManagedPath(p: string): boolean {
     p === ".gitleaks.toml" ||
     p.startsWith(".semgrep/") ||
     p === "scripts/security-check.mjs" ||
-    // Skill の書き方の例（良い例・悪い例のテスト）。Skill が差し込むため、ハーネスの更新で置き換える（F-24）
+    // Skill の例のテスト。Skill に差し込むため、ハーネスの更新で置き換える（F-24）
     p.startsWith("backend/src/rules-examples/") ||
     p.startsWith("frontend/src/rules-examples/") ||
     [

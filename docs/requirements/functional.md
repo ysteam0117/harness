@@ -397,7 +397,7 @@ knowledge/
 | 実装の進め方 | [C-76](common/workflow.md#c-76)・[C-66](common/workflow.md#c-66)・[C-33](common/workflow.md#c-33)・[C-34](common/workflow.md#c-34)・[C-35](common/workflow.md#c-35)・[C-07](common/workflow.md#c-07)・[C-81](common/workflow.md#c-81) | 統括（要件定義・Issueへの分割・Issueの実装を始めるとき） |
 | バックエンド | [C-03](common/backend.md#c-03)・[C-04](common/backend.md#c-04)・[C-10](common/backend.md#c-10)・[C-30](common/backend.md#c-30)・[C-31](common/backend.md#c-31)・[C-37](common/backend.md#c-37)・[C-64](common/backend.md#c-64)・[C-65](common/backend.md#c-65)・[C-74](common/backend.md#c-74)・[C-57](common/design-principles.md#c-57) | 計画・実装・コードレビュー |
 | フロントエンド | [C-06](common/frontend.md#c-06)・[C-43](common/frontend.md#c-43)〜[C-52](common/frontend.md#c-52)・[C-54](common/frontend.md#c-54)・[C-55](common/frontend.md#c-55)・[C-77](common/frontend.md#c-77)・[C-57](common/design-principles.md#c-57) | 計画・実装・コードレビュー |
-| テスト | [C-24](common/quality-test.md#c-24)〜[C-26](common/quality-test.md#c-26)・[C-69](common/quality-test.md#c-69)・[C-70](common/quality-test.md#c-70)・[C-60](common/quality-test.md#c-60)・[C-61](common/quality-test.md#c-61)・[C-79](common/quality-test.md#c-79)・[C-82](common/quality-test.md#c-82) | テスト・品質チェック |
+| テスト | [C-24](common/quality-test.md#c-24)〜[C-26](common/quality-test.md#c-26)・[C-69](common/quality-test.md#c-69)・[C-70](common/quality-test.md#c-70)・[C-60](common/quality-test.md#c-60)・[C-61](common/quality-test.md#c-61)・[C-79](common/quality-test.md#c-79)・[C-82](common/quality-test.md#c-82)・[C-52](common/frontend.md#c-52) | テスト・品質チェック（ほかの役割もテストを計画・作成・レビュー・検証するとき） |
 | セキュリティ | [C-09](common/security.md#c-09)・[C-12](common/security.md#c-12)〜[C-20](common/security.md#c-20)・[C-27](common/security.md#c-27)〜[C-29](common/security.md#c-29)・[C-58](common/security.md#c-58)・[C-59](common/security.md#c-59)・[C-63](common/security.md#c-63)・[C-72](common/security.md#c-72) | 計画・コードレビュー（影響大のとき） |
 | エラー応答・API | [C-15](common/error-response.md#c-15)・[C-71](common/error-response.md#c-71)・[C-73](common/error-response.md#c-73)・[C-31](common/backend.md#c-31) | 実装・コードレビュー |
 | 環境・デプロイ | [C-36](common/project-env.md#c-36)・[C-39](common/project-env.md#c-39)〜[C-41](common/project-env.md#c-41)・[C-08](common/workflow.md#c-08) | 統括（デプロイの承認を依頼するとき） |
@@ -486,8 +486,8 @@ templates/profiles/
   - 出力にないパス・範囲がない・範囲が2つある場合は、生成を止める（出さない通りの例は差し込めない）。差し込んだコードの中の`{{ }}`は、展開しない
 - 例のファイルは、生成するプロジェクトの`backend/src/rules-examples/`・`frontend/src/rules-examples/`に置く。ハーネスが管理するファイル（[F-27](#f-27)）で、消さない。例のテストは、毎回の品質チェック（`npm run check`）で動き、例が壊れないようにする
   - PostgreSQLの例は、実際のDBで確かめる。`pg`はWorkersのテストの中で読み込めないため、Node.jsの別の設定（`vitest.db.config.ts`）で動かす。`npm test`の後（`posttest`）に`npm run test:db`が自動で動き、検証用のDBにつなぐ。例のテストは、その接続だけの一時的な表だけを使い、マイグレーション・シード・既存のデータには触れない
-- 共通のSkill（`backend`・`error-api`・`security`）には例を置かず、「書き方の例は、選んだライブラリのSkillを読む」という案内だけを書く
-- 初回に載せる例：Drizzle（SQLインジェクション・N+1・トランザクション・楽観的ロック・生SQLの検証）、Hono（Controller と Service の役割・入力の検証・エラーの投げ方）。フロントエンド：状態とフォーム（サーバーのデータをコピーしない・更新後の取り直し・4つの状態・入力エラーの表示と多重送信の防止）、Axios（`apiClient`だけを使う・失敗をもみ消さない）、ロガー（`console.log`で秘密の値を出さない）（#85）
+- 共通のSkill（`backend`・`error-api`・`security`・`testing`）には例を置かず、「書き方の例は、選んだライブラリのSkillを読む」という案内だけを書く
+- 初回に載せる例：Drizzle（SQLインジェクション・N+1・トランザクション・楽観的ロック・生SQLの検証）、Hono（Controller と Service の役割・入力の検証・エラーの投げ方）。フロントエンド：状態とフォーム（サーバーのデータをコピーしない・更新後の取り直し・4つの状態・入力エラーの表示と多重送信の防止）、Axios（`apiClient`だけを使う・失敗をもみ消さない）、ロガー（`console.log`で秘密の値を出さない）（#85）。テストの道具には、Testing Library でリンクを待つ例（`frontend/src/rules-examples/async-query.test.tsx`）を載せる（#101）
 
 ### バージョンの選び方
 

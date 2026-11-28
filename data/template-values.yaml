@@ -15,9 +15,9 @@
 
 check_command: npm run check
 
-# 全役割に共通する委譲時の指示（C-66）
+# 全役割に共通する委譲時の指示と、テスト Skill の案内（C-66・F-21）
 delegated_worker_rule: >-
-  承認が必要な操作の範囲は、`AGENTS.md`の「破壊的な操作は、必ず利用者の判断を仰ぐ」、デプロイの承認（C-41）、AIの設定の`ask`・`prompt`に従う。操作の実行前に何を・なぜ・範囲・取り消し方をすぐ統括に報告し、指示を待つ。拒否された操作を別の手段で回避しない。手元の設定や起動時の指定で利用者の承認を省かない。ツールが実行を許可していても、必要な承認を得るまで操作を保留する。モードの確認や切り替えのために手元や利用者の設定ファイルを読み書きしない。承認が省かれる設定に気づいた場合やモードの確認・切り替えが必要な場合は、実行前に統括に報告する。作業用フォルダを割り当てられた場合は、削除せず場所を報告する。利用上限を確認した場合は統括に報告する。
+  承認が必要な操作の範囲は、`AGENTS.md`の「破壊的な操作は、必ず利用者の判断を仰ぐ」、デプロイの承認（C-41）、AIの設定の`ask`・`prompt`に従う。操作の実行前に何を・なぜ・範囲・取り消し方をすぐ統括に報告し、指示を待つ。拒否された操作を別の手段で回避しない。手元の設定や起動時の指定で利用者の承認を省かない。ツールが実行を許可していても、必要な承認を得るまで操作を保留する。モードの確認や切り替えのために手元や利用者の設定ファイルを読み書きしない。承認が省かれる設定に気づいた場合やモードの確認・切り替えが必要な場合は、実行前に統括に報告する。作業用フォルダを割り当てられた場合は、削除せず場所を報告する。利用上限を確認した場合は統括に報告する。テストの計画・作成・レビュー・検証を担当する場合は、Skill「テスト」を読む。
 
 process_report_instruction: >-
   工程の報告では、工程・担当の役割（分かればAI・モデル）・試行、確認できた開始・終了、待機の理由、再実行の元と理由、使用量の項目・数値・単位・範囲・取得元を統括に応答で伝える。時刻や値を推定せず、「未取得」と理由を書く。取得元の対象は工程名・試行番号・測定範囲で示す。この工程の記録は担当が編集しない。
@@ -628,6 +628,7 @@ drizzle_example_tests: |-
 drizzle_env_notes: "開発操作は`.env.development`、検証操作は`.env.test`を使う。PostgreSQLの検証DB名は`_test`で終わる必要がある。`npm run db:generate -- --name <名前>`は接続先を使わずマイグレーションを生成する"
 drizzle_migrate_commands: "開発：`npm run db:migrate:local`。検証：`npm run db:migrate:test`（環境別の一時保存先）"
 drizzle_schema_places: "テーブルの定義は、Drizzleのスキーマのファイル（`backend/db/schema.ts`）に書く。DB に触れる処理（Repository）は`backend/src/db/`に置く"
+test_tools_examples_intro: "例は、テスト（`frontend/src/rules-examples/async-query.test.tsx`）で動作を確かめてある。"
 frontend_state_examples_intro: "例は、テスト（`frontend/src/rules-examples/server-state.test.tsx`・`form.test.tsx`）で動作を確かめてある。悪い例は、問題が起きることもテストで確かめてある。コードを書く前に読み、良い例の書き方に合わせる。"
 axios_examples_intro: "例は、テスト（`frontend/src/rules-examples/http-client.test.tsx`）で動作を確かめてある。悪い例は、問題が起きることもテストで確かめてある。コードを書く前に読み、良い例の書き方に合わせる。"
 axios_client_rule: "APIは`frontend/src/services/api-client.ts`の`apiClient`だけを使って呼ぶ。コンポーネント・Hook・画面から`axios`・`fetch`を直接使わない"
