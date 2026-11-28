@@ -39,6 +39,7 @@ function setup(dir: string, over: Partial<StatusDeps> = {}) {
   const calls: string[][] = [];
   const deps: StatusDeps = {
     cwd: dir,
+    homeDirectory: () => dir,
     stdout: (s) => outs.push(s),
     stderr: (s) => errs.push(s),
     runGh: async (args, timeout) => {
