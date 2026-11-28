@@ -40,6 +40,8 @@ codex:
 
 ## 報告の形
 
+{{process_report_instruction}}
+
 承認待ち・利用上限待ちなど、実行結果を出せない状態は、Skill「実装の進め方」の「委譲時の作業場所と状態」に従って報告する。
 
 ```markdown

@@ -50,6 +50,8 @@ codex:
 
 ## 報告の形
 
+{{process_report_instruction}}
+
 ```markdown
 ## 変更したファイル
 - `パス`：変更した内容

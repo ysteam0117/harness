@@ -28,6 +28,7 @@
 | `public/favicon.ico`・`favicon.svg`・`apple-touch-icon.png`・`icons/icon-192.png`・`icons/icon-512.png`・`manifest.webmanifest` | `src/generate/icons.ts` | 常に | プロジェクトのもの |
 
 - ワークフローは、プロジェクトが CI を足したり変えたりするため、プロジェクトのものにする
+- 統括による工程の記録（[C-35](../requirements/common/workflow.md#c-35)・[C-66](../requirements/common/workflow.md#c-66)）には、実装の進め方 Skill とPR・ローカルIssueのテンプレートで共通の書式を使う。開始・終了は時差付きISO 8601、経過時間と実行時間は秒、使用量はトークン数で記す。使った単位・範囲・取得元、未取得の理由を明記する。管理対象は `harness update` で更新する。既にあるPRやIssueのファイル、ローカルIssueのREADMEは統括が必要に応じて手で更新する。
 - レビューの重大度・終了・後追いの記録（[C-33](../requirements/common/workflow.md#c-33)・[C-66](../requirements/common/workflow.md#c-66)）は、review Skill、計画・コードレビューの役割定義と、統括が読む `AGENTS.md`・実装の進め方 Skill に置く。統括はレビュー結果と再レビューを省く根拠を、GitHub の Issue コメント、ローカル Git の Issue ファイル、adopt の既存記録のうち構成に合う場所に残す。管理対象は `harness update` で更新する。adopt 時に管理外に残した同名ファイルは、必要に応じて手で取り込む。
 - 手元の対象検証と全体確認（[C-61](../requirements/common/quality-test.md#c-61)）の分担は、testing Skill と実装の進め方 Skill を参照する。統括は最終候補の結果を PR または Issue の記録に残す。`check.yml` は全体確認の前に実際の checkout の SHA を出す。既存プロジェクトのワークフローと手順書は、必要に応じて手動で取り込む。記録ステップがなければ実行情報とログを照合し、取得できない SHA は未記録とする。
 - 重い検証の事前確認・停止条件（[C-25](../requirements/common/quality-test.md#c-25)）は、共通の testing Skill を参照する。品質チェック担当と技術プロファイルの品質 Skill からも同じ箇所へ案内する。管理対象の Skill・エージェントには `harness update` で手順が届く。adopt 時に既存の同名ファイルを残した場合と `docs/testing/mutation.md` の適用例は、必要に応じて手動で取り込む（[導入](adopt.md#導入したアプリの更新harness-updateissue-16)、[管理の区分](generation.md#管理するファイルとプロジェクトのものの分け方f-27)）

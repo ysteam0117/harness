@@ -46,6 +46,8 @@ codex:
 
 ## 報告の形
 
+{{process_report_instruction}}
+
 ```markdown
 ## 作成・変更したファイル
 - `{{prototype_dir}}...`：内容

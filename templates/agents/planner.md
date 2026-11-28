@@ -36,6 +36,8 @@ Issueの受け入れ条件をもとに、実装計画を作る。**ファイル�
 
 ## 報告の形
 
+{{process_report_instruction}}
+
 ```markdown
 ## 変更の大きさ
 小／通常／影響大（理由）

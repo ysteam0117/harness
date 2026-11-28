@@ -148,6 +148,16 @@ issue_record_place:
   - when: { answer: repository, equals: local }
     value: Issueの記録
 
+process_record_place:
+  - when: { answer: repository, equals: local }
+    value: 既存のIssueの記録
+  - value: 既存のPR本文またはIssueの記録
+
+process_verification_examples:
+  - when: { answer: repository, equals: local }
+    value: 導入先で決めた手元の取り込み確認を工程として記録する。実行したコマンドは既存の検証の記録に残す。
+  - value: 導入先がCIを使う場合は、工程を「CI」、待機理由を「CI待ち」とし、CIの1回の実行を1試行とする。使わない場合はCIの工程とCI待ちは「該当しない」。PR先端のSHA、取り込み先の基点、実際のcheckoutのSHAと共有可能なCI実行リンクは、既存の検証の記録に残す。
+
 review_record_place: 既存のIssueの記録
 review_follow_up_place: 既存の記録方法で管理する関連Issue
 

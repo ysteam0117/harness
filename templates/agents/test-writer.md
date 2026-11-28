@@ -44,6 +44,8 @@ codex:
 
 ## 報告の形
 
+{{process_report_instruction}}
+
 ```markdown
 ## 追加・変更したテスト
 | 受け入れ条件 | テストのファイル | テスト名 |
