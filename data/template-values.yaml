@@ -19,6 +19,16 @@ check_command: npm run check
 delegated_worker_rule: >-
   承認が必要な操作の範囲は、`AGENTS.md`の「破壊的な操作は、必ず利用者の判断を仰ぐ」、デプロイの承認（C-41）、AIの設定の`ask`・`prompt`に従う。操作の実行前に何を・なぜ・範囲・取り消し方をすぐ統括に報告し、指示を待つ。拒否された操作を別の手段で回避しない。作業用フォルダを割り当てられた場合は、削除せず場所を報告する。利用上限を確認した場合は統括に報告する。
 
+review_finding_criteria: >-
+  重大（次の工程や取り込みを止める）は、根拠のある要件の未達・退行・安全上の問題・必要なテストの不足など。データ破損・認証の回避・情報漏えいにつながる指摘は必ず重大とする。軽微（受け入れ条件・安全・既存の確認を損ねない改善）は、修正するとよい指摘とする。根拠のない好みは修正要求にしない。
+  記録で参照できる合意済みの判断は、根拠と前提が同じなら再指摘しない。要件の矛盾・退行・安全上の問題を示せる場合は、合意済みの判断に関係していても新しい証拠と影響を報告する。
+  重大な指摘がなくても、必要な範囲が未確認なら終了可と報告しない。重大が0件で必要な範囲を確認できたら、その結果を統括に渡す。軽微の扱いを統括が記録してから終了を判断する。
+
+review_agreement_sources:
+  - when: { answer: repository, equals: local }
+    value: ADR・Issueの記録
+  - value: ADR・Issue・PRの記録
+
 # check.yml の .env.test 作成後に差し込むステップ。2行目はワークフローの字下げを含む。
 # Spring Boot では、Docker の開発・検証環境（Compose）を出さないので、起動のステップも出さない（Testcontainers が DB を起動する）
 workflow_test_db_step:
@@ -215,6 +225,16 @@ issue_record_place:
   - when: { answer: repository, equals: local }
     value: Issueのファイル
   - value: Issueのコメント
+
+review_record_place:
+  - when: { answer: repository, equals: local }
+    value: Issueのファイル
+  - value: Issueのコメント
+
+review_follow_up_place:
+  - when: { answer: repository, equals: local }
+    value: 関連するIssueのファイル
+  - value: 関連するIssue
 
 knowledge_record_place:
   - when: { answer: repository, equals: local }
