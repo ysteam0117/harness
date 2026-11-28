@@ -117,8 +117,10 @@ describe.each(["create", "adopt"] as const)("C-66 #90 %s の出力", (mode) => {
         expect(instructions, role).toMatch(/読み取りのコマンドにだけ使う/);
         const folderInstructions = instructions
           .split(/[。\n]/)
+          .map((instruction) => instruction.trim())
           .filter((instruction) => instruction.includes("作業用フォルダ"));
         expect(folderInstructions, role).toEqual([
+          "既存の手順が求める作業用フォルダの場所・実行したコマンドは、従来の秘密情報の扱いに従って統括へ伝える",
           "作業用フォルダを割り当てられた場合は、削除せず場所を報告する",
         ]);
       }

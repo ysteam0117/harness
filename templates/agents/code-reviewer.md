@@ -57,6 +57,8 @@ codex:
 
 ## 報告の形
 
+{{process_report_instruction}}
+
 ```markdown
 ## 結果
 重大・軽微の件数、確認できなかった範囲、終了可否を書く。指摘がなければ「指摘なし」と書く。

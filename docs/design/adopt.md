@@ -197,6 +197,7 @@ F-29 の手順5・6。`harness adopt` は、共通仕様（C-xx）との差の�
 - 品質チェック・テストのコマンドは「未設定」とする。実行する前に、既存のコマンド（`package.json` の `scripts`・README）と、テストが本番や共有の DB に接続しないことを確かめさせ、不明なら利用者に聞かせる
 - `AGENTS.md` の「ルールを読んで従う」の表は、出さない Skill を書かない（技術プロファイルの Skill の欄は、当てたプロファイルがなければ「該当する技術の Skill はない」とし、当てたものがあれば、その Skill を書く）
 - 手元の Git だけで管理する場合（`repository: local`）も、`docs/issues/`・`npm run merge:check` などを前提にしない
+- 統括による工程と使用量の要約には、既存のPR本文またはIssueの記録を使う。手元のGitでは既存のIssueの記録を使う。新しいPR・ローカルIssueのテンプレートは配らず、統括が必要な節を既存の様式に手で足す。
 - `data/adopt-values.yaml` に、`data/template-values.yaml` にない名前は書けない（書き間違いは止まる）
 
 文書のパス・フォルダ構成（`docs/requirements.md`・`docs/design/`・`docs/adr/`・`docs/tech-stack.md`・`docs/api/`・`docs/testing/`・`prototype/`・`backend/src/`・`frontend/src/`）と、権限の設定の `npm run env:check` の案内も、同じ仕組みで入れ替える。導入先では「既存のプロジェクトの文書・手順・フォルダ構成を確かめて合わせる（無ければ、利用者に聞く）」とする。テストは、全 Skill・両 AI（`.claude`・`.codex`）のエージェントの定義・AI の権限の設定まで、導入の出力全体に、これらが無いことを確かめる。

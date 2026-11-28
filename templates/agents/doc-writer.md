@@ -62,6 +62,8 @@ Skill「知見」を読み、次を書く。該当しない項目は「なし」
 
 ## 報告の形
 
+{{process_report_instruction}}
+
 ```markdown
 ## 更新した文書
 - `パス`：更新した内容

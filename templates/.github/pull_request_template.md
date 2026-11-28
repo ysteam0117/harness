@@ -29,6 +29,12 @@ Refs #<!-- 親Issueの番号 -->
 
 <!-- 手元の未コミット差分の有無と最終候補との対応、CIのPR先端・取り込み先の基点・checkoutのSHAを記録する -->
 
+## 工程の記録
+
+<!-- {{process_record_copy_rule}} -->
+
+{{process_record_tables}}
+
 ## 知見
 
 <!-- 必ず書く。該当しない項目は「なし」と書く（F-18） -->
